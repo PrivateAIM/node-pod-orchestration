@@ -8,6 +8,7 @@ packages = [{ include = "project" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
+kubernetes = "^28.1.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
