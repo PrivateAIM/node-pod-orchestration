@@ -9,7 +9,6 @@ def create_deployment(name: str, image: str, ports: list[int], namespace: str = 
     containers = []
     container1 = client.V1Container(name=name, image=image, ports=[client.V1ContainerPort(port) for port in ports])
     containers.append(container1)
-
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
     depl_pod_metadata = client.V1ObjectMeta(labels={'app': name})
     depl_selector = client.V1LabelSelector(match_labels={'app': name})
