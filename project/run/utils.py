@@ -1,7 +1,8 @@
 from kubernetes import client, config
 
 
-def create_deployment(name: str, image: str, ports: list[int], namespace: str = 'default', kind: str = 'Deployment') -> None:
+def create_deployment(name: str, image: str, ports: list[int], namespace: str = 'default',
+                      kind: str = 'Deployment') -> None:
     config.load_kube_config()
 
     v1 = client.AppsV1Api()
@@ -21,3 +22,15 @@ def create_deployment(name: str, image: str, ports: list[int], namespace: str = 
     v1.create_namespaced_deployment(namespace=namespace, body=depl_body)
 
     # v1.delete_namespaced_deployment(namespace=namespace, name=name)
+
+def delete_deployment(name: str, namespace: str = 'default') -> None:
+    config.load_kube_config()
+
+    v1 = client.AppsV1Api()
+
+    v1.delete_namespaced_deployment(namespace=namespace, name=name)
+
+
+def get_pod_logs(api_client: client.CoreV1Api, name_deployment: str, namespace: str = 'default') -> str:
+    pods = api_client.list_namespaced_pod(namespace=namespace,label_selector= f'app={name_deployment}', watch=False)
+
