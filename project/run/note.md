@@ -3,7 +3,7 @@
 # validation only in running image or if possible before
 
 # deploy job
-- deployment creation....... (done)
+- deployment creation  (done)
 - give tokens....... 
 - data token....... 
 - result token....... 
@@ -16,6 +16,6 @@
 
 # teardown
 - store logs
-- job delttion
+- job deletion (done)
 - db update
 

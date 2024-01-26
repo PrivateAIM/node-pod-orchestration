@@ -4,7 +4,6 @@ from kubernetes import client, config
 def create_deployment(name: str, image: str, ports: list[int], namespace: str = 'default',
                       kind: str = 'Deployment') -> None:
     config.load_kube_config()
-
     v1 = client.AppsV1Api()
 
     containers = []
@@ -25,12 +24,30 @@ def create_deployment(name: str, image: str, ports: list[int], namespace: str = 
 
 def delete_deployment(name: str, namespace: str = 'default') -> None:
     config.load_kube_config()
+    api_client = client.AppsV1Api()
 
-    v1 = client.AppsV1Api()
+    api_client.delete_namespaced_deployment(namespace=namespace, name=name)
 
-    v1.delete_namespaced_deployment(namespace=namespace, name=name)
+
+def get_deployment_status( name_deployment: str, namespace: str = 'default') -> str:
+    config.load_kube_config()
+    api_client = client.AppsV1Api()
+
+    deployment = api_client.read_namespaced_deployment(name=name_deployment, namespace=namespace)
+    return deployment.status
+
+def get_deployment_logs( name_deployment: str, namespace: str = 'default') -> str:
+    config.load_kube_config()
+    api_client = client.CoreV1Api()
+
+    pods = api_client.list_namespaced_pod(namespace=namespace,label_selector= f'app={name_deployment}', watch=False)
+    print(pods)
+
+
+
 
 
 def get_pod_logs(api_client: client.CoreV1Api, name_deployment: str, namespace: str = 'default') -> str:
     pods = api_client.list_namespaced_pod(namespace=namespace,label_selector= f'app={name_deployment}', watch=False)
+    client.CoreV1Api()
 
