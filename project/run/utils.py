@@ -44,13 +44,32 @@ def _check_image(image: str, registry_address: str) -> bool:
     return True
 
 
-def _add_tokens(image: str,client: httpclient) -> None:
+def _add_tokens(image: str,client_api,docker_client) -> None:
+    """
+
+    :param image:
+    :param client_api:
+    :param docker_client:
+    :return:
+    """
     pass
 
 def _add_service(image: str, docker_client) -> None:
+    """
+
+    :param image:
+    :param docker_client:
+    :return:
+    """
     pass
 
 def _push_image(image: str,tag) -> str:
+    """
+
+    :param image:
+    :param tag:
+    :return:
+    """
     pass
 
 
