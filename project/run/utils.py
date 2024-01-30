@@ -1,7 +1,62 @@
 from kubernetes import client, config
 
 
-def create_deployment(name: str, image: str, ports: list[int], namespace: str = 'default',
+def run_process(image: str, registry_address: str, httpclient , docker_client) -> None:
+    """
+      Pulls the image from the docker hub and prepares it for deployment
+    sotres it in the local registry
+    - pull
+    - ceck
+    - add tokens
+    - add servise
+    - tag
+    :param command:
+    :return:
+    """
+    _pull_image(image,registry_address)
+    if _check_image(image, registry_address):
+        _add_tokens(image, httpclient)
+        _add_service(image, docker_client)
+        image =_push_image(image, "latest")
+        _create_deployment(" ", image, [80, 443])
+    else:
+        raise Exception("Image not correct")
+    return image
+
+
+def _pull_image(image: str, registry_at_rest) -> str :
+    """
+
+    Pulls the image from the harbor
+    :param image:
+    :param client:
+    :return:
+    TODO
+    """
+    return ""
+
+def _check_image(image: str, registry_address: str) -> bool:
+    """
+    TOTDO
+    :param image:
+    :return:
+    """
+    return True
+
+
+def _add_tokens(image: str,client: httpclient) -> None:
+    pass
+
+def _add_service(image: str, docker_client) -> None:
+    pass
+
+def _push_image(image: str,tag) -> str:
+    pass
+
+
+
+
+def _create_deployment(name: str, image: str, ports: list[int], namespace: str = 'default',
                       kind: str = 'Deployment') -> None:
     config.load_kube_config()
     v1 = client.AppsV1Api()
