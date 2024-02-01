@@ -17,3 +17,4 @@ def get_logs(analysis_id: str):
 @router.put("/stop/{analysis_id}", response_class=JSONResponse)
 def stop_analysis(analysis_id: str):
     return {"status": analysis_id}
+
