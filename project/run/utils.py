@@ -133,17 +133,22 @@ def get_deployment_status(name_deployment: str, namespace: str = 'default') -> s
     return deployment.status
 
 
-def get_deployment_logs(name_deployment: str, namespace: str = 'default') -> str:
+def _get_deployment_logs(name_deployment: str, namespace: str = 'default') -> str:
     config.load_kube_config()
     api_client = client.CoreV1Api()
+    # get pods in deployment
+    pods = api_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name_deployment}')
+    pod_name = pods.items[0].metadata.name
+    api_response = _get_pod_logs(pod_name, namespace)
 
-    pods = api_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name_deployment}', watch=False)
-    print(pods)
+    return api_response
 
+def _get_pod_logs( name_pod: str, namespace: str = 'default') -> str:
+    config.load_kube_config()
+    api_client = client.CoreV1Api()
+    api_response = api_client.read_namespaced_pod_log(name_pod, namespace)
+    return api_response
 
-def get_pod_logs(api_client: client.CoreV1Api, name_deployment: str, namespace: str = 'default') -> str:
-    pods = api_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name_deployment}', watch=False)
-    client.CoreV1Api()
 
 def _copy_file_to_image(image: str, file_path_local: str, file_path_container: str) -> None:
     """

@@ -1,4 +1,5 @@
-from run.utils import _create_deployment, delete_deployment, get_deployment_logs, _copy_file_to_image, _add_service
+from run.utils import _create_deployment, delete_deployment, _copy_file_to_image, _add_service, \
+     _get_pod_logs, _get_deployment_logs
 from project.api.po_servers.api import api_router
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,17 +41,13 @@ def main():
     #delete_deployment("ubuntu-test3")
     #get_deployment_logs("helloworld")
     #_copy_file_to_image("testapp:latest", "/home/davidhieber/PycharmProjects/node-pod-orchestration/project/test.txt", "/opt/test.txt")
-    _add_service("testapp", 80, 443)
+    #_add_service("testapp", 80, 443)
     # Get the effective user ID (uid) and group ID (gid)
     #uid = os.geteuid()
     #gid = os.getegid()
 
-    # Get the username and group name corresponding to the uid and gid
-    #username = pwd.getpwuid(uid).pw_name
-    #groupname = pwd.getgrgid(gid).gr_name
-    #print("Current user is {} ({})".format(username, uid))
-    #print("Current group is {} ({})".format(groupname, gid))
-
+#print(_get_pod_logs("testapp-7f4c4cbf58-vp4mj"))
+    _get_deployment_logs("testapp")
 if __name__ == '__main__':
 
     main()
