@@ -1,4 +1,0 @@
-
-flask
-Jinja2
-mailjet_rest

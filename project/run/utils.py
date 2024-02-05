@@ -133,7 +133,7 @@ def get_deployment_status(name_deployment: str, namespace: str = 'default') -> s
     return deployment.status
 
 
-def _get_deployment_logs(name_deployment: str, namespace: str = 'default') -> str:
+def get_deployment_logs(name_deployment: str, namespace: str = 'default') -> str:
     config.load_kube_config()
     api_client = client.CoreV1Api()
     # get pods in deployment
