@@ -9,7 +9,7 @@ packages = [{ include = "project" }]
 [tool.poetry.dependencies]
 python = "^3.11"
 kubernetes = "^28.1.0"
-fastapi = "^0.109.0"
+fastapi = "^0.109.1"
 uvicorn = "^0.27.0"
 docker = "^7.0.0"
 
