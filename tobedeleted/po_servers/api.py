@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from project.api.po_servers.endpoints import analysis, analysis_info
+from ..po_servers.endpoints import analysis, analysis_info
 
 api_router = APIRouter()
 

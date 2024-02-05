@@ -1,11 +1,12 @@
-from project.api.po_servers.api import api_router
-from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .api import router
+
+
 def main():
-
-
     app = FastAPI(title="FLAME PO",
                   docs_url="/api/docs",
                   redoc_url="/api/redoc",
@@ -23,17 +24,15 @@ def main():
         allow_headers=["*"],
     )
     app.include_router(
-        api_router,
+        router,
         prefix="/api",
     )
 
     # server = PoBaseServer()
 
-
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
 if __name__ == '__main__':
-
     main()
 

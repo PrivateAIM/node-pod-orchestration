@@ -1,5 +1,5 @@
 import unittest
-from run.utils import create_deployment, delete_deployment, get_deployment_status, get_deployment_logs, get_pod_logs
+from ..tobedeleted.run.utils import _create_deployment, delete_deployment, get_deployment_status, get_deployment_logs, _get_pod_logs
 from kubernetes.client import AppsV1Api, CoreV1Api
 
 class TestUtils(unittest.TestCase):
@@ -13,7 +13,7 @@ class TestUtils(unittest.TestCase):
         self.core_api_client = CoreV1Api()
 
     def test_create_deployment(self):
-        create_deployment(self.name, self.image, self.ports, self.namespace, self.kind)
+        _create_deployment(self.name, self.image, self.ports, self.namespace, self.kind)
         # Add assertions here based on the expected outcome of the function
 
     def test_delete_deployment(self):
@@ -21,16 +21,17 @@ class TestUtils(unittest.TestCase):
         # Add assertions here based on the expected outcome of the function
 
     def test_get_deployment_status(self):
-        status = get_deployment_status(self.name, self.namespace)
+        _ = get_deployment_status(self.name, self.namespace)
         # Add assertions here based on the expected outcome of the function
 
     def test_get_deployment_logs(self):
-        logs = get_deployment_logs(self.name, self.namespace)
+        _ = get_deployment_logs(self.name, self.namespace)
         # Add assertions here based on the expected outcome of the function
 
     def test_get_pod_logs(self):
-        logs = get_pod_logs(self.core_api_client, self.name, self.namespace)
+        _ = _get_pod_logs(self.core_api_client, self.name, self.namespace)
         # Add assertions here based on the expected outcome of the function
+
 
 if __name__ == '__main__':
     unittest.main()

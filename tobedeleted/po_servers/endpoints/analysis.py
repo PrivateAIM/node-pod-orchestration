@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
-from ....run.utils import get_deployment_logs , delete_deployment, _create_deployment
+from tobedeleted.run.utils import get_deployment_logs , delete_deployment, _create_deployment
 router = APIRouter()
 
 
 @router.post("/start/{train_id}", response_class=JSONResponse)
 def start_analysis(analysis_id: str):
-    #TODO get corect image name
+    # TODO get corect image name
     status = _create_deployment(analysis_id, "karthequian/helloworld:latest", [80, 443])
     return {"status": status}
 
