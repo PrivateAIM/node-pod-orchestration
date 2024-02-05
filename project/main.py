@@ -1,4 +1,3 @@
-from run.utils import create_deployment, delete_deployment ,get_deployment_logs
 from project.api.po_servers.api import api_router
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,12 +29,11 @@ def main():
 
     # server = PoBaseServer()
 
-    #create_deployment("hallo-world", "karthequian/helloworld:latest", [80, 443])
 
-    #uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
-    #create_deployment( "ubuntu-test3", "ubuntu:latest", [80, 443])
-    #delete_deployment("ubuntu-test3")
-    get_deployment_logs("helloworld")
+
 if __name__ == '__main__':
+
     main()
+

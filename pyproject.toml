@@ -11,6 +11,7 @@ python = "^3.11"
 kubernetes = "^28.1.0"
 fastapi = "^0.109.0"
 uvicorn = "^0.27.0"
+docker = "^7.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
