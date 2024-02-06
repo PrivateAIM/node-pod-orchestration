@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from ...utils.docker import download_container, validate_container
 from ...utils.token import create_token
 from ...utils.kubernetes import create_deployment
+from ..database.entity import Database
 
 
 class AnalysisStatus(Enum):
@@ -28,7 +29,13 @@ class Analysis(BaseModel):
 class AnalysisCreate(Analysis):
     status: str = AnalysisStatus.CREATED.value
 
-    def __int__(self, analysis_id: str, container_registry_address: str, name: str, ports: list[int]) -> None:
+    def __int__(
+            self,
+            analysis_id: str,
+            container_registry_address: str,
+            name: str, ports: list[int],
+            database: Database,
+    ) -> None:
         self.analysis_id = analysis_id
         self.container_registry_address = container_registry_address
         self.name = name
@@ -37,9 +44,12 @@ class AnalysisCreate(Analysis):
         self.container_id = download_container(container_registry_address)
         if validate_container(container_registry_address, self.container_id):
             self.token = create_token()
-            self.pod_ids = create_deployment(name=name, image=self.container_id, ports=ports)
+
+            pod_ids = create_deployment(name=name, image=self.container_id, ports=ports)
+            self.pod_ids = pod_ids
+            database.add_entry(analysis_id, pod_ids)
+
             self.status = AnalysisStatus.RUNNING.value
-            # TODO: Add database entry
         else:
             raise ValueError('Validation of container against harbor reference failed.')
 

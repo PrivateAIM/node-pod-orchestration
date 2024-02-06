@@ -2,10 +2,13 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from .resources.analysis.entity import AnalysisCreate
+from .resources.database.entity import Database
 from ..tobedeleted.run.utils import get_deployment_logs, delete_deployment
 
 
 router = APIRouter()
+
+database = Database()
 
 
 @router.post("/start/{analysis_id}", response_class=JSONResponse)
@@ -16,6 +19,7 @@ def create_analysis(analysis_id: str, reg_address: str):
         container_registry_address=reg_address,
         name=name,
         port=[80, 443],
+        database=database,
     )
     return {"status": analysis.status}
 
