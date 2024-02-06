@@ -33,6 +33,10 @@ def get_logs(analysis_id: str):  # TODO: Rework similar to create_analysis()
     json_logs = {"logs": logs}
     return json_logs
 
+@router.get("/status/{analysis_id}", response_class=JSONResponse)
+def get_status(analysis_id: str): #TODO: Rework similar to create_analysis()
+    return {"status": ''}
+
 
 @router.put("/stop/{analysis_id}", response_class=JSONResponse)
 def stop_analysis(analysis_id: str):  # TODO: Rework similar to create_analysis()
