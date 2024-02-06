@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-from .resources.analysis.entity import AnalysisCreate
-from .resources.database.entity import Database
-from ..tobedeleted.run.utils import get_deployment_logs, delete_deployment
+from src.resources.analysis.entity import AnalysisCreate
+from src.resources.database.entity import Database
+from tobedeleted.run.utils import get_deployment_logs, delete_deployment
 
 
 router = APIRouter()

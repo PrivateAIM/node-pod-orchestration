@@ -3,10 +3,10 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from ...utils.docker import download_container, validate_container
-from ...utils.token import create_token
-from ...utils.kubernetes import create_deployment
-from ..database.entity import Database
+from src.utils.docker import download_container, validate_container
+from src.utils.token import create_token
+from src.utils.kubernetes import create_deployment, delete_deployment, get_log
+from src.resources.database.entity import Database
 
 
 class AnalysisStatus(Enum):
@@ -33,7 +33,8 @@ class AnalysisCreate(Analysis):
             self,
             analysis_id: str,
             container_registry_address: str,
-            name: str, ports: list[int],
+            name: str,
+            ports: list[int],
             database: Database,
     ) -> None:
         self.analysis_id = analysis_id
