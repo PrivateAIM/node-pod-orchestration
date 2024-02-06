@@ -56,7 +56,14 @@ class AnalysisCreate(Analysis):
 
 
 class AnalysisDelete(Analysis):
-    status: str = AnalysisStatus.STOPPED.value
+    container_registry_address: Optional[str]
+    ports: Optional[list[int]]
+    status: str = AnalysisStatus.RUNNING.value
 
-    def __int__(self):
-        pass  # TODO
+    def __int__(self, analysis_id: str, name: str, database: Database) -> None:
+        for pod_id in database.get_pod_ids(analysis_id):
+            log = get_log(name, pod_id)
+            # TODO: save final logs
+        delete_deployment(name=name)
+        self.status = AnalysisStatus.STOPPED.value
+        database.delete_entry(analysis_id)
