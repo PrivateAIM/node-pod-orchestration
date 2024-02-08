@@ -1,4 +1,5 @@
 import uvicorn
+import psycopg2
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,7 @@ def main():
         "http://localhost:8080/",
     ]
 
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
@@ -29,8 +31,17 @@ def main():
     )
 
     # server = PoBaseServer()
+    conn = psycopg2.connect(
+        host="postgresql-service",  # PostgreSQL service name
+        port="5432",
+        user="postgres",
+        password="postgres"
+    )
+
+
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 
 if __name__ == '__main__':
