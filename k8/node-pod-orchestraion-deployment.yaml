@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: po
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: po
+  template:
+    metadata:
+      labels:
+        app: po
+    spec:
+      containers:
+      - name: po
+        image: po:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: POSTGRES_HOST
+          value: postgresql
+        - name: POSTGRES_DB
+          value: postgres_db
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          value: postgres
