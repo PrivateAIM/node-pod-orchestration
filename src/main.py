@@ -3,7 +3,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.api import router
+from src.api.api import router
 
 
 def main():
@@ -35,4 +35,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

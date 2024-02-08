@@ -16,7 +16,7 @@ def create_analysis(analysis_id: str, reg_address: str):
     name = analysis_id  # TODO: Generate expressive names
     analysis = AnalysisCreate(
         analysis_id=analysis_id,
-        container_registry_address=reg_address,
+        image_registry_address=reg_address,
         name=name,
         port=[80, 443],
         database=database,
