@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException
+import os
+
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from src.resources.analysis.entity import AnalysisCreate
@@ -12,11 +14,11 @@ database = Database()
 
 
 @router.post("/start/{analysis_id}", response_class=JSONResponse)
-def create_analysis(analysis_id: str, reg_address: str):
+def create_analysis(analysis_id: str):
     name = analysis_id  # TODO: Generate expressive names
     analysis = AnalysisCreate(
         analysis_id=analysis_id,
-        image_registry_address=reg_address,
+        registry_address=os.getenv("HARBOR_URL"),
         name=name,
         port=[80, 443],
         database=database,

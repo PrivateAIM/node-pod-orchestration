@@ -22,7 +22,6 @@ class Analysis(BaseModel):
     ports: list[int]
     status: str
     log: Optional[str]
-    image_id: Optional[str]
     pod_ids: Optional[list[str]]
 
 
@@ -32,20 +31,20 @@ class AnalysisCreate(Analysis):
     def __int__(
             self,
             analysis_id: str,
-            image_registry_address: str,
+            registry_address: str,
             name: str,
             ports: list[int],
             database: Database,
     ) -> None:
         self.analysis_id = analysis_id
-        self.image_registry_address = image_registry_address
+        self.image_registry_address = registry_address + analysis_id
         self.name = name
         self.ports = ports
 
-        self.image_id = download_image(image_registry_address)
-        if validate_image(image_registry_address, self.image_id):
-            self.token = create_token()
+        self.image_id = download_image(self.image_registry_address)
+        self.token = create_token()
 
+        if validate_image(self.image_id, self.image_registry_address):
             pod_ids = create_deployment(name=name, image=self.image_id, ports=ports)
             self.pod_ids = pod_ids
             database.add_entry(analysis_id, pod_ids)
@@ -60,7 +59,12 @@ class AnalysisDelete(Analysis):
     ports: Optional[list[int]]
     status: str = AnalysisStatus.RUNNING.value
 
-    def __int__(self, analysis_id: str, name: str, database: Database) -> None:
+    def __int__(
+            self,
+            analysis_id: str,
+            name: str,
+            database: Database,
+    ) -> None:
         for pod_id in database.get_pod_ids(analysis_id):
             log = get_log(name, pod_id)
             # TODO: save final logs

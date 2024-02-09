@@ -17,7 +17,6 @@ def main():
         "http://localhost:8080/",
     ]
 
-
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
@@ -38,10 +37,7 @@ def main():
         password="postgres"
     )
 
-
-
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
 
 
 if __name__ == '__main__':
