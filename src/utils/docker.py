@@ -2,12 +2,11 @@ import os
 import docker
 
 
-_REGISTRY_ADDRESS = os.getenv("HARBOR_URL")
 _CLIENT = docker.from_env()
 _CLIENT.login(
     username=os.getenv("NODE_NAME"),
     password=os.getenv("HARBOR_PW"),
-    registry=_REGISTRY_ADDRESS,
+    registry=os.getenv("HARBOR_URL"),
 )
 
 
