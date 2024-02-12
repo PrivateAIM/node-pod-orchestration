@@ -22,3 +22,7 @@ class Database:
     def delete_entry(self, analysis_id: str) -> None:
         del self.entries[analysis_id]
         # TODO: Update external save (?)
+
+    def update_entry(self, analysis_id: str) -> None:
+        del self.entries[analysis_id]
+        # TODO: Update external save (?)
