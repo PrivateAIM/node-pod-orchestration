@@ -2,12 +2,13 @@ import os
 import docker
 
 
-_CLIENT = docker.from_env()
-_CLIENT.login(
-    username=os.getenv("NODE_NAME"),
-    password=os.getenv("HARBOR_PW"),
-    registry=os.getenv("HARBOR_URL"),
-)
+#_CLIENT = docker.from_env()
+_CLIENT = None
+#_CLIENT.login(
+#    username=os.getenv("NODE_NAME"),
+#    password=os.getenv("HARBOR_PW"),
+#    registry=os.getenv("HARBOR_URL"),
+#)
 
 
 def download_image(image_registry_address: str) -> str:

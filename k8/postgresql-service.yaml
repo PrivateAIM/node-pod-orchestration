@@ -9,3 +9,4 @@ spec:
     - protocol: TCP
       port: 5432  # Port of the service
       targetPort: 5432  # Port of the PostgreSQL pod
+  type: LoadBalancer

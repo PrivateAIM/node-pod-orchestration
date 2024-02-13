@@ -1,7 +1,7 @@
 #!/bin/bash
-
+eval $(minikube docker-env)
 # Build Docker image
-docker build -t po:latest .
+docker build  -t po:latest .
 
 # Push Docker image to registry (if needed)
 # docker push your-registry/your-image-name
@@ -9,8 +9,8 @@ docker build -t po:latest .
 # Apply Kubernetes YAML files
 kubectl apply -f k8/postgresql-deployment.yaml
 kubectl apply -f k8/postgresql-service.yaml
-kubectl apply -f k8/node-pod-orchestraion-deployment.yaml
-kubectl apply -f k8/node-pod-orchestraion-service.yaml
+kubectl apply -f k8/node-pod-orchestration-deployment.yaml
+kubectl apply -f k8/node-pod-orchestration-service.yaml
 # Add more kubectl apply commands for any additional YAML files
 
 # Wait for deployments to be ready
