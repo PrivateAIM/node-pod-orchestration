@@ -22,7 +22,7 @@ class Analysis(Base):
     image_registry_address = Column(String, nullable=True)
     ports = Column(JSON, nullable=True)
     status = Column(String, nullable=True)
-    log = Column(String, nullable=True)
+    log_location = Column(String, nullable=True)
     pod_ids = Column(JSON, nullable=True)
     minio_bucket = Column(String, nullable=True)
     minio_bucket_id = Column(String, nullable=True)

@@ -4,27 +4,15 @@ import psycopg2
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.test.test_db import TestDatabase
 from src.api.api import router
 from src.resources.database.entity import Database
 
 
 def main():
     # TODO: temporary for testing
-    db = Database()
 
-    analysis = db.create_analysis(analysis_id="1", status="pending")
-    print(analysis)
-    retrieved_analysis = db.get_analysis(analysis_id="1")
-    print(retrieved_analysis.status)
-
-    updated_analysis = db.update_analysis(analysis_id="1", status="completed")
-    print(updated_analysis.status)
-
-    db.delete_analysis(analysis_id="1")
-    db.close()
-    # TODO
-
-    print("Database created2")
+    TestDatabase()
 
     app = FastAPI(title="FLAME PO",
                   docs_url="/api/docs",
@@ -48,7 +36,7 @@ def main():
     )
 
 
-    #uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
 if __name__ == '__main__':
