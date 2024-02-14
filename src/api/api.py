@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from src.resources.analysis.entity import Analysis
 from src.resources.database.entity import Database
+from src.utils.kubernetes import get_logs
 
 
 router = APIRouter()
@@ -24,10 +25,10 @@ def create_analysis(analysis_id: str):
     return {"status": analysis.status}
 
 
-@router.get("/logs/{analysis_id}", response_class=JSONResponse)
-def get_logs(analysis_id: str):  # TODO: Rework similar to create_analysis()
-    json_logs = {"logs": "log"}
-    return json_logs
+@router.get("/{analysis_id}/logs", response_class=JSONResponse)
+def get_logs(analysis_id: str):
+    return {"logs": get_logs(analysis_id)}
+
 
 
 

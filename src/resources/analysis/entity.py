@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from src.utils.docker import download_image, validate_image
 from src.utils.token import create_token
-from src.utils.kubernetes import create_deployment, delete_deployment, get_log
+from src.utils.kubernetes import create_deployment, delete_deployment, get_logs
 from src.resources.database.entity import Database
 
 

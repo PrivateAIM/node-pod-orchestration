@@ -33,17 +33,17 @@ def delete_deployment(name: str, namespace: str = 'default') -> None:
     api_client.delete_namespaced_deployment(name=name, namespace=namespace)
 
 
-def get_log(name: str, pod_id: Optional[str], namespace: str = 'default') -> str:
+def get_logs(name: str, pod_ids: Optional[list[str]], namespace: str = 'default') -> list[str]:
     config.load_kube_config()
     api_client = client.CoreV1Api()
     # get pods in deployment
     pods = api_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name}')
-    if pod_id is not None:
-        for pod in pods.items:
-            if pod.metadata.uid == pod_id:
-                return api_client.read_namespaced_pod_log(pod.metadata.name, namespace)
+    if pod_ids is not None:
+        return [api_client.read_namespaced_pod_log(pod.metadata.name, namespace)
+                for pod in pods.items() if pod.metadata.uid in pod_ids]
 
-    return api_client.read_namespaced_pod_log(pods.items[0].metadata.name, namespace)
+    return [api_client.read_namespaced_pod_log(pod.metadata.name, namespace)
+            for pod in pods.items]
 
 
 def _get_pods(name: str, namespace: str = 'default') -> list[str]:
