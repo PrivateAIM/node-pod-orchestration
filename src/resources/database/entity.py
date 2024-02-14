@@ -49,10 +49,8 @@ class Database:
         '''
         return self.session.query(Analysis).all()
 
-
     def get_analysis_ids(self) -> list[str]:
         return [analysis.analysis_id for analysis in self.get_entrys()]
-
 
     def get_pod_ids(self, analysis_id: str) -> list[str]:
         return self.get_analysis(analysis_id).pod_ids
