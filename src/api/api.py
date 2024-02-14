@@ -21,7 +21,7 @@ def create_analysis(analysis_id: str):
         name=analysis_id,
         ports=[80, 443],
     )
-    analysis.create(database)
+    analysis.start(database)
     return {"status": analysis.status}
 
 
@@ -43,9 +43,12 @@ def get_pods(analysis_id: str):
 
 @router.put("/{analysis_id}/stop", response_class=JSONResponse)
 def stop_analysis(analysis_id: str):
-    return {"status": ''}
+    analysis = database.get_analysis(analysis_id)
+    analysis.stop(database)
+    return {"status": analysis.status}
 
 
 @router.delete("/{analysis_id}/delete", response_class=JSONResponse)
 def delete_analysis(analysis_id: str):
+    database.delete_analysis(analysis_id)
     return {"status": ''}

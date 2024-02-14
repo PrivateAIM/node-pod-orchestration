@@ -24,7 +24,7 @@ class Analysis(BaseModel):
     log: Optional[str]
     pod_ids: Optional[list[str]]
 
-    def create(self, database: Database) -> None:
+    def start(self, database: Database) -> None:
         self.status = AnalysisStatus.CREATED.value
         if validate_image(self.image_id, self.image_registry_address):
             self.pod_ids = create_deployment(name=self.name, image=self.image_id, ports=self.ports)
@@ -34,9 +34,9 @@ class Analysis(BaseModel):
         else:
             raise ValueError('Validation of image against harbor reference failed.')
 
-    def delete(self, database: Database) -> None:
+    def stop(self, database: Database) -> None:
         logs = get_logs(self.name, database.get_pod_ids(self.analysis_id))
         # TODO: save final logs
         delete_deployment(name=self.name)
         self.status = AnalysisStatus.STOPPED.value
-        database.delete_entry(self.analysis_id)
+        database.stop_analysis(self.analysis_id)
