@@ -44,7 +44,7 @@ def main():
     )
     app.include_router(
         router,
-        prefix="/api",
+        prefix="/po",
     )
 
 

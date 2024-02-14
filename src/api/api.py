@@ -30,9 +30,22 @@ def get_logs(analysis_id: str):
     return {"logs": get_logs(analysis_id)}
 
 
+@router.get("/{analysis_id}/status", response_class=JSONResponse)
+def get_status(analysis_id: str):
+    analysis = database.get_analysis(analysis_id)
+    return {"status": analysis.status}
 
 
+@router.get("/{analysis_id}/pods", response_class=JSONResponse)
+def get_pods(analysis_id: str):
+    return {"pods": database.get_pod_ids(analysis_id)}
 
-@router.put("/stop/{analysis_id}", response_class=JSONResponse)
-def stop_analysis(analysis_id: str):  # TODO: Rework similar to create_analysis()
+
+@router.put("/{analysis_id}/stop", response_class=JSONResponse)
+def stop_analysis(analysis_id: str):
+    return {"status": ''}
+
+
+@router.delete("/{analysis_id}/delete", response_class=JSONResponse)
+def delete_analysis(analysis_id: str):
     return {"status": ''}
