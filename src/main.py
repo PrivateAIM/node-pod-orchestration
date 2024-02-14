@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.api.api import router
 from src.resources.database.entity import Database
 
+
 def main():
+    # TODO: temporary for testing
     db = Database()
 
     analysis = db.create_analysis(analysis_id="1", status="pending")
@@ -20,6 +22,7 @@ def main():
 
     db.delete_analysis(analysis_id="1")
     db.close()
+    # TODO
 
     print("Database created2")
 
