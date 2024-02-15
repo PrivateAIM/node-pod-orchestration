@@ -13,9 +13,6 @@ def load_cluster_config():
 
 
 def create_deployment(name: str, image: str, ports: list[int], namespace: str = 'default') -> list[str]:
-    config.load_kube_config()
-    v1 = client.AppsV1Api()
-
     containers = []
     container1 = client.V1Container(name=name, image=image, image_pull_policy="Never",
                                     ports=[client.V1ContainerPort(port) for port in ports])
