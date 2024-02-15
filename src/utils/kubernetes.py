@@ -3,16 +3,12 @@ from typing import Optional
 from kubernetes import client, config
 
 
-app_client = client.AppsV1Api()
-
-core_client = client.CoreV1Api()
-
-
 def load_cluster_config():
     config.load_incluster_config()
 
 
 def create_deployment(name: str, image: str, ports: list[int], namespace: str = 'default') -> list[str]:
+    app_client = client.AppsV1Api()
     containers = []
     container1 = client.V1Container(name=name, image=image, image_pull_policy="Never",
                                     ports=[client.V1ContainerPort(port) for port in ports])
@@ -33,10 +29,12 @@ def create_deployment(name: str, image: str, ports: list[int], namespace: str = 
 
 
 def delete_deployment(name: str, namespace: str = 'default') -> None:
+    app_client = client.AppsV1Api()
     app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
 
 
 def get_logs(name: str, pod_ids: Optional[list[str]], namespace: str = 'default') -> list[str]:
+    core_client = client.CoreV1Api()
     # get pods in deployment
     pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name}')
     if pod_ids is not None:
@@ -48,7 +46,7 @@ def get_logs(name: str, pod_ids: Optional[list[str]], namespace: str = 'default'
 
 
 def _get_pods(name: str, namespace: str = 'default') -> list[str]:
-    api_client = client.CoreV1Api()
+    core_client = client.CoreV1Api()
 
     return [pod.metadata.name
-            for pod in api_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name}').items]
+            for pod in core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name}').items]
