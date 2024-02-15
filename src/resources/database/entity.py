@@ -1,5 +1,6 @@
 import os
 import json
+from typing import Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from .db_models import Base, Analysis

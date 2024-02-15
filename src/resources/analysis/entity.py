@@ -7,12 +7,7 @@ from src.utils.docker import download_image, validate_image
 from src.utils.token import create_token
 from src.utils.kubernetes import create_deployment, delete_deployment, get_logs
 from src.resources.database.entity import Database
-
-
-class AnalysisStatus(Enum):
-    CREATED = 'created'
-    RUNNING = 'running'
-    STOPPED = 'stopped'
+from src.resources.analysis.constants import AnalysisStatus
 
 
 class Analysis(BaseModel):
