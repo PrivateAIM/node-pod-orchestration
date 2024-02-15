@@ -6,13 +6,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from .utils.kubernetes import load_cluster_config
 from src.test.test_db import TestDatabase
 from src.api.api import router
-from src.resources.database.entity import Database
 
 
 def main():
     # TODO: temporary for testing
 
-    TestDatabase()
+    # load cluster config
+    load_cluster_config()
+
+    #TestDatabase()
 
     app = FastAPI(title="FLAME PO",
                   docs_url="/api/docs",
@@ -34,7 +36,6 @@ def main():
         router,
         prefix="/po",
     )
-
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
