@@ -1,6 +1,5 @@
 from typing import Any
-from enum import Enum
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, Column, DateTime, Integer, String
 from sqlalchemy.ext.declarative import as_declarative, declared_attr
 
 

@@ -1,9 +1,9 @@
 import uvicorn
-import psycopg2
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .utils.kubernetes import load_cluster_config
 from src.test.test_db import TestDatabase
 from src.api.api import router
 from src.resources.database.entity import Database

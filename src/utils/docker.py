@@ -1,5 +1,3 @@
-import os
-import docker
 
 
 #_CLIENT = docker.from_env()
