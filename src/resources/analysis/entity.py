@@ -26,13 +26,13 @@ class Analysis(BaseModel):
 
     def start(self, database: Database) -> None:
         self.status = AnalysisStatus.CREATED.value
-        if validate_image(self.image_id, self.image_registry_address):
-            self.pod_ids = create_deployment(name=self.name, image=self.image_id, ports=self.ports)
-            database.add_entry(self.analysis_id, self.pod_ids)
+        # if validate_image(self.image_registry_address, self.image_registry_address):
+        self.pod_ids = create_deployment(name=self.name, image=self.image_registry_address, ports=self.ports)
+        database.create_analysis(self.analysis_id, self.pod_ids)
 
-            self.status = AnalysisStatus.RUNNING.value
-        else:
-            raise ValueError('Validation of image against harbor reference failed.')
+        self.status = AnalysisStatus.RUNNING.value
+        # else:
+        #    raise ValueError('Validation of image against harbor reference failed.')
 
     def stop(self, database: Database) -> None:
         logs = get_logs(self.name, database.get_pod_ids(self.analysis_id))
