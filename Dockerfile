@@ -17,6 +17,7 @@ RUN touch README.md
 RUN poetry install --without dev --no-root && rm -rf $POETRY_CACHE_DIR
 
 COPY src ./src
+COPY .env ./
 
 
 # Make port 8080 available to the world outside this container

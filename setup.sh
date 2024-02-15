@@ -4,14 +4,22 @@ eval $(minikube docker-env)
 docker build  -t po:latest .
 
 # Push Docker image to registry (if needed)
-# docker push your-registry/your-image-name
+kubectl create serviceaccount po-sa
+sleep 3
+#
+kubectl apply -f k8/node-pod-orchestration-role.yaml
+kubectl apply -f k8/node-pod-orchestration-rolebinding.yaml
+
+sleep 3
 
 # Apply Kubernetes YAML files
 kubectl apply -f k8/postgresql-deployment.yaml
 kubectl apply -f k8/postgresql-service.yaml
+#kubectl apply -f k8/node-pod-orchestration-role.yaml
 kubectl apply -f k8/node-pod-orchestration-deployment.yaml
 kubectl apply -f k8/node-pod-orchestration-service.yaml
 # Add more kubectl apply commands for any additional YAML files
+
 
 # Wait for deployments to be ready
 kubectl wait --for=condition=available deployment/postgresql --timeout=300s
