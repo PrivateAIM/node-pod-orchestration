@@ -1,10 +1,11 @@
 [tool.poetry]
-name = "python-template-repo"
+name = "Node-Pod-Orchestration"
 version = "0.1.0"
 description = ""
-authors = ["Maximilian Jugl <Maximilian.Jugl@medizin.uni-leipzig.de>"]
+authors = ["Alexander Röhl <alexander.roehl@uni-tuebingen.de>","David Hieber <david.hieber@uni-tuebingen.de>", "Maximilian Jugl <Maximilian.Jugl@medizin.uni-leipzig.de>"]
+license = "Apache 2.0"
 readme = "README.md"
-packages = [{ include = "project" }]
+packages = [{ include = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
