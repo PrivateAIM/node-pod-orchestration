@@ -29,5 +29,12 @@ spec:
           value: postgres
         - name: HARBOR_URL
           value: "harbor_url"
-
+        livenessProbe:
+          httpGet:
+            path: /po/healthz
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          failureThreshold: 1
+          timeoutSeconds: 5
 ---

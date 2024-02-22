@@ -8,7 +8,6 @@ from src.resources.analysis.constants import AnalysisStatus
 from src.resources.database.entity import Database
 from src.utils.kubernetes import get_logs, delete_deployment
 
-
 router = APIRouter()
 
 database = Database()
@@ -56,3 +55,9 @@ def delete_analysis(analysis_id: str):
         analysis.status = AnalysisStatus.STOPPED.value
     database.delete_analysis(analysis_id)
     return {"status": analysis.status}
+
+
+@router.get("/healthz", response_class=JSONResponse)
+def health():
+
+    return {"status": "ok"}
