@@ -1,6 +1,6 @@
 import os
 
-from fastapi import APIRouter
+from fastapi import APIRouter , Body
 from fastapi.responses import JSONResponse
 
 from src.resources.analysis.entity import Analysis, read_db_analysis
@@ -17,7 +17,7 @@ database = Database()
 def create_analysis(analysis_id: str):
     analysis = Analysis(
         analysis_id=analysis_id,
-        image_registry_address=os.getenv("HARBOR_URL") + analysis_id,
+        image_registry_address=create_image_address(analysis_id),
         ports=[80, 443],
     )
     analysis.start(database)

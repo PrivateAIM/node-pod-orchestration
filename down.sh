@@ -10,6 +10,7 @@ kubectl delete serviceaccount po-sa
 kubectl delete rolebinding po-sa-binding
 kubectl delete secret po-sa-token
 kubectl delete deployment postgresql
+kubectl delete secret harbor-credentials
 
 sleep 3
 docker rmi 'po:latest'

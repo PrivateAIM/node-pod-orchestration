@@ -1,5 +1,5 @@
 from typing import Optional
-
+import os
 from kubernetes import client, config
 
 
@@ -17,7 +17,10 @@ def create_deployment(name: str, image: str, ports: list[int], namespace: str = 
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
     depl_pod_metadata = client.V1ObjectMeta(labels={'app': name})
     depl_selector = client.V1LabelSelector(match_labels={'app': name})
-    depl_pod_spec = client.V1PodSpec(containers=containers)
+    depl_pod_spec = client.V1PodSpec(containers=containers,
+                                     image_pull_secrets=[
+                                         client.V1LocalObjectReference(name="harbor-credentials"),
+                                     ])
     depl_template = client.V1PodTemplateSpec(metadata=depl_pod_metadata, spec=depl_pod_spec)
 
     depl_spec = client.V1DeploymentSpec(selector=depl_selector, template=depl_template)

@@ -27,8 +27,6 @@ spec:
           value: postgres
         - name: POSTGRES_PASSWORD
           value: postgres
-        - name: HARBOR_URL
-          value: "harbor_url"
         livenessProbe:
           httpGet:
             path: /po/healthz
