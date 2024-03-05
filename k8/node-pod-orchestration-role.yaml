@@ -4,9 +4,9 @@ metadata:
   namespace: default
   name:  po-sa
 rules:
-- apiGroups: ["apps"] # "" indicates the core API group
+- apiGroups: ["apps"] # indicates the apps API group
   resources: ["deployments"]
   verbs: ["*"]
-- apiGroups: [""] # "" indicates the core API group
-  resources: ["pods"]
+- apiGroups: [""] # indicates the core API group
+  resources: ["pods", "secrets"]
   verbs: ["*"]

@@ -7,10 +7,21 @@ def load_cluster_config():
     config.load_incluster_config()
 
 
+def create_harbor_secret(name: str = 'harbor-credentials', namespace: str = 'default') -> None:
+    core_client = client.CoreV1Api()
+    secret_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
+    secret = client.V1Secret(metadata=secret_metadata,
+                             string_data={'docker-server': os.getenv('HARBOR_URL'),
+                                          'docker-username': os.getenv('HARBOR_USER'),
+                                          'docker-password': os.getenv('HARBOR_PASSWORD')}
+                             )
+    core_client.create_namespaced_secret(namespace=namespace, body=secret)
+
+
 def create_deployment(name: str, image: str, ports: list[int], namespace: str = 'default') -> list[str]:
     app_client = client.AppsV1Api()
     containers = []
-    container1 = client.V1Container(name=name, image=image, image_pull_policy="Never",
+    container1 = client.V1Container(name=name, image=image, image_pull_policy="Always",
                                     ports=[client.V1ContainerPort(port) for port in ports])
     containers.append(container1)
 

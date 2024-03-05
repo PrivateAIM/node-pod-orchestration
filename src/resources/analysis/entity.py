@@ -20,8 +20,6 @@ class Analysis(BaseModel):
     def start(self, database: Database) -> None:
         self.status = AnalysisStatus.CREATED.value
 
-        self.image_registry_address = "karthequian/helloworld:latest"  # TODO: Delete this, when Harbor is up
-
         self.pod_ids = create_deployment(name=self.analysis_id, image=self.image_registry_address, ports=self.ports)
         self.status = AnalysisStatus.RUNNING.value
         database.create_analysis(analysis_id=self.analysis_id,
