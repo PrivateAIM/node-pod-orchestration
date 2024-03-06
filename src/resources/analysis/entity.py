@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from src.utils.kubernetes import create_deployment, delete_deployment, get_logs
+from src.utils.token import create_tokens
 from src.resources.database.db_models import Analysis as AnalysisDB
 from src.resources.database.entity import Database
 from src.resources.analysis.constants import AnalysisStatus
@@ -13,14 +14,18 @@ class Analysis(BaseModel):
     analysis_id: str
     image_registry_address: str
     ports: list[int]
+    tokens: Optional[dict[str, str]] = None
     status: Optional[str] = None
     log: Optional[str] = None
     pod_ids: Optional[list[str]] = None
 
     def start(self, database: Database) -> None:
         self.status = AnalysisStatus.CREATED.value
-
-        self.pod_ids = create_deployment(name=self.analysis_id, image=self.image_registry_address, ports=self.ports)
+        self.tokens = create_tokens()
+        self.pod_ids = create_deployment(name=self.analysis_id,
+                                         image=self.image_registry_address,
+                                         ports=self.ports,
+                                         tokens=self.tokens)
         self.status = AnalysisStatus.RUNNING.value
         database.create_analysis(analysis_id=self.analysis_id,
                                  pod_ids=self.pod_ids,

@@ -18,11 +18,17 @@ def create_harbor_secret(name: str = 'harbor-credentials', namespace: str = 'def
     core_client.create_namespaced_secret(namespace=namespace, body=secret)
 
 
-def create_deployment(name: str, image: str, ports: list[int], namespace: str = 'default') -> list[str]:
+def create_deployment(name: str,
+                      image: str,
+                      ports: list[int],
+                      tokens: dict[str, str] = {},
+                      namespace: str = 'default') -> list[str]:
     app_client = client.AppsV1Api()
     containers = []
     container1 = client.V1Container(name=name, image=image, image_pull_policy="Always",
-                                    ports=[client.V1ContainerPort(port) for port in ports])
+                                    ports=[client.V1ContainerPort(port) for port in ports],
+                                    env=[client.V1EnvVar(name=key, value=val) for key, val in tokens.items()],
+                                    command=["/bin/sh", "-c", "sleep 3600"])  # TODO: remove command only for testing because images dont have endpoints
     containers.append(container1)
 
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
