@@ -25,10 +25,16 @@ def create_deployment(name: str,
                       namespace: str = 'default') -> list[str]:
     app_client = client.AppsV1Api()
     containers = []
+
+    liveness_probe = client.V1Probe(http_get=client.V1HTTPGetAction(path="/po/node/healthz", port=8000),
+                                    initial_delay_seconds=15,
+                                    period_seconds=20,
+                                    failure_threshold=1,
+                                    timeout_seconds=5)
     container1 = client.V1Container(name=name, image=image, image_pull_policy="Always",
                                     ports=[client.V1ContainerPort(port) for port in ports],
                                     env=[client.V1EnvVar(name=key, value=val) for key, val in tokens.items()],
-                                    command=["/bin/sh", "-c", "sleep 3600"])  # TODO: remove command only for testing because images dont have endpoints
+                                    liveness_probe=liveness_probe)
     containers.append(container1)
 
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace)

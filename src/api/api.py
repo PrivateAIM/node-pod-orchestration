@@ -1,6 +1,6 @@
 import os
 
-from fastapi import APIRouter , Body
+from fastapi import APIRouter, Body
 from fastapi.responses import JSONResponse
 
 from src.resources.analysis.entity import Analysis, read_db_analysis
@@ -60,5 +60,4 @@ def delete_analysis(analysis_id: str):
 
 @router.get("/healthz", response_class=JSONResponse)
 def health():
-
     return {"status": "ok"}
