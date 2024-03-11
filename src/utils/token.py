@@ -10,8 +10,8 @@ from kong_admin_client.models.create_key_auth_for_consumer_request import (
 
 
 def create_tokens(analysis_id: str, project_id: str = "project1") -> dict[str, str]:
-    return {'data_source_token': _get_kong_token(analysis_id, project_id),
-            'message_broker_token': "def567"}
+    return {'DATA_SOURCE_TOKEN': _get_kong_token(analysis_id, project_id),
+            'MESSAGE_BROKER_TOKEN': "def567"}
 
 
 def _get_kong_token(analysis_id: str, project_id: str) -> str:

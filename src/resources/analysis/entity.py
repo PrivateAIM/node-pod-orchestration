@@ -8,6 +8,7 @@ from src.utils.token import create_tokens
 from src.resources.database.db_models import Analysis as AnalysisDB
 from src.resources.database.entity import Database
 from src.resources.analysis.constants import AnalysisStatus
+import random
 
 
 class Analysis(BaseModel):
@@ -21,7 +22,8 @@ class Analysis(BaseModel):
 
     def start(self, database: Database) -> None:
         self.status = AnalysisStatus.CREATED.value
-        self.tokens = create_tokens(self.analysis_id)
+        # TODO: solution for some anlyis that have to be started multiple times
+        self.tokens = create_tokens(self.analysis_id + str(random.randint(0, 10000)))
         self.pod_ids = create_deployment(name=self.analysis_id,
                                          image=self.image_registry_address,
                                          ports=self.ports,
