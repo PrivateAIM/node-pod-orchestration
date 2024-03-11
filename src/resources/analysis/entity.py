@@ -21,7 +21,7 @@ class Analysis(BaseModel):
 
     def start(self, database: Database) -> None:
         self.status = AnalysisStatus.CREATED.value
-        self.tokens = create_tokens()
+        self.tokens = create_tokens(self.analysis_id)
         self.pod_ids = create_deployment(name=self.analysis_id,
                                          image=self.image_registry_address,
                                          ports=self.ports,
