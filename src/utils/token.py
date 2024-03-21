@@ -1,3 +1,5 @@
+import os
+import requests
 from kong_admin_client import Configuration, ApiClient, ConsumersApi, ACLsApi, KeyAuthsApi
 from kong_admin_client.rest import ApiException
 from kong_admin_client.models.create_consumer_request import CreateConsumerRequest
@@ -11,7 +13,34 @@ from kong_admin_client.models.create_key_auth_for_consumer_request import (
 
 def create_tokens(analysis_id: str, project_id: str = "project1") -> dict[str, str]:
     return {'DATA_SOURCE_TOKEN': _get_kong_token(analysis_id, project_id),
-            'MESSAGE_BROKER_TOKEN': "def567"}
+            'MESSAGE_BROKER_TOKEN': _get_message_broker_token(analysis_id, project_id),
+            'RESULT_SERVICE_TOKEN': _get_result_service_token(analysis_id, project_id)}
+
+
+def _get_message_broker_token(analysis_id: str, project_id: str) -> str:
+    # http://localhost:18080/realms/master/protocol/openid-connect/certs
+    # random token for now later we will gete
+    return "def567"
+
+def _get_result_service_token(analysis_id: str, project_id: str) -> str:
+    # curl -q -X POST -d "grant_type=client_credentials&client_id=service1&client_secret=9dd01665c2f3f02f93c32d03bd854569f03cd62f439ccf9f0861c141b9d6330e" http://keycloak-service:8080/realms/flame/protocol/openid-connect/token
+    client = os.getenv('RESULT_CLIENT_ID')
+    client_secret = os.getenv('RESULT_CLIENT_SECRET')
+    keycloak_url = os.getenv('KEYCLOAK_URL')+ "/realms/flame/protocol/openid-connect/token"
+
+
+    data = {"grant_type": "client_credentials", "client_id": client, "client_secret": client_secret}
+
+    # get token from keycloak like in the above curl command
+    try:
+        response = requests.post(keycloak_url, data=data)
+        response.raise_for_status()
+        return response.json()['access_token']
+    except requests.exceptions.RequestException as e:
+        print(e)
+        return None
+
+
 
 
 def _get_kong_token(analysis_id: str, project_id: str) -> str:
