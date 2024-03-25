@@ -1,5 +1,5 @@
 import os
-
+from pydantic import BaseModel
 from fastapi import APIRouter, Body
 from fastapi.responses import JSONResponse
 
@@ -14,11 +14,17 @@ router = APIRouter()
 database = Database()
 
 
-@router.post("/{analysis_id}", response_class=JSONResponse)
-def create_analysis(analysis_id: str):
+class CreateAnalysis(BaseModel):
+    analysis_id: str = 'flame-test'
+    project_id: str = 'project1'
+
+
+@router.post("/", response_class=JSONResponse)
+def create_analysis(body: CreateAnalysis):
     analysis = Analysis(
-        analysis_id=analysis_id,
-        image_registry_address=create_image_address(analysis_id),
+        analysis_id=body.analysis_id,
+        project_id=body.project_id,
+        image_registry_address=create_image_address(body.analysis_id),
         ports=[80, 443],
     )
     analysis.start(database)
