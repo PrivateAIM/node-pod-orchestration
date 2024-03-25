@@ -18,11 +18,11 @@ def create_harbor_secret(name: str = 'harbor-credentials', namespace: str = 'def
     core_client.create_namespaced_secret(namespace=namespace, body=secret)
 
 
-def create_deployment(name: str,
-                      image: str,
-                      ports: list[int],
-                      tokens: dict[str, str] = {},
-                      namespace: str = 'default') -> list[str]:
+def create_analysis_deployment(name: str,
+                               image: str,
+                               ports: list[int],
+                               tokens: dict[str, str] = {},
+                               namespace: str = 'default') -> list[str]:
     app_client = client.AppsV1Api()
     containers = []
 
@@ -38,8 +38,8 @@ def create_deployment(name: str,
     containers.append(container1)
 
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
-    depl_pod_metadata = client.V1ObjectMeta(labels={'app': name})
-    depl_selector = client.V1LabelSelector(match_labels={'app': name})
+    depl_pod_metadata = client.V1ObjectMeta(labels={'app': name, 'mode': 'analysis'})
+    depl_selector = client.V1LabelSelector(match_labels={'app': name, 'mode': 'analysis'})
     depl_pod_spec = client.V1PodSpec(containers=containers,
                                      image_pull_secrets=[
                                          client.V1LocalObjectReference(name="harbor-credentials"),

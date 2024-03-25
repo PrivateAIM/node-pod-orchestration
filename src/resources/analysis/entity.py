@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from src.utils.kubernetes import create_deployment, delete_deployment, get_logs
+from src.utils.kubernetes import create_analysis_deployment, delete_deployment, get_logs
 from src.utils.token import create_tokens
 from src.resources.database.db_models import Analysis as AnalysisDB
 from src.resources.database.entity import Database
@@ -13,6 +13,7 @@ import random
 
 class Analysis(BaseModel):
     analysis_id: str
+    project_id: str
     image_registry_address: str
     ports: list[int]
     tokens: Optional[dict[str, str]] = None
@@ -22,14 +23,15 @@ class Analysis(BaseModel):
 
     def start(self, database: Database) -> None:
         self.status = AnalysisStatus.CREATED.value
-        # TODO: solution for some anlyis that have to be started multiple times
-        self.tokens = create_tokens(self.analysis_id + str(random.randint(0, 10000)))
-        self.pod_ids = create_deployment(name=self.analysis_id,
-                                         image=self.image_registry_address,
-                                         ports=self.ports,
-                                         tokens=self.tokens)
+        # TODO: solution for some analyis that have to be started multiple times
+        self.tokens = create_tokens(self.analysis_id + str(random.randint(0, 10000)), self.project_id)
+        self.pod_ids = create_analysis_deployment(name=self.analysis_id,
+                                                  image=self.image_registry_address,
+                                                  ports=self.ports,
+                                                  tokens=self.tokens)
         self.status = AnalysisStatus.RUNNING.value
         database.create_analysis(analysis_id=self.analysis_id,
+                                 project_id=self.project_id,
                                  pod_ids=self.pod_ids,
                                  status=self.status,
                                  log=self.log,
@@ -46,6 +48,7 @@ class Analysis(BaseModel):
 
 def read_db_analysis(analysis: AnalysisDB) -> Analysis:
     return Analysis(analysis_id=analysis.analysis_id,
+                    project_id=analysis.project_id,
                     image_registry_address=analysis.image_registry_address,
                     ports=json.loads(analysis.ports),
                     status=analysis.status,
