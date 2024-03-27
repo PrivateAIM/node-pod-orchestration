@@ -14,10 +14,11 @@ class Base:
         return cls.__name__.lower()
 
 
-class Analysis(Base):
+class AnalysisDB(Base):
     __tablename__ = "analysis"
     id = Column(Integer, primary_key=True, index=True)
-    analysis_id = Column(String, unique=True, index=True)
+    deployment_name = Column(String, unique=True, index=True)
+    analysis_id = Column(String, unique=False, index=True)
     project_id = Column(String, unique=False, index=True)
     image_registry_address = Column(String, nullable=True)
     ports = Column(JSON, nullable=True)

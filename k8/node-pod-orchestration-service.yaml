@@ -10,4 +10,4 @@ spec:
       port: 80         # Port on the service
       targetPort: 8000 # Port your Python app is listening on
       nodePort: 30000  # Choose a port number within the range 30000-32767
-  type: NodePort
+  type: NodePort # TODO Change this to LoadBalancer, only for testing purposes

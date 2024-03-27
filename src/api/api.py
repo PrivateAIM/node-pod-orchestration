@@ -33,35 +33,41 @@ def create_analysis(body: CreateAnalysis):
 
 @router.get("/{analysis_id}/logs", response_class=JSONResponse)
 def retrieve_logs(analysis_id: str):
-    return {"logs": get_logs(analysis_id, database.get_pod_ids(analysis_id))}
+    deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
+    return {"logs": {deployment.deployment_name: get_logs(deployment.deployment_name,
+                                                          database.get_deployment_pod_ids(deployment.deployment_name)
+                                                          )
+                     for deployment in deployments}}
 
 
 @router.get("/{analysis_id}/status", response_class=JSONResponse)
 def get_status(analysis_id: str):
-    analysis = database.get_analysis(analysis_id)
-    return {"status": analysis.status}
+    deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
+    return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
 @router.get("/{analysis_id}/pods", response_class=JSONResponse)
 def get_pods(analysis_id: str):
-    return {"pods": database.get_pod_ids(analysis_id)}
+    return {"pods": database.get_analysis_pod_ids(analysis_id)}
 
 
 @router.put("/{analysis_id}/stop", response_class=JSONResponse)
 def stop_analysis(analysis_id: str):
-    analysis = read_db_analysis(database.get_analysis(analysis_id))
-    analysis.stop(database)
-    return {"status": analysis.status}
+    deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
+    for deployment in deployments:
+        deployment.stop(database)
+    return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
 @router.delete("/{analysis_id}/delete", response_class=JSONResponse)
 def delete_analysis(analysis_id: str):
-    analysis = read_db_analysis(database.get_analysis(analysis_id))
-    if analysis.status != AnalysisStatus.STOPPED.value:
-        analysis.stop(database)
-        analysis.status = AnalysisStatus.STOPPED.value
+    deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
+    for deployment in deployments:
+        if deployment.status != AnalysisStatus.STOPPED.value:
+            deployment.stop(database)
+            deployment.status = AnalysisStatus.STOPPED.value
     database.delete_analysis(analysis_id)
-    return {"status": analysis.status}
+    return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
 @router.get("/healthz", response_class=JSONResponse)

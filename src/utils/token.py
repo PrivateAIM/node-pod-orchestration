@@ -27,8 +27,7 @@ def _get_result_service_token(analysis_id: str, project_id: str) -> str:
     # curl -q -X POST -d "grant_type=client_credentials&client_id=service1&client_secret=9dd01665c2f3f02f93c32d03bd854569f03cd62f439ccf9f0861c141b9d6330e" http://keycloak-service:8080/realms/flame/protocol/openid-connect/token
     client = os.getenv('RESULT_CLIENT_ID')
     client_secret = os.getenv('RESULT_CLIENT_SECRET')
-    keycloak_url = os.getenv('KEYCLOAK_URL')+ "/realms/flame/protocol/openid-connect/token"
-
+    keycloak_url = os.getenv('KEYCLOAK_URL') + "/realms/flame/protocol/openid-connect/token"
 
     data = {"grant_type": "client_credentials", "client_id": client, "client_secret": client_secret}
 
