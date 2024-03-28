@@ -4,9 +4,12 @@ metadata:
   namespace: default
   name:  po-sa
 rules:
+- apiGroups: ["networking.k8s.io"] # indicates the network API group
+  resources: ["networkpolicies"]
+  verbs: ["*"]
 - apiGroups: ["apps"] # indicates the apps API group
   resources: ["deployments"]
   verbs: ["*"]
 - apiGroups: [""] # indicates the core API group
-  resources: ["pods", "secrets"]
+  resources: ["pods", "secrets", "services"]
   verbs: ["*"]

@@ -25,7 +25,7 @@ def create_analysis(body: CreateAnalysis):
         analysis_id=body.analysis_id,
         project_id=body.project_id,
         image_registry_address=create_image_address(body.analysis_id),
-        ports=[80, 443],
+        ports=[8000],
     )
     analysis.start(database)
     return {"status": analysis.status}
