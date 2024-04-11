@@ -1,0 +1,28 @@
+api:
+  version: 0.1.0
+  domain: localhost
+env:
+
+    NODE_NAME: #TODO
+    NODE_KEY: #TODO
+    NODE_KEY_PW: #TODO
+
+    HARBOR_URL: dev-harbor.personalhealthtrain.de
+    HARBOR_PW: test
+    HARBOR_USER: test
+
+    KEYCLOAK_URL: http://keycloak-service
+    KEYCLOAK_REALM: flame
+
+    RESULT_CLIENT_ID: service1
+    RESULT_CLIENT_SECRET: abc
+
+    DB_HOST: postgresql-service
+    DB_PORT: 5432
+    DB_USER: #TODO
+    DB_PASSWORD: #TODO
+
+
+    POSTGRES_DB: postgres_db
+    POSTGRES_USER: #TODO
+    POSTGRES_PASSWORD: #TODO

@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-po
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: po
+      version: {{ .Chart.AppVersion }}
+      deployment-id:  {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        component: po
+        version: {{ .Chart.AppVersion }}
+        deployment-id: {{ .Release.Name }}
+    spec:
+      #volumes:
+      #  - name: keys
+      #    hostPath:
+      #      path: {{ .Values.env.NODE_KEY}}
+      #      type: File
+      containers:
+      - name: po
+        image: po:latest
+        imagePullPolicy: IfNotPresent
+        #VolumeMounts:
+        #  - mountPath: /config/keys
+        #    name: keys
+        ports:
+        - containerPort: 8080
+        env:
+        - name: POSTGRES_HOST
+          value: {{ .Values.env.POSTGRES_HOST}}
+        - name: POSTGRES_DB
+          value: {{ .Values.env.POSTGRES_DB}}
+        - name: POSTGRES_USER
+          value: {{ .Values.env.POSTGRES_USER}}
+        - name: POSTGRES_PASSWORD
+          value: {{ .Values.env.POSTGRES_USER}}
+        - name: RESULT_CLIENT_ID
+          value: {{ .Values.env.RESULT_CLIENT_ID}}
+        - name: RESULT_CLIENT_SECRET
+          value: {{ .Values.env.RESULT_CLIENT_SECRET}}
+        - name: KEYCLOAK_URL
+          value: {{ .Values.env.KEYCLOAK_URL}}
+        - name: KEYCLOAK_REALM
+          value: {{ .Values.env.KEYCLOAK_REALM}}
+        - name: HARBOR_URL
+          value: {{ .Values.env.HARBOR_URL}}
+        - name: HARBOR_USER
+          value: {{ .Values.env.HARBOR_USER}}
+        - name: HARBOR_PW
+          value: {{ .Values.env.HARBOR_PW}}
+        - name: NODE_NAME
+          value: {{ .Values.env.NODE_NAME}}
+        - name: NODE_PW
+          value: {{ .Values.env.NODE_PW}}
+        - name: NODE_KEY_PW
+          value: {{ .Values.env.NODE_KEY_PW}}
+        livenessProbe:
+          httpGet:
+            path: /po/healthz
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          failureThreshold: 1
+          timeoutSeconds: 5
+---

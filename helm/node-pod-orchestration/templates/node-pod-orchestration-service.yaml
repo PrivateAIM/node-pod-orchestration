@@ -1,13 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: po-service
+  name: {{ .Release.Name }}-po-service
 spec:
   selector:
     app: po   # Selector to match the pods of your Python app deployment
   ports:
     - protocol: TCP
-      port: 80         # Port on the service
+      port: 8000         # Port on the service
       targetPort: 8000 # Port your Python app is listening on
-      nodePort: 30000  # Choose a port number within the range 30000-32767
-  type: NodePort # TODO Change this to LoadBalancer, only for testing purposes
+  type: ClusterIP # TODO Change this to LoadBalancer, only for testing purposes

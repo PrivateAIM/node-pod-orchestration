@@ -2,7 +2,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   namespace: default
-  name:  po-sa
+  name:  {{ .Release.Name }}-po-sa
 rules:
 - apiGroups: ["networking.k8s.io"] # indicates the network API group
   resources: ["networkpolicies"]
