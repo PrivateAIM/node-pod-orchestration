@@ -103,7 +103,7 @@ def _create_analysis_network_policy(namespace: str = 'default') -> None:
 def delete_deployment(name: str, namespace: str = 'default') -> None:
     app_client = client.AppsV1Api()
     app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
-    _delete_service(name, namespace)
+    _delete_service(f"service-{name}", namespace)
 
 
 def _delete_service(name: str, namespace: str = 'default') -> None:
