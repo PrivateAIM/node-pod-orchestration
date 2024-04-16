@@ -37,5 +37,5 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }},ghcr.io/privateaim/node-pod-orchestraion:latest
+          tags: ${{ steps.meta.outputs.tags }},ghcr.io/privateaim/node-pod-orchestration:latest
           labels: ${{ steps.meta.outputs.labels }}
