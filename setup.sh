@@ -19,6 +19,11 @@ docker build  -t po:latest .
 #kubectl apply -f k8/manifests/node-pod-orchestration-deployment.yaml
 #kubectl apply -f k8/manifests/node-pod-orchestration-service.yaml
 # Add more kubectl apply commands for any additional YAML files
+kubectl apply -f k8/node-po-nginx-config-map.yaml
+kubectl apply -f k8/node-po-nginx-deployment.yaml
+kubectl apply -f k8/node-po-nginx-service.yaml
+#kubectl apply -f k8/node-analysis-network-policy.yaml
+
 
 
 # Wait for deployments to be ready
