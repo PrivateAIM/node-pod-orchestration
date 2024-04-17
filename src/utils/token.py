@@ -12,15 +12,16 @@ from kong_admin_client.models.create_key_auth_for_consumer_request import (
 
 
 def create_tokens(analysis_id: str, project_id: str) -> dict[str, str]:
-    return {'DATA_SOURCE_TOKEN': _get_kong_token(analysis_id, project_id),
+    tokens = {'DATA_SOURCE_TOKEN': _get_kong_token(analysis_id, project_id),
             'KEYCLOAK_TOKEN': _get_keycloak_token(analysis_id, project_id)}
 
+    return tokens
 
 
 
 def _get_keycloak_token(analysis_id: str, project_id: str) -> str:
     #TODO create client in keycloak
-    # curl -q -X POST -d "grant_type=client_credentials&client_id=service1&client_secret=9dd01665c2f3f02f93c32d03bd854569f03cd62f439ccf9f0861c141b9d6330e" http://keycloak-service:8080/realms/flame/protocol/openid-connect/token
+    # curl -q -X POST -d "grant_type=client_credentials&client_id=service1&client_secret=9dd01665c2f3f02f93c32d03bd854569f03cd62f439ccf9f0861c141b9d6330e" http://flame-node-keycloak-service:8080/realms/flame/protocol/openid-connect/token
     client = os.getenv('RESULT_CLIENT_ID')
     client_secret = os.getenv('RESULT_CLIENT_SECRET')
 
@@ -39,7 +40,7 @@ def _get_keycloak_token(analysis_id: str, project_id: str) -> str:
 
 
 def _get_kong_token(analysis_id: str, project_id: str) -> str:
-    kong_admin_url = "kong-kong-admin"
+    kong_admin_url = "flame-node-kong-admin"
     configuration = Configuration(host=kong_admin_url)
 
     # Add consumer
