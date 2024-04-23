@@ -63,8 +63,8 @@ def _get_keycloak_client_secret(analysis_id: str) -> str:
 
 def _get_keycloak_admin_token() -> str:
     # curl -d "grant_type=client_credentials" -d "client_id=admin_script" -d "client_secret=RSDuBMhVIGnqEzOZjTLDjT0q5jpw5Igz" "http://flame-node-keycloak-service:8080/realms/flame/protocol/openid-connect/token"
-    keycloak_admin_client_id = os.getenv('KEYCLOAK_ADMIN_CLIENT_ID')
-    keycloak_admin_client_secret = os.getenv('KEYCLOAK_ADMIN_CLIENT_SECRET')
+    keycloak_admin_client_id = os.getenv('RESULT_CLIENT_ID')
+    keycloak_admin_client_secret = os.getenv('RESULT_CLIENT_SECRET')
 
     # get admin token
     url_admin_access_token = f"{_KEYCLOAK_URL}/realms/{_KEYCLOAK_REALM}/protocol/openid-connect/token"
