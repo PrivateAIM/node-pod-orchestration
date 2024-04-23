@@ -73,7 +73,7 @@ def _get_keycloak_admin_token() -> str:
         "client_id": keycloak_admin_client_id,
         "client_secret": keycloak_admin_client_secret
     }
-    response = requests.get(url_admin_access_token, data=data)
+    response = requests.post(url_admin_access_token, data=data)
     response.raise_for_status()
     print('Admin token:', response.json()['access_token'])
 
