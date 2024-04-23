@@ -86,9 +86,9 @@ def _keycloak_client_exists(analysis_id: str, admin_token: str) -> bool:
 
     response = requests.get(url_get_client, headers=headers)
     response.raise_for_status()
-    print('Does client already exist:', bool(response))
+    print('Does client already exist:', bool(response.json()))
 
-    return bool(response)
+    return bool(response.json())
 
 
 def _create_keycloak_client(admin_token: str, analysis_id: str) -> None:
