@@ -95,7 +95,7 @@ def _create_keycloak_client(admin_token: str, analysis_id: str) -> None:
     # curl -X POST -d '{ "clientId": "service3" }' -H "Content-Type:application/json" -H "Authorization: Bearer $token" "http://flame-node-keycloak-service:8080/admin/realms/flame/clients"
     url_create_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients"
     headers = {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
-    client_data = {"clientId": analysis_id}
+    client_data = {"clientId": analysis_id, "serviceAccountsEnabled": "true"}
 
     response = requests.post(url_create_client, headers=headers, json=client_data)
     response.raise_for_status()
