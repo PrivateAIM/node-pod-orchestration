@@ -56,9 +56,9 @@ def _get_keycloak_client_secret(analysis_id: str) -> str:
 
     response = requests.get(url_get_client, headers=headers)
     response.raise_for_status()
-    print('Client secret:', response.json()['secret'])
+    print('Client secret:', response.json()[0]['secret'])
 
-    return response.json()['secret']
+    return response.json()[0]['secret']
 
 
 def _get_keycloak_admin_token() -> str:
@@ -111,7 +111,7 @@ def delete_keycloak_client(analysis_id: str) -> None:
     response = requests.get(url_get_client, headers=headers)
     response.raise_for_status()
     try:
-        uuid = response.json()['id']
+        uuid = response.json()[0]['id']
     except KeyError:
         print('Client not found')
         return
