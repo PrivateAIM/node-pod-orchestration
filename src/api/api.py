@@ -63,12 +63,13 @@ def stop_analysis(analysis_id: str):
 @router.delete("/{analysis_id}/delete", response_class=JSONResponse)
 def delete_analysis(analysis_id: str):
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
+
     for deployment in deployments:
         if deployment.status != AnalysisStatus.STOPPED.value:
             deployment.stop(database)
             deployment.status = AnalysisStatus.STOPPED.value
+        delete_keycloak_client(deployment.deployment_name)
     database.delete_analysis(analysis_id)
-    delete_keycloak_client(analysis_id)
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
