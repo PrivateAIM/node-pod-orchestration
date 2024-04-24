@@ -1,3 +1,4 @@
+import os
 import json
 from typing import Optional, List, Type
 from sqlalchemy import create_engine
@@ -9,10 +10,10 @@ from .db_models import Base, AnalysisDB
 
 class Database:
     def __init__(self) -> None:
-        host = "flame-node-postgresql-service"
-        port = "5432"
-        user = "postgres"
-        password = "postgres"
+        host = os.getenv("DB_HOST", "flame-node-postgresql-service")
+        port = os.getenv("DB_PORT", "5432")
+        user = os.getenv("DB_USER", "postgres")
+        password = os.getenv("DB_PASSWORD", "postgres")
         print(f'postgresql+psycopg2://{user}:{password}@{host}:{port}')
         self.engine = create_engine(f'postgresql+psycopg2://{user}:{password}@{host}:{port}')
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
