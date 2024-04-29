@@ -9,7 +9,7 @@ from .db_models import Base, AnalysisDB
 
 class Database:
     def __init__(self) -> None:
-        host = "flame-node-postgresql-service"
+        host = "flame-node-postgresql"
         port = "5432"
         user = "postgres"
         password = "postgres"
