@@ -7,6 +7,7 @@ from src.resources.analysis.entity import Analysis, read_db_analysis
 from src.resources.analysis.constants import AnalysisStatus
 from src.resources.database.entity import Database
 from src.utils.kubernetes import get_logs, delete_deployment
+from src.utils.token import delete_keycloak_client
 from src.utils.other import create_image_address
 
 router = APIRouter()
@@ -62,10 +63,12 @@ def stop_analysis(analysis_id: str):
 @router.delete("/{analysis_id}/delete", response_class=JSONResponse)
 def delete_analysis(analysis_id: str):
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
+
     for deployment in deployments:
         if deployment.status != AnalysisStatus.STOPPED.value:
             deployment.stop(database)
             deployment.status = AnalysisStatus.STOPPED.value
+        delete_keycloak_client(deployment.deployment_name)
     database.delete_analysis(analysis_id)
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 

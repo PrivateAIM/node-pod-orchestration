@@ -24,9 +24,9 @@ COPY src ./src
 EXPOSE 8000
 
 # Define environment variable
-#ENV POSTGRES_HOST=<postgres_host>
-#ENV POSTGRES_DB=<postgres_db>
-#ENV POSTGRES_USER=<postgres_user>
-#ENV POSTGRES_PASSWORD=<postgres_password>
+ENV POSTGRES_HOST=<postgres_host>
+ENV POSTGRES_DB=<postgres_db>
+ENV POSTGRES_USER=<postgres_user>
+ENV POSTGRES_PASSWORD=<postgres_password>
 
 ENTRYPOINT ["poetry", "run", "python", "-m", "src.main"]
