@@ -27,7 +27,7 @@ class Analysis(BaseModel):
         self.status = AnalysisStatus.CREATED.value
         self.deployment_name = self.analysis_id + str(random.randint(0, 10000))
         # TODO: solution for some analyis that have to be started multiple times
-        self.tokens = create_tokens(self.deployment_name, self.project_id)
+        self.tokens = create_tokens(self.analysis_id, self.project_id)
         self.analysis_config = self.tokens
         self.analysis_config['ANALYSIS_ID'] = self.analysis_id
         self.analysis_config['PROJECT_ID'] = self.project_id

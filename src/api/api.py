@@ -68,7 +68,7 @@ def delete_analysis(analysis_id: str):
         if deployment.status != AnalysisStatus.STOPPED.value:
             deployment.stop(database)
             deployment.status = AnalysisStatus.STOPPED.value
-        delete_keycloak_client(deployment.deployment_name)
+    delete_keycloak_client(analysis_id)
     database.delete_analysis(analysis_id)
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
