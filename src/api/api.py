@@ -63,7 +63,7 @@ def stop_analysis(analysis_id: str):
 @router.delete("/{analysis_id}/delete", response_class=JSONResponse)
 def delete_analysis(analysis_id: str):
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
-
+    print(deployments)
     for deployment in deployments:
         if deployment.status != AnalysisStatus.STOPPED.value:
             deployment.stop(database)
