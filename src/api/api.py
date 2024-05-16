@@ -35,9 +35,9 @@ def create_analysis(body: CreateAnalysis):
 @router.get("/{analysis_id}/logs", response_class=JSONResponse)
 def retrieve_logs(analysis_id: str):
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
-    return {"logs": {deployment.deployment_name: get_logs(deployment.deployment_name,
-                                                          database.get_deployment_pod_ids(deployment.deployment_name)
-                                                          )
+    return {"logs": {deployment.deployment_name:
+                         get_logs(deployment.deployment_name,
+                                  database.get_deployment_pod_ids(deployment.deployment_name))
                      for deployment in deployments}}
 
 
@@ -63,7 +63,7 @@ def stop_analysis(analysis_id: str):
 @router.delete("/{analysis_id}/delete", response_class=JSONResponse)
 def delete_analysis(analysis_id: str):
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
-    print(deployments)
+
     for deployment in deployments:
         if deployment.status != AnalysisStatus.STOPPED.value:
             deployment.stop(database)

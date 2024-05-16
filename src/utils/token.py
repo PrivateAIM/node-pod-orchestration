@@ -15,8 +15,8 @@ _KEYCLOAK_URL = os.getenv('KEYCLOAK_URL')
 _KEYCLOAK_REALM = os.getenv('KEYCLOAK_REALM')
 
 
-def create_tokens(deplyment_name: str, analysis_id: str, project_id: str) -> dict[str, str]:
-    tokens = {'DATA_SOURCE_TOKEN': _get_kong_token(deplyment_name, project_id),
+def create_tokens(deployment_name: str, analysis_id: str, project_id: str) -> dict[str, str]:
+    tokens = {'DATA_SOURCE_TOKEN': _get_kong_token(deployment_name, project_id),
               'KEYCLOAK_TOKEN': _get_keycloak_token(analysis_id)}
 
     return tokens
