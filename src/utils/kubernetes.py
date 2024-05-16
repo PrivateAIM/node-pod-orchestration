@@ -57,41 +57,73 @@ def create_analysis_deployment(name: str,
     app_client.create_namespaced_deployment(async_req=False, namespace=namespace, body=depl_body)
     time.sleep(.1)
 
-    #_create_analysis_network_policy()
+    _create_service(name, ports=[80], target_ports=ports, namespace=namespace)
 
-    _create_analysis_service(name, ports=[80], target_ports=ports, namespace=namespace)
+    _create_analysis_nginx_deployment(name, ports, env, namespace)
+    time.sleep(.1)
+    _create_analysis_network_policy(name, namespace) # TODO: tie analysis deployment together with nginx deployment
 
     return _get_pods(name)
 
+def _create_analysis_nginx_deployment(analysis_name: str,
+                                      analysis_ports: list[int],
+                                      analysis_env: dict[str, str] = {},
+                                      namespace: str = 'default') -> None:
+    app_client = client.AppsV1Api()
+    containers = []
+    nginx_name = f"nginx-{analysis_name}"
 
-def _create_analysis_service(name: str, ports: list[int], target_ports: list[int], namespace: str = 'default') -> None:
+    liveness_probe = client.V1Probe(http_get=client.V1HTTPGetAction(path="/", port=80),
+                                      initial_delay_seconds=15,
+                                      period_seconds=20,
+                                      failure_threshold=1,
+                                      timeout_seconds=5)
+    container1 = client.V1Container(name=nginx_name, image="nginx:latest", image_pull_policy="Always",
+                                    ports=[client.V1ContainerPort(port) for port in analysis_ports],
+                                    liveness_probe=liveness_probe)
+    containers.append(container1)
+
+    depl_metadata = client.V1ObjectMeta(name=nginx_name, namespace=namespace)
+    depl_pod_metadata = client.V1ObjectMeta(labels={'app': nginx_name})
+    depl_selector = client.V1LabelSelector(match_labels={'app': nginx_name})
+    depl_pod_spec = client.V1PodSpec(containers=containers)
+    depl_template = client.V1PodTemplateSpec(metadata=depl_pod_metadata, spec=depl_pod_spec)
+
+    depl_spec = client.V1DeploymentSpec(selector=depl_selector, template=depl_template)
+    depl_body = client.V1Deployment(api_version='apps/v1', kind='Deployment', metadata=depl_metadata, spec=depl_spec)
+
+    app_client.create_namespaced_deployment(async_req=False, namespace=namespace, body=depl_body)
+
+    _create_service(nginx_name, ports=[80], target_ports=analysis_ports, namespace=namespace)
+
+
+
+def _create_service(name: str, ports: list[int], target_ports: list[int], namespace: str = 'default') -> None:
     core_client = client.CoreV1Api()
     service_spec = client.V1ServiceSpec(selector={'app': name},
-                                        # ports=[client.V1ServicePort(port=80, target_port=8000)])
                                         ports=[client.V1ServicePort(port=port, target_port=target_port)
                                                for port, target_port in zip(ports, target_ports)])
     service_body = client.V1Service(metadata=client.V1ObjectMeta(name=f'service-{name}'), spec=service_spec)
     core_client.create_namespaced_service(body=service_body, namespace=namespace)
 
 
-def _create_analysis_network_policy(namespace: str = 'default') -> None:
+def _create_analysis_network_policy(analysis_name: str, namespace: str = 'default') -> None:
     network_client = client.NetworkingV1Api()
+    nginx_name = f'nginx-{analysis_name}'
 
     egress = [client.V1NetworkPolicyEgressRule(
-        to=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': 'po-nginx'}))],
-        ports=[client.V1NetworkPolicyPort(port=5555, protocol='TCP')]
+        to=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_name}))]
     )]
     ingress = [client.V1NetworkPolicyIngressRule(
-        _from=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': 'po-nginx'}))],
-        ports=[client.V1NetworkPolicyPort(end_port=5555, protocol='TCP')])]
-
+        _from=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_name}))]
+    )]
     policy_types = ['Ingress', 'Egress']
-    pod_selector = client.V1LabelSelector(client.V1LabelSelector(match_labels={'mode': 'analysis'}))
+    pod_selector = client.V1LabelSelector(match_labels={'app': analysis_name})
     network_spec = client.V1NetworkPolicySpec(pod_selector=pod_selector,
                                               policy_types=policy_types,
                                               ingress=ingress,
                                               egress=egress)
-    network_metadata = client.V1ObjectMeta(name='po-analysis-network-policy', namespace=namespace)
+    network_metadata = client.V1ObjectMeta(name=f'nginx-to-{analysis_name}-policy', namespace=namespace)
     network_body = client.V1NetworkPolicy(api_version='networking.k8s.io/v1',
                                           kind='NetworkPolicy',
                                           metadata=network_metadata,
@@ -100,10 +132,11 @@ def _create_analysis_network_policy(namespace: str = 'default') -> None:
     network_client.create_namespaced_network_policy(namespace=namespace, body=network_body)
 
 
-def delete_deployment(name: str, namespace: str = 'default') -> None:
+def delete_deployment(depl_name: str, namespace: str = 'default') -> None:
     app_client = client.AppsV1Api()
-    app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
-    _delete_service(f"service-{name}", namespace)
+    for name in [depl_name, f'nginx-{depl_name}']:
+        app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
+        _delete_service(f"service-{name}", namespace)
 
 
 def _delete_service(name: str, namespace: str = 'default') -> None:

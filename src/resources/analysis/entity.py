@@ -49,7 +49,7 @@ class Analysis(BaseModel):
     def stop(self, database: Database) -> None:
         logs = get_logs(self.deployment_name, database.get_deployment_pod_ids(self.deployment_name))
         # TODO: save final logs
-        delete_deployment(name=self.deployment_name)
+        delete_deployment(self.deployment_name)
         self.status = AnalysisStatus.STOPPED.value
         database.stop_analysis(self.deployment_name)
 
