@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from src.resources.analysis.entity import Analysis, read_db_analysis
 from src.resources.analysis.constants import AnalysisStatus
 from src.resources.database.entity import Database
-from src.utils.kubernetes import get_logs, delete_deployment
+from src.k8s.kubernetes import get_logs, delete_deployment
 from src.utils.token import delete_keycloak_client
 from src.utils.other import create_image_address
 

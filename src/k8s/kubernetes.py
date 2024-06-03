@@ -1,6 +1,8 @@
+import asyncio
 from typing import Optional
 import os
 import time
+from src.utils.other import get_project_data_source
 from kubernetes import client, config
 
 
@@ -57,36 +59,76 @@ def create_analysis_deployment(name: str,
     app_client.create_namespaced_deployment(async_req=False, namespace=namespace, body=depl_body)
     time.sleep(.1)
 
-    _create_service(name, ports=[80], target_ports=ports, namespace=namespace)
+    analysis_service_name = _create_service(name, ports=[80], target_ports=ports, namespace=namespace)
 
-    _create_analysis_nginx_deployment(name, ports, env, namespace)
+    _, nginx_service_name = _create_analysis_nginx_deployment(name, analysis_service_name, ports, env, namespace)
     time.sleep(.1)
-    _create_analysis_network_policy(name, namespace) # TODO: tie analysis deployment together with nginx deployment
+    _create_analysis_network_policy(name, nginx_service_name, namespace) # TODO: tie analysis deployment together with nginx deployment
 
     return _get_pods(name)
 
+
 def _create_analysis_nginx_deployment(analysis_name: str,
+                                      analysis_service_name: str,
                                       analysis_ports: list[int],
                                       analysis_env: dict[str, str] = {},
-                                      namespace: str = 'default') -> None:
+                                      namespace: str = 'default') -> tuple[str, str]:
     app_client = client.AppsV1Api()
     containers = []
     nginx_name = f"nginx-{analysis_name}"
+
+    config_map_name = _create_config_map(analysis_name,
+                                         analysis_service_name,
+                                         nginx_name,
+                                         analysis_ports,
+                                         analysis_env,
+                                         namespace)
 
     liveness_probe = client.V1Probe(http_get=client.V1HTTPGetAction(path="/", port=80),
                                       initial_delay_seconds=15,
                                       period_seconds=20,
                                       failure_threshold=1,
                                       timeout_seconds=5)
+
+    cf_vol = client.V1Volume(
+        name="nginx-vol",
+        config_map=client.V1ConfigMapVolumeSource(name=config_map_name,
+                                                  items=[
+                                                      client.V1KeyToPath(
+                                                          key="nginx.conf",
+                                                          path="nginx.conf"
+                                                      )
+                                                  ])
+    )
+
+    vol_mount = client.V1VolumeMount(
+        name="nginx-vol",
+        mount_path="/etc/nginx/nginx.conf",
+        sub_path="nginx.conf"
+    )
+
     container1 = client.V1Container(name=nginx_name, image="nginx:latest", image_pull_policy="Always",
                                     ports=[client.V1ContainerPort(port) for port in analysis_ports],
-                                    liveness_probe=liveness_probe)
+                                    liveness_probe=liveness_probe,
+                                    volume_mounts=[vol_mount])
     containers.append(container1)
+
+
 
     depl_metadata = client.V1ObjectMeta(name=nginx_name, namespace=namespace)
     depl_pod_metadata = client.V1ObjectMeta(labels={'app': nginx_name})
     depl_selector = client.V1LabelSelector(match_labels={'app': nginx_name})
-    depl_pod_spec = client.V1PodSpec(containers=containers)
+    depl_pod_spec = client.V1PodSpec(containers=containers,
+                                     volumes=[cf_vol])
+                                     # volumes=[client.V1Volume(name='nginx-vol',
+                                     #                          config_map=client.V1ConfigMapVolumeSource(name=config_map_name,
+                                     #                                                                    items=[
+                                     #                                                                        client.V1KeyToPath(
+                                     #                                                                            key="nginx.conf",
+                                     #                                                                            path="nginx.conf"
+                                     #                                                                        )
+                                     #                                                                    ])
+                                     #                          )])
     depl_template = client.V1PodTemplateSpec(metadata=depl_pod_metadata, spec=depl_pod_spec)
 
     depl_spec = client.V1DeploymentSpec(selector=depl_selector, template=depl_template)
@@ -94,28 +136,96 @@ def _create_analysis_nginx_deployment(analysis_name: str,
 
     app_client.create_namespaced_deployment(async_req=False, namespace=namespace, body=depl_body)
 
-    _create_service(nginx_name, ports=[80], target_ports=analysis_ports, namespace=namespace)
+    nginx_service_name = _create_service(nginx_name, ports=[80], target_ports=analysis_ports, namespace=namespace)
+
+    return nginx_name, nginx_service_name
 
 
+def _create_config_map(analysis_name: str,
+                       analysis_service_name: str,
+                       nginx_name: str,
+                       analysis_ports: list[int],
+                       analysis_env: dict[str, str] = {},
+                       namespace: str = 'default') -> str:
+    data_sources = get_project_data_source(analysis_env['KEYCLOAK_TOKEN'], analysis_env['PROJECT_ID'])
 
-def _create_service(name: str, ports: list[int], target_ports: list[int], namespace: str = 'default') -> None:
+    data = {
+            "nginx.conf": f"""
+            worker_processes 1;
+            events {{ worker_connections 1024; }}
+            http {{
+                sendfile on;
+                
+                server {{
+                    listen 80;
+                    
+                    client_max_body_size 0;
+                    chunked_transfer_encoding on;
+                    
+                    proxy_redirect off;
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto $scheme;
+                    
+                    # analysis deployment to kong
+                    location /kong {{
+                        proxy_pass  http://flame-node-kong-proxy;
+                        allow       {analysis_service_name};
+                        deny        all;
+                    }}
+                    
+                    # analysis deplyoment to message broker
+                    location /message-broker {{
+                        proxy-pass  http://flame-node-node-message-broker;
+                        allow       {analysis_service_name};
+                        deny        all;
+                    }}
+                    
+                    # message-broker to analysis deployment
+                    location /analysis {{
+                        proxy_pass  http://{analysis_service_name};
+                        allow       flame-node-node-message-broker;
+                        deny        all;
+                    }}
+                }}
+            }}
+            """
+    }
+
     core_client = client.CoreV1Api()
+    name = f"{nginx_name}-config"
+    config_map = client.V1ConfigMap(
+        api_version="v1",
+        kind="ConfigMap",
+        metadata=client.V1ObjectMeta(name=name, namespace=namespace),
+        data=data
+    )
+    core_client.create_namespaced_config_map(namespace=namespace, body=config_map)
+    return name
+
+
+def _create_service(name: str, ports: list[int], target_ports: list[int], namespace: str = 'default') -> str:
+    service_name = f'service-{name}'
+    core_client = client.CoreV1Api()
+
     service_spec = client.V1ServiceSpec(selector={'app': name},
                                         ports=[client.V1ServicePort(port=port, target_port=target_port)
                                                for port, target_port in zip(ports, target_ports)])
-    service_body = client.V1Service(metadata=client.V1ObjectMeta(name=f'service-{name}'), spec=service_spec)
+    service_body = client.V1Service(metadata=client.V1ObjectMeta(name=service_name, labels={'app': service_name}), spec=service_spec)
     core_client.create_namespaced_service(body=service_body, namespace=namespace)
 
+    return service_name
 
-def _create_analysis_network_policy(analysis_name: str, namespace: str = 'default') -> None:
+
+def _create_analysis_network_policy(analysis_name: str, nginx_service_name: str, namespace: str = 'default') -> None:
     network_client = client.NetworkingV1Api()
-    nginx_name = f'nginx-{analysis_name}'
 
     egress = [client.V1NetworkPolicyEgressRule(
-        to=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_name}))]
+        to=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_service_name}))]
     )]
     ingress = [client.V1NetworkPolicyIngressRule(
-        _from=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_name}))]
+        _from=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_service_name}))]
     )]
     policy_types = ['Ingress', 'Egress']
     pod_selector = client.V1LabelSelector(match_labels={'app': analysis_name})
@@ -137,6 +247,13 @@ def delete_deployment(depl_name: str, namespace: str = 'default') -> None:
     for name in [depl_name, f'nginx-{depl_name}']:
         app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
         _delete_service(f"service-{name}", namespace)
+
+    network_client = client.NetworkingV1Api()
+    network_client.delete_namespaced_network_policy(name=f'nginx-to-{depl_name}-policy', namespace=namespace)
+
+    core_client = client.CoreV1Api()
+    core_client.delete_namespaced_config_map(name=f"nginx-{depl_name}-config")
+
 
 
 def _delete_service(name: str, namespace: str = 'default') -> None:

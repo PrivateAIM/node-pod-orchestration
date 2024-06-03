@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from src.utils.kubernetes import create_analysis_deployment, delete_deployment, get_logs
+from src.k8s.kubernetes import create_analysis_deployment, delete_deployment, get_logs
 from src.utils.token import create_tokens
 from src.resources.database.db_models import AnalysisDB
 from src.resources.database.entity import Database

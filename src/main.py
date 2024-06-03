@@ -5,14 +5,12 @@ from dotenv import load_dotenv, find_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .utils.kubernetes import load_cluster_config, create_harbor_secret
+from src.k8s.kubernetes import load_cluster_config, create_harbor_secret
 from src.test.test_db import TestDatabase
 from src.api.api import router
 
 
 def main():
-    # TODO: temporary for testing
-
     # load env
     load_dotenv(find_dotenv())
 
