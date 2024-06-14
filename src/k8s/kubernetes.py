@@ -41,7 +41,7 @@ def create_analysis_deployment(name: str,
     container1 = client.V1Container(name=name, image=image, image_pull_policy="Always",
                                     ports=[client.V1ContainerPort(port) for port in ports],
                                     env=[client.V1EnvVar(name=key, value=val) for key, val in env.items()],
-                                    liveness_probe=liveness_probe)
+                                    )#liveness_probe=liveness_probe)
     containers.append(container1)
 
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
@@ -287,14 +287,24 @@ def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespa
 def delete_deployment(depl_name: str, namespace: str = 'default') -> None:
     app_client = client.AppsV1Api()
     for name in [depl_name, f'nginx-{depl_name}']:
-        app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
-        _delete_service(f"service-{name}", namespace)
-
+        try:
+            app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
+            _delete_service(f"service-{name}", namespace)
+        except client.exceptions.ApiException as e:
+            if e.reason != 'Not Found':
+                print(f"Not Found {name}")
     network_client = client.NetworkingV1Api()
-    network_client.delete_namespaced_network_policy(name=f'nginx-to-{depl_name}-policy', namespace=namespace)
-
+    try:
+        network_client.delete_namespaced_network_policy(name=f'nginx-to-{depl_name}-policy', namespace=namespace)
+    except client.exceptions.ApiException as e:
+        if e.reason != 'Not Found':
+            print(f"Not Found nginx-to-{depl_name}-policy")
     core_client = client.CoreV1Api()
-    core_client.delete_namespaced_config_map(name=f"nginx-{depl_name}-config")
+    try:
+        core_client.delete_namespaced_config_map(name=f"nginx-{depl_name}-config", namespace=namespace)
+    except client.exceptions.ApiException as e:
+        if e.reason != 'Not Found':
+            print(f"Not Found {depl_name}-config")
 
 
 
