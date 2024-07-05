@@ -2,7 +2,7 @@ import asyncio
 from typing import Optional
 import os
 import time
-from src.utils.other import get_project_data_source
+from src.utils.other import get_project_data_source, get_element_by_substring
 from kubernetes import client, config
 
 
@@ -145,7 +145,9 @@ def _create_nginx_config_map(analysis_name: str,
     core_client = client.CoreV1Api()
 
     # extract data sources
-    data_sources = get_project_data_source(analysis_env['KEYCLOAK_TOKEN'], analysis_env['PROJECT_ID'])
+    service_names = get_service_names(namespace)
+    hub_adapter_service_name = get_element_by_substring(service_names,'hub-adapter-service')
+    data_sources = get_project_data_source(analysis_env['KEYCLOAK_TOKEN'], analysis_env['PROJECT_ID'],hub_adapter_service_name,namespace)
 
     # get the service ip of the message broker and analysis service
     message_broker_service_ip = core_client.read_namespaced_service(name="flame-node-node-message-broker", namespace=namespace).spec.cluster_ip
@@ -160,7 +162,13 @@ def _create_nginx_config_map(analysis_name: str,
 
     # analysis_ip = core_client.read_namespaced_pod(name=analysis_name, namespace=namespace).spec.cluster_ip
     # analysis_service_ip = core_client.read_namespaced_service(name=analysis_service_name, namespace=namespace).spec.cluster_ip
+    kong_proxy_name = get_element_by_substring(service_names, 'kong-proxy')
 
+    result_service_name = get_element_by_substring(service_names, 'result-service')
+
+    hub_adapter_service_name = get_element_by_substring(service_names, 'hub-adapter-service')
+
+    message_broker_service_name = get_element_by_substring(service_names, 'message-broker')
     data = {
             "nginx.conf": f"""
             worker_processes 1;
@@ -186,26 +194,26 @@ def _create_nginx_config_map(analysis_name: str,
                     }}
                     # analysis deployment to kong
                     location /kong {{
-                        proxy_pass  http://flame-node-kong-proxy;
+                        proxy_pass  http://{kong_proxy_name};
                         allow       {analysis_ip};
                         deny        all;
                     }}
                     
                     location /storage {{
-                        proxy_pass http://flame-node-node-result-service:8080;
+                        proxy_pass http://{result_service_name}:8080;
                         allow       {analysis_ip};
                         deny        all;
                     }}
                     
                     location /hub-adapter {{
-                        proxy_pass http://flame-node-hub-adapter-service:5000;
+                        proxy_pass http://{hub_adapter_service_name}:5000;
                         allow       {analysis_ip};
                         deny        all;
                     }}
                     
                     # analysis deplyoment to message broker
                     location /message-broker {{
-                        proxy_pass  http://flame-node-node-message-broker;
+                        proxy_pass  http://{message_broker_service_name};
                         allow       {analysis_ip};
                         deny        all;
                     }}
@@ -323,6 +331,10 @@ def get_logs(name: str, pod_ids: Optional[list[str]], namespace: str = 'default'
 
     return [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
             for pod in pods.items]
+
+def get_service_names(namespace: str = 'default') -> list[str]:
+    core_client = client.CoreV1Api()
+    return [service.metadata.name for service in core_client.list_namespaced_service(namespace=namespace).items]
 
 
 def _get_pods(name: str, namespace: str = 'default') -> list[str]:
