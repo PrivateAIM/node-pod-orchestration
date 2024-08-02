@@ -16,7 +16,6 @@ def main():
 
     # load cluster config
     load_cluster_config()
-    create_harbor_secret()
 
     #TestDatabase()
 

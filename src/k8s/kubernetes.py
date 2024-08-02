@@ -10,19 +10,30 @@ def load_cluster_config():
     config.load_incluster_config()
 
 
-def create_harbor_secret(name: str = 'harbor-credentials', namespace: str = 'default') -> None:
+def create_harbor_secret(user: str,
+                         password: str,
+                         server_address: str = '',
+                         name: str = 'flame-harbor-credentials',
+                         namespace: str = 'default') -> None:
     core_client = client.CoreV1Api()
     secret_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
     secret = client.V1Secret(metadata=secret_metadata,
-                             string_data={'docker-server': os.getenv('HARBOR_URL'),
-                                          'docker-username': os.getenv('HARBOR_USER'),
-                                          'docker-password': os.getenv('HARBOR_PASSWORD')}
+                             string_data={'docker-server': server_address,
+                                          'docker-username': user,
+                                          'docker-password': password}
                              )
     try:
         core_client.create_namespaced_secret(namespace=namespace, body=secret)
-    except client.exceptions.ApiException as e:
-        if e.reason != 'Conflict':
-            raise e
+    except client.exceptions.ApiException:
+        try:
+            core_client.delete_namespaced_secret(name=name, namespace=namespace)
+            core_client.create_namespaced_secret(namespace=namespace, body=secret)
+        except client.exceptions.ApiException as e:
+            if e.reason != 'Conflict':
+                raise e
+            else:
+                print('Conflict remains unresolved!')
+                raise e
 
 
 def create_analysis_deployment(name: str,
@@ -38,7 +49,7 @@ def create_analysis_deployment(name: str,
                                     period_seconds=20,
                                     failure_threshold=1,
                                     timeout_seconds=5)
-    container1 = client.V1Container(name=name, image=image, image_pull_policy="Always",
+    container1 = client.V1Container(name=name, image=image, image_pull_policy="IfNotPresent",
                                     ports=[client.V1ContainerPort(port) for port in ports],
                                     env=[client.V1EnvVar(name=key, value=val) for key, val in env.items()],
                                     )#liveness_probe=liveness_probe)
@@ -49,7 +60,7 @@ def create_analysis_deployment(name: str,
     depl_selector = client.V1LabelSelector(match_labels={'app': name, 'mode': 'analysis'})
     depl_pod_spec = client.V1PodSpec(containers=containers,
                                      image_pull_secrets=[
-                                         client.V1LocalObjectReference(name="harbor-credentials"),
+                                         client.V1LocalObjectReference(name="flame-harbor-credentials"),
                                      ])
     depl_template = client.V1PodTemplateSpec(metadata=depl_pod_metadata, spec=depl_pod_spec)
 

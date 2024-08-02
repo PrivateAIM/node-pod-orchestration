@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from src.resources.analysis.entity import Analysis, read_db_analysis
 from src.resources.analysis.constants import AnalysisStatus
 from src.resources.database.entity import Database
-from src.k8s.kubernetes import get_logs, delete_deployment
+from src.k8s.kubernetes import create_harbor_secret, get_logs, delete_deployment
 from src.utils.token import delete_keycloak_client
 from src.utils.other import create_image_address
 
@@ -18,17 +18,23 @@ database = Database()
 class CreateAnalysis(BaseModel):
     analysis_id: str = 'flame-test'
     project_id: str = 'project1'
+    registry_url: str = ''
+    registry_user: str = ''
+    registry_password: str = ''
 
 
 @router.post("/", response_class=JSONResponse)
 def create_analysis(body: CreateAnalysis):
+    create_harbor_secret(body.registry_user, body.registry_password, server_address=body.registry_url.split('/')[0])
+
     analysis = Analysis(
         analysis_id=body.analysis_id,
         project_id=body.project_id,
-        image_registry_address=create_image_address(body.analysis_id),
+        image_registry_address=body.registry_url,
         ports=[8000],
     )
     analysis.start(database)
+
     return {"status": analysis.status}
 
 
