@@ -24,7 +24,7 @@ class Database:
         Base.metadata.drop_all(bind=self.engine)
         Base.metadata.create_all(bind=self.engine)
 
-    def get_deployment(self, deployment_name: str) -> AnalysisDB:
+    def get_deployment(self, deployment_name: str) -> Optional[AnalysisDB]:
         return self.session.query(AnalysisDB).filter_by(**{"deployment_name": deployment_name}).first()
 
     def get_deployments(self, analysis_id: str) -> list[AnalysisDB]:

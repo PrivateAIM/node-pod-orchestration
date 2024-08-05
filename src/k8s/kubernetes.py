@@ -75,7 +75,7 @@ def create_analysis_deployment(name: str,
 
     nginx_name, _ = _create_analysis_nginx_deployment(name, analysis_service_name, service_ports, env, namespace)
     time.sleep(.1)
-    _create_analysis_network_policy(name, nginx_name, namespace) # TODO: tie analysis deployment together with nginx deployment
+    _create_analysis_network_policy(name, nginx_name, namespace)  # TODO: tie analysis deployment together with nginx deployment
 
     return _get_pods(name)
 
@@ -97,10 +97,10 @@ def _create_analysis_nginx_deployment(analysis_name: str,
                                                namespace)
 
     liveness_probe = client.V1Probe(http_get=client.V1HTTPGetAction(path="/healthz", port=80),
-                                      initial_delay_seconds=15,
-                                      period_seconds=20,
-                                      failure_threshold=1,
-                                      timeout_seconds=5)
+                                    initial_delay_seconds=15,
+                                    period_seconds=20,
+                                    failure_threshold=1,
+                                    timeout_seconds=5)
 
     cf_vol = client.V1Volume(
         name="nginx-vol",
@@ -124,8 +124,6 @@ def _create_analysis_nginx_deployment(analysis_name: str,
                                     liveness_probe=liveness_probe,
                                     volume_mounts=[vol_mount])
     containers.append(container1)
-
-
 
     depl_metadata = client.V1ObjectMeta(name=nginx_name, namespace=namespace)
     depl_pod_metadata = client.V1ObjectMeta(labels={'app': nginx_name})
@@ -157,11 +155,15 @@ def _create_nginx_config_map(analysis_name: str,
 
     # extract data sources
     service_names = get_service_names(namespace)
-    hub_adapter_service_name = get_element_by_substring(service_names,'hub-adapter-service')
-    data_sources = get_project_data_source(analysis_env['KEYCLOAK_TOKEN'], analysis_env['PROJECT_ID'],hub_adapter_service_name,namespace)
+    hub_adapter_service_name = get_element_by_substring(service_names, 'hub-adapter-service')
+    data_sources = get_project_data_source(analysis_env['KEYCLOAK_TOKEN'],
+                                           analysis_env['PROJECT_ID'],
+                                           hub_adapter_service_name,
+                                           namespace)
 
     # get the service ip of the message broker and analysis service
-    message_broker_service_ip = core_client.read_namespaced_service(name="flame-node-node-message-broker", namespace=namespace).spec.cluster_ip
+    message_broker_service_name = get_element_by_substring(service_names, 'message-broker')
+    message_broker_service_ip = core_client.read_namespaced_service(name=message_broker_service_name, namespace=namespace).spec.cluster_ip
 
     # wait until analysis pod receives a cluster ip
     analysis_ip = None
@@ -174,12 +176,7 @@ def _create_nginx_config_map(analysis_name: str,
     # analysis_ip = core_client.read_namespaced_pod(name=analysis_name, namespace=namespace).spec.cluster_ip
     # analysis_service_ip = core_client.read_namespaced_service(name=analysis_service_name, namespace=namespace).spec.cluster_ip
     kong_proxy_name = get_element_by_substring(service_names, 'kong-proxy')
-
     result_service_name = get_element_by_substring(service_names, 'result-service')
-
-    hub_adapter_service_name = get_element_by_substring(service_names, 'hub-adapter-service')
-
-    message_broker_service_name = get_element_by_substring(service_names, 'message-broker')
     data = {
             "nginx.conf": f"""
             worker_processes 1;
@@ -258,11 +255,12 @@ def _create_service(name: str, ports: list[int], target_ports: list[int], namesp
     service_spec = client.V1ServiceSpec(selector={'app': name},
                                         ports=[client.V1ServicePort(port=port, target_port=target_port)
                                                for port, target_port in zip(ports, target_ports)])
-    service_body = client.V1Service(metadata=client.V1ObjectMeta(name=service_name, labels={'app': service_name}), spec=service_spec)
+    service_body = client.V1Service(metadata=client.V1ObjectMeta(name=service_name,
+                                                                 labels={'app': service_name}),
+                                    spec=service_spec)
     core_client.create_namespaced_service(body=service_body, namespace=namespace)
 
-    service_ip = core_client.read_namespaced_service(name=service_name, namespace=namespace).spec.cluster_ip
-
+    # service_ip = core_client.read_namespaced_service(name=service_name, namespace=namespace).spec.cluster_ip
     return service_name
 
 
@@ -326,7 +324,6 @@ def delete_deployment(depl_name: str, namespace: str = 'default') -> None:
             print(f"Not Found {depl_name}-config")
 
 
-
 def _delete_service(name: str, namespace: str = 'default') -> None:
     core_client = client.CoreV1Api()
     core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace)
@@ -342,6 +339,7 @@ def get_logs(name: str, pod_ids: Optional[list[str]], namespace: str = 'default'
 
     return [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
             for pod in pods.items]
+
 
 def get_service_names(namespace: str = 'default') -> list[str]:
     core_client = client.CoreV1Api()

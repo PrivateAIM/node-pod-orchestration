@@ -5,7 +5,7 @@ from dotenv import load_dotenv, find_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.k8s.kubernetes import load_cluster_config, create_harbor_secret
+from src.k8s.kubernetes import load_cluster_config
 from src.test.test_db import TestDatabase
 from src.api.api import router
 
