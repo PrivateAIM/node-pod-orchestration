@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import json
 from typing import Optional
 import os
 import time
@@ -20,8 +22,13 @@ def create_harbor_secret(user: str,
     secret = client.V1Secret(metadata=secret_metadata,
                              type='kubernetes.io/dockerconfigjson',
                              string_data={'docker-server': server_address,
-                                          'docker-username': user,
-                                          'docker-password': password}
+                                          'docker-username': user.replace('$', '\$'),
+                                          'docker-password': password,
+                                          '.dockerconfigjson': json.dumps({"auths":
+                                                                               {server_address:
+                                                                                     {"username": user,
+                                                                                      "password": password,
+                                                                                      "auth": base64.b64encode(f'{user}:{password}')}}})}
                              )
     try:
         core_client.create_namespaced_secret(namespace=namespace, body=secret)
