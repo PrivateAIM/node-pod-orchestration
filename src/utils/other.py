@@ -6,13 +6,14 @@ def _add_slash(string: str) -> str:
     return string + ('' if string.endswith('/') else '/')
 
 
-def get_project_data_source(keycloak_token, project_id, hub_adapter_service_name) -> dict:
+def get_project_data_source(keycloak_token, project_id, hub_adapter_service_name, namespace="default") -> dict:
     """
     Get data sources for a project from the node hub adapter service using the keycloak token
 
     :param keycloak_token:
     :param project_id:
     :param hub_adapter_service_name:
+    :param namespace:
     :return:
     """
     client = AsyncClient(base_url=f"http://{hub_adapter_service_name}:5000",

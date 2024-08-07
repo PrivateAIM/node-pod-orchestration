@@ -156,10 +156,10 @@ def _create_nginx_config_map(analysis_name: str,
     # extract data sources
     service_names = get_service_names(namespace)
     hub_adapter_service_name = get_element_by_substring(service_names, 'hub-adapter-service')
-    data_sources = get_project_data_source(analysis_env['KEYCLOAK_TOKEN'],
-                                           analysis_env['PROJECT_ID'],
-                                           hub_adapter_service_name,
-                                           namespace)
+    # data_sources = get_project_data_source(analysis_env['KEYCLOAK_TOKEN'],
+    #                                        analysis_env['PROJECT_ID'],
+    #                                        hub_adapter_service_name,
+    #                                        namespace)
 
     # get the service ip of the message broker and analysis service
     message_broker_service_name = get_element_by_substring(service_names, 'message-broker')
