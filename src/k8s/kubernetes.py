@@ -18,6 +18,7 @@ def create_harbor_secret(user: str,
     core_client = client.CoreV1Api()
     secret_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
     secret = client.V1Secret(metadata=secret_metadata,
+                             type='kubernetes.io/dockercfg',
                              string_data={'docker-server': server_address,
                                           'docker-username': user,
                                           'docker-password': password}
