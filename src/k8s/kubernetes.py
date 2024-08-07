@@ -28,7 +28,7 @@ def create_harbor_secret(user: str,
                                                                                {server_address:
                                                                                      {"username": user,
                                                                                       "password": password,
-                                                                                      "auth": base64.b64encode(f'{user}:{password}'.encode("ascii"))}}})}
+                                                                                      "auth": base64.b64encode(f'{user}:{password}'.encode("ascii")).decode("ascii")}}})}
                              )
     try:
         core_client.create_namespaced_secret(namespace=namespace, body=secret)
