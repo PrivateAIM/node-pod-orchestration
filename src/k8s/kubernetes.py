@@ -163,18 +163,22 @@ def _create_nginx_config_map(analysis_name: str,
 
     # get the service ip of the message broker and analysis service
     message_broker_service_name = get_element_by_substring(service_names, 'message-broker')
-    message_broker_service_ip = core_client.read_namespaced_service(name=message_broker_service_name, namespace=namespace).spec.cluster_ip
+    message_broker_service_ip = core_client.read_namespaced_service(name=message_broker_service_name,
+                                                                    namespace=namespace).spec.cluster_ip
 
     # wait until analysis pod receives a cluster ip
     analysis_ip = None
     while analysis_ip is None:
-        pod_list_object = core_client.list_namespaced_pod(label_selector=f"app={analysis_name}", watch=False, namespace=namespace)
+        pod_list_object = core_client.list_namespaced_pod(label_selector=f"app={analysis_name}",
+                                                          watch=False,
+                                                          namespace=namespace)
         analysis_ip = pod_list_object.items[0].status.pod_ip
         print(analysis_ip)
         time.sleep(1)
 
     # analysis_ip = core_client.read_namespaced_pod(name=analysis_name, namespace=namespace).spec.cluster_ip
-    # analysis_service_ip = core_client.read_namespaced_service(name=analysis_service_name, namespace=namespace).spec.cluster_ip
+    # analysis_service_ip = core_client.read_namespaced_service(name=analysis_service_name,
+    #                                                           namespace=namespace).spec.cluster_ip
     kong_proxy_name = get_element_by_substring(service_names, 'kong-proxy')
     result_service_name = get_element_by_substring(service_names, 'result-service')
     data = {

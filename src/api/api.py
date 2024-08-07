@@ -15,11 +15,11 @@ database = Database()
 
 
 class CreateAnalysis(BaseModel):
-    analysis_id: str = 'flame-test'
-    project_id: str = 'project1'
-    registry_url: str = ''
-    registry_user: str = ''
-    registry_password: str = ''
+    analysis_id: str = 'analysis_id'
+    project_id: str = 'project_id'
+    registry_url: str = 'harbor.privateaim'
+    registry_user: str = 'robot_user'
+    registry_password: str = 'default_pw'
 
 
 @router.post("/", response_class=JSONResponse)

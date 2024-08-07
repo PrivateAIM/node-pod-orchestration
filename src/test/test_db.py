@@ -17,7 +17,7 @@ class TestDatabase:
 
     def test_create_analysis(self):
         analysis = self.database.create_analysis(analysis_id="123", image_registry_address="harbor.com",
-                                                 ports=[80, 443],pod_ids=["a1"], status="running")
+                                                 ports=[80, 443], pod_ids=["a1"], status="running")
         print(f"{analysis.analysis_id}, 123")
 
     def test_get_analysis(self):
