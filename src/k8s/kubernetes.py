@@ -1,34 +1,34 @@
-import asyncio
-import base64
-import json
-from typing import Optional
-import os
 import time
-from src.utils.other import get_project_data_source, get_element_by_substring
+import json
+import base64
+from typing import Optional
+
 from kubernetes import client, config
+
+from src.utils.other import get_element_by_substring
 
 
 def load_cluster_config():
     config.load_incluster_config()
 
 
-def create_harbor_secret(user: str,
+def create_harbor_secret(host_address: str,
+                         user: str,
                          password: str,
-                         server_address: str = '',
                          name: str = 'flame-harbor-credentials',
                          namespace: str = 'default') -> None:
     core_client = client.CoreV1Api()
     secret_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
     secret = client.V1Secret(metadata=secret_metadata,
                              type='kubernetes.io/dockerconfigjson',
-                             string_data={'docker-server': server_address,
+                             string_data={'docker-server': host_address,
                                           'docker-username': user.replace('$', '\$'),
                                           'docker-password': password,
                                           '.dockerconfigjson': json.dumps({"auths":
-                                                                               {server_address:
-                                                                                     {"username": user,
-                                                                                      "password": password,
-                                                                                      "auth": base64.b64encode(f'{user}:{password}'.encode("ascii")).decode("ascii")}}})}
+                                                                               {host_address:
+                                                                                    {"username": user,
+                                                                                     "password": password,
+                                                                                     "auth": base64.b64encode(f'{user}:{password}'.encode("ascii")).decode("ascii")}}})}
                              )
     try:
         core_client.create_namespaced_secret(namespace=namespace, body=secret)
