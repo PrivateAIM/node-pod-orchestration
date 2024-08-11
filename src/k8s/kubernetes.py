@@ -214,25 +214,29 @@ def _create_nginx_config_map(analysis_name: str,
                     }}
                     # analysis deployment to kong
                     location /kong {{
+                        rewrite     ^/kong(/.*) $1 break;
                         proxy_pass  http://{kong_proxy_name};
                         allow       {analysis_ip};
                         deny        all;
                     }}
                     
                     location /storage {{
+                        rewrite     ^/storage(/.*) $1 break;
                         proxy_pass http://{result_service_name}:8080;
                         allow       {analysis_ip};
                         deny        all;
                     }}
                     
                     location /hub-adapter {{
+                        rewrite     ^/hub-adapter(/.*) $1 break;
                         proxy_pass http://{hub_adapter_service_name}:5000;
                         allow       {analysis_ip};
                         deny        all;
                     }}
                     
-                    # analysis deplyoment to message broker
+                    # analysis deployment to message broker
                     location /message-broker {{
+                        rewrite     ^/message-broker(/.*) $1 break;
                         proxy_pass  http://{message_broker_service_name};
                         allow       {analysis_ip};
                         deny        all;
@@ -240,6 +244,7 @@ def _create_nginx_config_map(analysis_name: str,
                     
                     # message-broker to analysis deployment
                     location /analysis {{
+                        rewrite     ^/analysis(/.*) $1 break;
                         proxy_pass  http://{analysis_service_name};
                         allow       {message_broker_service_ip};
                         deny        all;
