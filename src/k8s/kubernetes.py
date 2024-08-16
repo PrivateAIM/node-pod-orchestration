@@ -322,7 +322,7 @@ def delete_deployment(depl_name: str, namespace: str = 'default') -> None:
     for name in [depl_name, f'nginx-{depl_name}']:
         try:
             app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
-            _delete_service(f"service-{name}", namespace)
+            _delete_service(name, namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
                 print(f"Not Found {name}")
