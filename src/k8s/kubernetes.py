@@ -174,6 +174,12 @@ def _create_nginx_config_map(analysis_name: str,
     message_broker_service_ip = core_client.read_namespaced_service(name=message_broker_service_name,
                                                                     namespace=namespace).spec.cluster_ip
 
+    message_broker_pod_name = get_element_by_substring(get_pod_names(namespace), 'message-broker')
+    message_broker_pod_list = core_client.list_namespaced_pod(label_selector=f"name={message_broker_pod_name}",
+                                                              watch=False,
+                                                              namespace=namespace)
+    message_broker_ip = message_broker_pod_list.items[0].status.pod_ip
+
     # wait until analysis pod receives a cluster ip
     analysis_ip = None
     while analysis_ip is None:
@@ -246,7 +252,7 @@ def _create_nginx_config_map(analysis_name: str,
                     location /analysis {{
                         rewrite     ^/analysis(/.*) $1 break;
                         proxy_pass  http://{analysis_service_name};
-                        allow       {message_broker_service_ip};
+                        allow       {message_broker_ip};
                         deny        all;
                     }}
                 }}
@@ -361,6 +367,11 @@ def get_logs(name: str, pod_ids: Optional[list[str]], namespace: str = 'default'
 def get_service_names(namespace: str = 'default') -> list[str]:
     core_client = client.CoreV1Api()
     return [service.metadata.name for service in core_client.list_namespaced_service(namespace=namespace).items]
+
+
+def get_pod_names(namespace: str = 'default') -> list[str]:
+    core_client = client.CoreV1Api()
+    return [pod.metadata.name for pod in core_client.list_namespaced_pod(namespace=namespace).items]
 
 
 def _get_pods(name: str, namespace: str = 'default') -> list[str]:
