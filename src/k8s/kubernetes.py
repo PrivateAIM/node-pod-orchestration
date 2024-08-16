@@ -175,10 +175,17 @@ def _create_nginx_config_map(analysis_name: str,
                                                                     namespace=namespace).spec.cluster_ip
 
     message_broker_pod_name = get_element_by_substring(get_pod_names(namespace), 'message-broker')
-    message_broker_pod_list = core_client.list_namespaced_pod(label_selector=f"name={message_broker_pod_name}",
-                                                              watch=False,
-                                                              namespace=namespace)
-    message_broker_ip = message_broker_pod_list.items[0].status.pod_ip
+    message_broker_pod = None
+    while message_broker_pod is None:
+        try:
+            message_broker_pod = core_client.read_namespaced_pod(name=message_broker_pod_name,
+                                                                 namespace=namespace)
+        except:
+            pass
+        if message_broker_pod is not None:
+            message_broker_ip = message_broker_pod.status.pod_ip
+            print(message_broker_ip)
+        time.sleep(1)
 
     # wait until analysis pod receives a cluster ip
     analysis_ip = None
@@ -186,8 +193,10 @@ def _create_nginx_config_map(analysis_name: str,
         pod_list_object = core_client.list_namespaced_pod(label_selector=f"app={analysis_name}",
                                                           watch=False,
                                                           namespace=namespace)
-        analysis_ip = pod_list_object.items[0].status.pod_ip
-        print(analysis_ip)
+
+        if len(pod_list_object.items) > 0:
+            analysis_ip = pod_list_object.items[0].status.pod_ip
+            print(analysis_ip)
         time.sleep(1)
 
     # analysis_ip = core_client.read_namespaced_pod(name=analysis_name, namespace=namespace).spec.cluster_ip
