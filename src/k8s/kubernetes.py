@@ -5,6 +5,7 @@ from typing import Optional
 
 from kubernetes import client, config
 
+from src.resources.database.entity import Database
 from src.utils.other import get_element_by_substring
 
 
@@ -360,17 +361,38 @@ def _delete_service(name: str, namespace: str = 'default') -> None:
     core_client = client.CoreV1Api()
     core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace)
 
+def get_analysis_logs(deployment_names: list[str], database: Database, namespace: str = 'default') -> dict[str, dict[str, str]]:
+    """
+    get logs for both the analysis and nginx deployment
+    :param name:
+    :param pod_ids:
+    :param namespace:
+    :return:
+    """
+    return {"analysis": {deployment_name: _get_logs(deployment_name, database.get_deployment_pod_ids(deployment_name))
+                         for deployment_name in deployment_names},
+            "nginx": {f"nginx-{deployment_name}": _get_logs(f"nginx-{deployment_name}")
+                      for deployment_name in deployment_names}
+            }
 
-def get_logs(name: str, pod_ids: Optional[list[str]], namespace: str = 'default') -> list[str]:
+def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = 'default') -> list[str]:
     core_client = client.CoreV1Api()
     # get pods in deployment
     pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name}')
-    if pod_ids is not None:
-        return [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
-                for pod in pods.items if pod.metadata.uid in pod_ids]
 
-    return [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
-            for pod in pods.items]
+    if pod_ids is not None:
+        try:
+            return [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
+                    for pod in pods.items if pod.metadata.name in pod_ids]
+        except client.exceptions.ApiException as e:
+            print(e)
+            return []
+    try:
+        return [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
+                for pod in pods.items]
+    except client.exceptions.ApiException as e:
+        print(e)
+        return []
 
 
 def get_service_names(namespace: str = 'default') -> list[str]:

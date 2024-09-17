@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from src.k8s.kubernetes import create_analysis_deployment, delete_deployment, get_logs
+from src.k8s.kubernetes import create_analysis_deployment, delete_deployment
 from src.utils.token import create_tokens
 from src.resources.database.db_models import AnalysisDB
 from src.resources.database.entity import Database
@@ -42,16 +42,14 @@ class Analysis(BaseModel):
                                  project_id=self.project_id,
                                  pod_ids=self.pod_ids,
                                  status=self.status,
-                                 log=self.log,
                                  ports=self.ports,
                                  image_registry_address=self.image_registry_address)
 
-    def stop(self, database: Database) -> None:
-        logs = get_logs(self.deployment_name, database.get_deployment_pod_ids(self.deployment_name))
-        # TODO: save final logs
-        delete_deployment(self.deployment_name)
+    def stop(self, database: Database, log: str, namespace: str = 'default') -> None:
+        self.log = log
+        delete_deployment(self.deployment_name, namespace=namespace)
         self.status = AnalysisStatus.STOPPED.value
-        database.stop_analysis(self.deployment_name)
+        database.update_analysis(self.analysis_id, status=self.status, log_location=self.log)
 
 
 def read_db_analysis(analysis: AnalysisDB) -> Analysis:
@@ -61,4 +59,5 @@ def read_db_analysis(analysis: AnalysisDB) -> Analysis:
                     image_registry_address=analysis.image_registry_address,
                     ports=json.loads(analysis.ports),
                     status=analysis.status,
-                    pod_ids=json.loads(analysis.pod_ids))
+                    pod_ids=json.loads(analysis.pod_ids),
+                    log=analysis.log_location)

@@ -1,3 +1,4 @@
+import ast
 from pydantic import BaseModel
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -5,7 +6,7 @@ from fastapi.responses import JSONResponse
 from src.resources.analysis.entity import Analysis, read_db_analysis
 from src.resources.analysis.constants import AnalysisStatus
 from src.resources.database.entity import Database
-from src.k8s.kubernetes import create_harbor_secret, get_logs
+from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
 from src.utils.token import delete_keycloak_client
 
 router = APIRouter()
@@ -37,13 +38,30 @@ def create_analysis(body: CreateAnalysis):
     return {"status": analysis.status}
 
 
+@router.get("/{analysis_id}/history", response_class=JSONResponse)
+def retrieve_history(analysis_id: str):
+    """
+    Retrieve the history of logs for a given analysis
+    :param analysis_id:
+    :return:
+    """
+    deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)
+                   if deployment.status == AnalysisStatus.STOPPED.value]
+    analysis_logs, nginx_logs = ({}, {})
+    for deployment in deployments:
+        log = ast.literal_eval(deployment.log)
+        analysis_logs[deployment.deployment_name] = log["analysis"][deployment.deployment_name]
+        nginx_logs[f"nginx-{deployment.deployment_name}"] = log["nginx"][f"nginx-{deployment.deployment_name}"]
+
+    return {"analysis": analysis_logs, "nginx": nginx_logs}
+
+
 @router.get("/{analysis_id}/logs", response_class=JSONResponse)
 def retrieve_logs(analysis_id: str):
-    deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
-    return {"logs": {deployment.deployment_name: get_logs(deployment.deployment_name,
-                                                          database.get_deployment_pod_ids(deployment.deployment_name))
-                     for deployment in deployments}}
-
+    deployment_names = [read_db_analysis(deployment).deployment_name
+                        for deployment in database.get_deployments(analysis_id)
+                        if deployment.status == AnalysisStatus.RUNNING.value]
+    return get_analysis_logs(deployment_names, database=database)
 
 @router.get("/{analysis_id}/status", response_class=JSONResponse)
 def get_status(analysis_id: str):
@@ -58,9 +76,11 @@ def get_pods(analysis_id: str):
 
 @router.put("/{analysis_id}/stop", response_class=JSONResponse)
 def stop_analysis(analysis_id: str):
-    deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
+    deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)
+                   if deployment.status == AnalysisStatus.RUNNING.value]
     for deployment in deployments:
-        deployment.stop(database)
+        log = str(get_analysis_logs([deployment.deployment_name], database=database))
+        deployment.stop(database, log)
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 

@@ -23,6 +23,7 @@ class AnalysisDB(Base):
     image_registry_address = Column(String, nullable=True)
     ports = Column(JSON, nullable=True)
     status = Column(String, nullable=True)
+    #TODO: change to log
     log_location = Column(String, nullable=True)
     pod_ids = Column(JSON, nullable=True)
     minio_bucket = Column(String, nullable=True)

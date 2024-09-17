@@ -11,5 +11,5 @@ rules:
   resources: ["deployments"]
   verbs: ["*"]
 - apiGroups: [""] # indicates the core API group
-  resources: ["pods", "secrets", "services", "configmaps"]
+  resources: ["pods", "secrets", "services", "configmaps", "pods/log"]
   verbs: ["*"]

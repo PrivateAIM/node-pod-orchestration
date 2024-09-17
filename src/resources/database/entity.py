@@ -37,8 +37,7 @@ class Database:
                         pod_ids: list[str],
                         status: str,
                         ports: list[int],
-                        image_registry_address: str,
-                        log: str = None) -> AnalysisDB:
+                        image_registry_address: str) -> AnalysisDB:
         analysis = AnalysisDB(analysis_id=analysis_id,
                               deployment_name=deployment_name,
                               project_id=project_id,
