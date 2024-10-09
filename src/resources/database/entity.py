@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.resources.analysis.constants import AnalysisStatus
-from .db_models import Base, AnalysisDB
+from .db_models import Base, AnalysisDB, ArchiveDB
 
 
 class Database:

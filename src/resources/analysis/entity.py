@@ -1,3 +1,4 @@
+import random
 import json
 from typing import Optional
 
@@ -8,7 +9,6 @@ from src.utils.token import create_tokens
 from src.resources.database.db_models import AnalysisDB
 from src.resources.database.entity import Database
 from src.resources.analysis.constants import AnalysisStatus
-import random
 
 
 class Analysis(BaseModel):
@@ -45,11 +45,11 @@ class Analysis(BaseModel):
                                  ports=self.ports,
                                  image_registry_address=self.image_registry_address)
 
-    def stop(self, database: Database, log: str, namespace: str = 'default') -> None:
+    def stop(self, database: Database, log: Optional[str] = '', namespace: str = 'default') -> None:
         self.log = log
         delete_deployment(self.deployment_name, namespace=namespace)
         self.status = AnalysisStatus.STOPPED.value
-        database.update_analysis(self.analysis_id, status=self.status, log_location=self.log)
+        database.update_analysis(self.analysis_id, status=self.status, log=self.log)
 
 
 def read_db_analysis(analysis: AnalysisDB) -> Analysis:
@@ -60,4 +60,13 @@ def read_db_analysis(analysis: AnalysisDB) -> Analysis:
                     ports=json.loads(analysis.ports),
                     status=analysis.status,
                     pod_ids=json.loads(analysis.pod_ids),
-                    log=analysis.log_location)
+                    log=analysis.log)
+
+
+class CreateAnalysis(BaseModel):
+    analysis_id: str = 'analysis_id'
+    project_id: str = 'project_id'
+    registry_url: str = 'harbor.privateaim'
+    image_url: str = 'harbor.privateaim/node_id/analysis_id'
+    registry_user: str = 'robot_user'
+    registry_password: str = 'default_pw'

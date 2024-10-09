@@ -1,13 +1,11 @@
-import uvicorn
-import os
+from threading import Thread
+
 from dotenv import load_dotenv, find_dotenv
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
+from src.resources.database.entity import Database
+from src.api.api import PodOrchestrationAPI
 from src.k8s.kubernetes import load_cluster_config
-from src.test.test_db import TestDatabase
-from src.api.api import router
+from src.status.status import status_loop
 
 
 def main():
@@ -17,30 +15,18 @@ def main():
     # load cluster config
     load_cluster_config()
 
-    #TestDatabase()
+    # init database
+    database = Database()
 
-    app = FastAPI(title="FLAME PO",
-                  docs_url="/api/docs",
-                  redoc_url="/api/redoc",
-                  openapi_url="/api/v1/openapi.json", )
+    api_thread = Thread(target=start_po_api, kwargs={'database': database})
+    api_thread.start()
 
-    origins = [
-        "http://localhost:8080/",
-    ]
+    # start the status loop
+    status_loop(database)
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    app.include_router(
-        router,
-        prefix="/po",
-    )
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+def start_po_api(database: Database):
+    PodOrchestrationAPI(database)
 
 
 if __name__ == '__main__':

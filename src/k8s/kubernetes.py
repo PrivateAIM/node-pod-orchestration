@@ -187,6 +187,20 @@ def _create_nginx_config_map(analysis_name: str,
             message_broker_ip = message_broker_pod.status.pod_ip
             print(message_broker_ip)
         time.sleep(1)
+    # get the pod ip of the pod orchestration
+    pod_orchestration_name = get_element_by_substring(get_pod_names(namespace), 'po-')
+
+    pod_orchestration_pod = None
+    while pod_orchestration_pod is None:
+        try:
+            pod_orchestration_pod = core_client.read_namespaced_pod(name=pod_orchestration_name,
+                                                                    namespace=namespace)
+        except:
+            pass
+        if pod_orchestration_pod is not None:
+            pod_orchestration_ip = pod_orchestration_pod.status.pod_ip
+            print(pod_orchestration_ip)
+        time.sleep(1)
 
     # wait until analysis pod receives a cluster ip
     analysis_ip = None
@@ -258,11 +272,12 @@ def _create_nginx_config_map(analysis_name: str,
                         deny        all;
                     }}
                     
-                    # message-broker to analysis deployment
+                    # message-broker/pod-orchestration to analysis deployment
                     location /analysis {{
                         rewrite     ^/analysis(/.*) $1 break;
                         proxy_pass  http://{analysis_service_name};
                         allow       {message_broker_ip};
+                        allow       {pod_orchestration_ip};
                         deny        all;
                     }}
                 }}
