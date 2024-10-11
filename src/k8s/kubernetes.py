@@ -297,19 +297,18 @@ def _create_nginx_config_map(analysis_name: str,
 
 
 def _create_service(name: str, ports: list[int], target_ports: list[int], namespace: str = 'default') -> str:
-    service_name = f"analysis-{name}"
     core_client = client.CoreV1Api()
 
     service_spec = client.V1ServiceSpec(selector={'app': name},
                                         ports=[client.V1ServicePort(port=port, target_port=target_port)
                                                for port, target_port in zip(ports, target_ports)])
-    service_body = client.V1Service(metadata=client.V1ObjectMeta(name=service_name,
-                                                                 labels={'app': service_name}),
+    service_body = client.V1Service(metadata=client.V1ObjectMeta(name=name,
+                                                                 labels={'app': name}),
                                     spec=service_spec)
     core_client.create_namespaced_service(body=service_body, namespace=namespace)
 
     # service_ip = core_client.read_namespaced_service(name=service_name, namespace=namespace).spec.cluster_ip
-    return service_name
+    return name
 
 
 def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespace: str = 'default') -> None:
@@ -354,7 +353,7 @@ def delete_deployment(depl_name: str, namespace: str = 'default') -> None:
     for name in [depl_name, f'nginx-{depl_name}']:
         try:
             app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
-            _delete_service(f"analysis-{name}", namespace)
+            _delete_service(name, namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
                 print(f"Not Found {name}")
