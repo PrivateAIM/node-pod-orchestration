@@ -69,16 +69,16 @@ class Database:
         self.session.close()
 
     def get_analysis_ids(self) -> list[str]:
-        return [analysis.analysis_id for analysis in self.session.query(AnalysisDB)]
+        return [analysis.analysis_id for analysis in self.session.query(AnalysisDB) if analysis is not None]
 
     def get_deployment_ids(self) -> list[str]:
-        return [analysis.deployment_name for analysis in self.session.query(AnalysisDB)]
+        return [analysis.deployment_name for analysis in self.session.query(AnalysisDB) if analysis is not None]
 
     def get_deployment_pod_ids(self, deployment_name: str) -> list[str]:
         return self.get_deployment(deployment_name).pod_ids
 
     def get_analysis_pod_ids(self, analysis_id: str) -> list[str]:
-        return [deployment.pod_ids for deployment in self.get_deployments(analysis_id)]
+        return [deployment.pod_ids for deployment in self.get_deployments(analysis_id) if deployment is not None]
 
     def stop_analysis(self, analysis_id: str) -> None:
         self.update_analysis(analysis_id, status=AnalysisStatus.STOPPED.value)

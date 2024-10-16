@@ -5,7 +5,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from src.k8s.kubernetes import create_analysis_deployment, delete_deployment
-from src.utils.token import create_tokens
+from src.utils.token import create_analysis_tokens
 from src.resources.database.db_models import AnalysisDB
 from src.resources.database.entity import Database
 from src.resources.analysis.constants import AnalysisStatus
@@ -27,7 +27,7 @@ class Analysis(BaseModel):
         self.status = AnalysisStatus.CREATED.value
         self.deployment_name = self.analysis_id + str(random.randint(0, 10000))
         # TODO: solution for some analyzes that have to be started multiple times
-        self.tokens = create_tokens(self.deployment_name, self.analysis_id, self.project_id)
+        self.tokens = create_analysis_tokens(self.deployment_name, self.analysis_id, self.project_id)
         self.analysis_config = self.tokens
         self.analysis_config['ANALYSIS_ID'] = self.analysis_id
         self.analysis_config['PROJECT_ID'] = self.project_id
