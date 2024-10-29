@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Optional, List, Type
+from typing import Optional, List, Type, Literal
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -58,6 +58,13 @@ class Database:
                 self.session.commit()
         return analysis
 
+    def update_deployment(self, deployment_name: str, **kwargs) -> AnalysisDB:
+        deployment = self.get_deployment(deployment_name)
+        for key, value in kwargs.items():
+            setattr(deployment, key, value)
+        self.session.commit()
+        return deployment
+
     def delete_analysis(self, analysis_id: str) -> None:
         analysis = self.get_deployments(analysis_id)
         for deployment in analysis:
@@ -80,6 +87,11 @@ class Database:
     def get_analysis_pod_ids(self, analysis_id: str) -> list[str]:
         return [deployment.pod_ids for deployment in self.get_deployments(analysis_id) if deployment is not None]
 
-    def stop_analysis(self, analysis_id: str) -> None:
-        self.update_analysis(analysis_id, status=AnalysisStatus.STOPPED.value)
+    def update_analysis_status(self, analysis_id: str, status: AnalysisStatus) -> None:
+        self.update_analysis(analysis_id, status=status)
 
+    def update_deployment_status(self, deployment_name: str, status: AnalysisStatus) -> None:
+        self.update_deployment(deployment_name, status=status)
+
+    def stop_analysis(self, analysis_id: str) -> None:
+        self.update_analysis_status(analysis_id, status=AnalysisStatus.STOPPED.value)

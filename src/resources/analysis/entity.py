@@ -13,19 +13,19 @@ from src.resources.analysis.constants import AnalysisStatus
 
 class Analysis(BaseModel):
     analysis_id: str
-    deployment_name: Optional[str] = None
+    deployment_name: str = ''
     project_id: str
     image_registry_address: str
     ports: list[int]
     tokens: Optional[dict[str, str]] = None
     analysis_config: Optional[dict[str, str]] = None
-    status: Optional[str] = None
+    status: str = AnalysisStatus.PENDING.value
     log: Optional[str] = None
     pod_ids: Optional[list[str]] = None
 
     def start(self, database: Database) -> None:
         self.status = AnalysisStatus.CREATED.value
-        self.deployment_name = self.analysis_id + str(random.randint(0, 10000))
+        self.deployment_name = "analysis-" + self.analysis_id + str(random.randint(0, 10000))
         # TODO: solution for some analyzes that have to be started multiple times
         self.tokens = create_analysis_tokens(self.deployment_name, self.analysis_id, self.project_id)
         self.analysis_config = self.tokens
@@ -36,7 +36,7 @@ class Analysis(BaseModel):
                                                   image=self.image_registry_address,
                                                   ports=self.ports,
                                                   env=self.analysis_config)
-        self.status = AnalysisStatus.RUNNING.value
+
         database.create_analysis(analysis_id=self.analysis_id,
                                  deployment_name=self.deployment_name,
                                  project_id=self.project_id,

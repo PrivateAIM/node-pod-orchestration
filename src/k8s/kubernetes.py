@@ -61,7 +61,7 @@ def create_analysis_deployment(name: str,
     container1 = client.V1Container(name=name, image=image, image_pull_policy="IfNotPresent",
                                     ports=[client.V1ContainerPort(port) for port in ports],
                                     env=[client.V1EnvVar(name=key, value=val) for key, val in env.items()],
-                                    )#liveness_probe=liveness_probe)
+                                    liveness_probe=liveness_probe)
     containers.append(container1)
 
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
