@@ -101,7 +101,7 @@ def _set_analysis_hub_status(node_analysis_id: str,
             analysis_hub_status = AnalysisHubStatus.FINISHED.value
             break
         elif intern_depl_status == 'ongoing':
-            analysis_hub_status = AnalysisHubStatus.ONGOING.value
+            analysis_hub_status = AnalysisHubStatus.RUNNING.value
             break
         elif db_depl_status == 'stopped':
             analysis_hub_status = AnalysisHubStatus.STOPPED.value
