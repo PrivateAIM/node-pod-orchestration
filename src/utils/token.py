@@ -154,7 +154,7 @@ def delete_keycloak_client(analysis_id: str) -> None:
     response.raise_for_status()
     try:
         uuid = response.json()[0]['id']
-    except KeyError:
+    except (KeyError, IndexError):
         print('Client not found')
         return
 
