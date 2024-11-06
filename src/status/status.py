@@ -130,7 +130,8 @@ def _submit_analysis_status_update(node_analysis_id: str, status: AnalysisHubSta
     if status is not None:
 
         response = asyncio.run(AsyncClient(base_url=os.getenv('HUB_URL_CORE'),
-                                          headers={"accept": "application/json"})
+                                          headers={"accept": "application/json",
+                                                   "Authorization":f"Bearer {get_hub_token()['hub_token']}"})
                                .post(f'/analysis-nodes/{node_analysis_id}',
                                      json={"run_status": status},
                                      headers=[('Connection', 'close')]))
