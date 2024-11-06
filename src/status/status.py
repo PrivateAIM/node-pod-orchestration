@@ -203,7 +203,7 @@ async def _get_internal_deployment_status(deployment_name: str) -> Literal['fini
     response = await AsyncClient(
         base_url=f'http://nginx-{deployment_name}:80').get('/analysis/healthz',
                                                                                headers=[('Connection', 'close')])
-    print(f"response: {response}")
+    print(f"response nginx-{deployment_name}/analysis/healthz: {response}")
     response.raise_for_status()
     try:
         print(f"analyse status: {response.json()}")
