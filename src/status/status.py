@@ -25,7 +25,7 @@ def status_loop(database: Database):
             if node_id is None:
                 node_id = _get_node_id()
 
-            for analysis_id in database.get_analysis_ids():
+            for analysis_id in set(database.get_analysis_ids()):
                 node_analysis_id = _get_node_analysis_id(node_id, analysis_id)
 
                 deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
@@ -200,7 +200,7 @@ def _delete_analysis(analysis_id: str, database: Database, deployments: list[Ana
 
 async def _get_internal_deployment_status(deployment_name: str) -> Literal['finished', 'ongoing', 'failed']:
     response = await AsyncClient(
-        base_url=f'http://analysis-nginx-{deployment_name}:80').get('/analysis/healthz',
+        base_url=f'http://nginx-{deployment_name}:80').get('/analysis/healthz',
                                                                                headers=[('Connection', 'close')])
     print(response)
     response.raise_for_status()
