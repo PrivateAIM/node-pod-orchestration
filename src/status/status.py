@@ -76,7 +76,8 @@ def _update_running_status(deployments: list[Analysis],
             database.update_deployment_status(deployment_name, AnalysisStatus.RUNNING.value)
             database_status = _get_status(deployments)
         except httpx.HTTPError:
-            pass
+            print(f"Deployment {deployment_name} not responsive")
+
     return database_status, internal_status
 
 
@@ -201,6 +202,7 @@ async def _get_internal_deployment_status(deployment_name: str) -> Literal['fini
     response = await AsyncClient(
         base_url=f'http://analysis-nginx-{deployment_name}:80').get('/analysis/healthz',
                                                                                headers=[('Connection', 'close')])
+    print(response)
     response.raise_for_status()
 
     analysis_health_status = response.json()['status']
