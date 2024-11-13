@@ -2,7 +2,7 @@ import time
 import json
 import os
 import asyncio
-from typing import Literal
+from typing import Literal, Optional
 from httpx import AsyncClient
 import httpx
 
