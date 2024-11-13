@@ -1,3 +1,4 @@
+import os
 from threading import Thread
 
 from dotenv import load_dotenv, find_dotenv
@@ -21,8 +22,8 @@ def main():
     api_thread = Thread(target=start_po_api, kwargs={'database': database})
     api_thread.start()
 
-    # start the status loop
-    status_loop(database)
+    # start status loop
+    status_loop(database, os.getenv('STATUS_LOOP_INTERVAL', 10))
 
 
 def start_po_api(database: Database):
