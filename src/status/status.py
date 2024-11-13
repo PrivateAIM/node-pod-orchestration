@@ -6,7 +6,6 @@ from typing import Literal, Optional
 from httpx import AsyncClient
 import httpx
 
-
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, AnalysisStatus, read_db_analysis
 from src.utils.token import delete_keycloak_client, get_hub_token
@@ -39,33 +38,36 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         deployments = [read_db_analysis(deployment)
                                        for deployment in database.get_deployments(analysis_id)]
 
-                        db_status, int_status = (_get_status(deployments), {'status': {}})
+                        db_status, int_status = (_get_status(deployments), _get_internal_status(deployments))
 
                         # update created to running status if deployment responsive
-                        db_status, int_status = _update_running_status(deployments,
-                                                                       database,
-                                                                       db_status,
-                                                                       int_status)
+                        db_status = _update_running_status(deployments, database, db_status, int_status)
 
-                        db_status, int_status = update_finished_status(deployments,
-                                                                       analysis_id,
-                                                                       database,
-                                                                       db_status,
-                                                                       int_status)
+                        # update running to finished status if analysis finished
+                        db_status = _update_finished_status(deployments, analysis_id, database, db_status, int_status)
 
                         _set_analysis_hub_status(node_analysis_id, db_status, int_status)
         time.sleep(status_loop_interval)
 
 
-def update_finished_status(deployments: list[Analysis],
-                                      analysis_id: str,
-                                      database: Database,
-                                      database_status: dict[str, dict[str, str]],
-                                      internal_status: dict[str, dict[str, str]]) \
-        -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
-    running_deployment_names = [deployment.deployment_name for deployment in deployments if deployment.status == 'running']
-
-    # internal_status = asyncio.run(_get_internal_deployment_status(deployments))
+def _update_finished_status(deployments: list[Analysis],
+                            analysis_id: str,
+                            database: Database,
+                            database_status: dict[str, dict[str, str]],
+                            internal_status: dict[str, dict[str, Optional[str]]]) -> dict[str, dict[str, str]]:
+    """
+    update status of analysis in database from running to finished if deployment is finished
+    and delete analysis TODO:final local log save (minio?)
+    #
+    :param deployments:
+    :param analysis_id:
+    :param database:
+    :param database_status:
+    :param internal_status:
+    :return:
+    """
+    running_deployment_names = [deployment.deployment_name
+                                for deployment in deployments if deployment.status == 'running']
 
     newly_finished_deployment_names = [deployment_name
                                        for deployment_name in internal_status['status'].keys()
@@ -76,31 +78,39 @@ def update_finished_status(deployments: list[Analysis],
         # TODO: final local log save (minio?)  # archive logs
         _delete_analysis(analysis_id, database, deployments)  # delete analysis from database
 
-    return  database_status, internal_status
+    return database_status
 
 
 def _update_running_status(deployments: list[Analysis],
-                                      database: Database,
-                                      database_status: dict[str, dict[str, str]],
-                                      internal_status: dict[str, dict[str, str]]) \
-        -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
-    newly_created_deployments = [deployment for deployment in deployments if deployment.status == 'created']
-    for deployment in newly_created_deployments:
-        deployment_name = deployment.deployment_name
-        try:
-            internal_status['status'][deployment_name] = asyncio.run(_get_internal_deployment_status(deployment_name))
-            database.update_deployment_status(deployment_name, AnalysisStatus.RUNNING.value)
-            database_status = _get_status(deployments)
-        except httpx.HTTPError:
-            print(f"Deployment {deployment_name} not responsive")
+                           database: Database,
+                           database_status: dict[str, dict[str, str]],
+                           internal_status: dict[str, dict[str, Optional[str]]]) -> dict[str, dict[str, str]]:
+    """
+    update status of analysis in database from created to running if deployment is ongoing
+    :param deployments:
+    :param database:
+    :param database_status:
+    :param internal_status:
+    :return:
+    """
+    newly_created_deployment_names = [deployment.deployment_name
+                                      for deployment in deployments if deployment.status == 'created']
 
-    return database_status, internal_status
+    running_deployment_names = [deployment_name
+                                for deployment_name in internal_status['status'].keys()
+                                if (deployment_name in newly_created_deployment_names) and
+                                (internal_status['status'][deployment_name] == 'ongoing')]
+    for deployment_name in running_deployment_names:
+        database.update_deployment_status(deployment_name, AnalysisStatus.RUNNING.value)
+        database_status = _get_status(deployments)
 
+    return database_status
 
 
 def _set_analysis_hub_status(node_analysis_id: str,
                              database_status: dict[str, dict[str, str]],
-                             internal_status: dict[str, dict[str, str]]) -> None:
+                             internal_status: dict[str, dict[str, Optional[str]]]) -> None:
+
     analysis_hub_status = None
     # get keys from database_status
     for deployment_name in database_status['status'].keys():
@@ -152,11 +162,12 @@ def _submit_analysis_status_update(node_analysis_id: str, status: AnalysisHubSta
                                .post(f'/analysis-nodes/{node_analysis_id}',
                                      json={"run_status": status},
                                      headers=[('Connection', 'close')]))
-        #print(f"resposne status update: {response.json()}")
+        #print(f"response status update: {response.json()}")
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             print(f"Error updating analysis status: {e}")
+
 
 def _get_node_analysis_id(node_id: str, analysis_id: str) -> Optional[str]:
     """
@@ -185,7 +196,7 @@ def _get_node_analysis_id(node_id: str, analysis_id: str) -> Optional[str]:
     return response.json()['data'][0]['id']
 
 
-def _get_node_id() -> str:
+def _get_node_id() -> Optional[str]:
     """
     robot-id: 170c1cd8-d468-41c3-9bee-8e3cb1813210
     endpoint: GET https://core.privateaim.dev/nodes?filter[robot_id]=170c1cd8-d468-41c3-9bee-8e3cb1813210
@@ -197,9 +208,11 @@ def _get_node_id() -> str:
                                             os.getenv('HUB_URL_CORE'))
 
 
-    response = asyncio.run(AsyncClient(base_url=hub_url_core, headers={"accept": "application/json",
-                                                                       "Authorization": f"Bearer {get_hub_token()['hub_token']}"})
-                           .get(f'/nodes?filter[robot_id]={robot_id}', headers=[('Connection', 'close')]))
+    response = asyncio.run(AsyncClient(base_url=hub_url_core,
+                                       headers={"accept": "application/json",
+                                                "Authorization": f"Bearer {get_hub_token()['hub_token']}"})
+                           .get(f'/nodes?filter[robot_id]={robot_id}',
+                                headers=[('Connection', 'close')]))
     print(response.json())
     try:
         response.raise_for_status()
@@ -210,12 +223,12 @@ def _get_node_id() -> str:
 
 
 def _get_status(deployments: list[Analysis]) -> dict[Literal['status'],
-                                                     dict[str, Literal['created', 'running', 'stopped', 'finished']]]:
+                                                dict[str, Literal['created', 'running', 'stopped', 'finished']]]:
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
-def _delete_analysis(analysis_id: str, database: Database, deployments: list[Analysis]) -> dict[Literal['status'],
-                                                                                                dict[str, Literal['created', 'running', 'stopped', 'finished']]]:
+def _delete_analysis(analysis_id: str, database: Database, deployments: list[Analysis]) \
+        -> dict[Literal['status'], dict[str, Literal['created', 'running', 'stopped', 'finished']]]:
     for deployment in deployments:
         if deployment.status != AnalysisStatus.STOPPED.value:
             deployment.stop(database)
@@ -225,16 +238,21 @@ def _delete_analysis(analysis_id: str, database: Database, deployments: list[Ana
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
-async def _get_internal_deployment_status(deployment_name: str) -> Literal['finished', 'ongoing', 'failed']:
-    response = await AsyncClient(
-        base_url=f'http://nginx-{deployment_name}:80').get('/analysis/healthz',
-                                                                               headers=[('Connection', 'close')])
+def _get_internal_status(deployments: list[Analysis]) \
+        -> dict[Literal['status'], dict[str, Optional[Literal['finished', 'ongoing', 'failed']]]]:
+    return {"status": {deployment.deployment_name: asyncio.run(_get_internal_deployment_status(deployment.deployment_name))
+                       for deployment in deployments}}
+
+
+async def _get_internal_deployment_status(deployment_name: str) -> Optional[Literal['finished', 'ongoing', 'failed']]:
+    response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:80')
+                      .get('/analysis/healthz', headers=[('Connection', 'close')]))
     print(f"response nginx-{deployment_name}/analysis/healthz: {response}")
     try:
         response.raise_for_status()
     except httpx.HTTPStatusError as e:
         print(f"Error getting internal deployment status: {e}")
-        return 'failed'
+        return None
     try:
         print(f"analyse status: {response.json()}")
     except json.decoder.JSONDecodeError:
