@@ -73,9 +73,15 @@ def _update_finished_status(deployments: list[Analysis],
                                        for deployment_name in internal_status['status'].keys()
                                        if (deployment_name in running_deployment_names) and
                                        (internal_status['status'][deployment_name] == 'finished')]
+    print(f"All deployments (name,db_status,internal_status): "
+          f"{[(deployment.deployment_name, database_status['status'][deployment.deployment_name], internal_status['status'][deployment.deployment_name]) for deployment in deployments]}\n"
+          f"Running deployments: {running_deployment_names}\n"
+          f"Newly finished deployments: {newly_finished_deployment_names}")
     for deployment_name in newly_finished_deployment_names:
+        print("Update status to finished")
         database.update_deployment_status(deployment_name, AnalysisStatus.FINISHED.value)  # change database status to finished
         # TODO: final local log save (minio?)  # archive logs
+        print("Delete deployment")
         _delete_analysis(analysis_id, database, deployments)  # delete analysis from database
 
     return database_status
@@ -223,7 +229,7 @@ def _get_node_id() -> Optional[str]:
 
 
 def _get_status(deployments: list[Analysis]) -> dict[Literal['status'],
-                                                dict[str, Literal['created', 'running', 'stopped', 'finished']]]:
+                                                     dict[str, Literal['created', 'running', 'stopped', 'finished']]]:
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
