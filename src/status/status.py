@@ -245,6 +245,7 @@ def _get_internal_status(deployments: list[Analysis]) \
 
 
 async def _get_internal_deployment_status(deployment_name: str) -> Optional[Literal['finished', 'ongoing', 'failed']]:
+    print(f"url : http://nginx-{deployment_name}:80")
     response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:80')
                       .get('/analysis/healthz', headers=[('Connection', 'close')]))
     print(f"response nginx-{deployment_name}/analysis/healthz: {response}")
