@@ -245,25 +245,28 @@ def _get_internal_status(deployments: list[Analysis]) \
 
 
 async def _get_internal_deployment_status(deployment_name: str) -> Optional[Literal['finished', 'ongoing', 'failed']]:
-    print(f"url : http://nginx-{deployment_name}:80")
-    response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:80')
-                      .get('/analysis/healthz', headers=[('Connection', 'close')]))
-    print(f"response nginx-{deployment_name}/analysis/healthz: {response}")
     try:
-        response.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        print(f"Error getting internal deployment status: {e}")
-        return None
-    try:
-        print(f"analyse status: {response.json()}")
-    except json.decoder.JSONDecodeError:
-        print("No JSON in response")
-    analysis_health_status = response.json()['status']
-    if analysis_health_status == 'finished':
-        health_status = 'finished'
-    elif analysis_health_status == 'ongoing':
-        health_status = 'ongoing'
-    else:
-        health_status = 'failed'
+        response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:80')
+                          .get('/analysis/healthz', headers=[('Connection', 'close')]))
+        print(f"response nginx-{deployment_name}/analysis/healthz: {response}")
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            print(f"Error getting internal deployment status: {e}")
+            return None
+        try:
+            print(f"analyse status: {response.json()}")
+        except json.decoder.JSONDecodeError:
+            print("No JSON in response")
+        analysis_health_status = response.json()['status']
+        if analysis_health_status == 'finished':
+            health_status = 'finished'
+        elif analysis_health_status == 'ongoing':
+            health_status = 'ongoing'
+        else:
+            health_status = 'failed'
+        return health_status
 
-    return health_status
+    except httpx.ConnectError as e:
+        print(f"Connection to http://nginx-{deployment_name}:80 yielded an error: {e}")
+        return None
