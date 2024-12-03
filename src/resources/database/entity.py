@@ -30,26 +30,18 @@ class Database:
     def get_deployments(self, analysis_id: str) -> list[AnalysisDB]:
         return self.session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
 
-    def create_analysis(self,
-                        analysis_id: str,
-                        deployment_name: str,
-                        project_id: str,
-                        pod_ids: list[str],
-                        status: str,
-                        ports: list[int],
-                        image_registry_address: str) -> AnalysisDB:
-        analysis = AnalysisDB(analysis_id=analysis_id,
-                              deployment_name=deployment_name,
-                              project_id=project_id,
-                              pod_ids=json.dumps(pod_ids),
-                              status=status,
-                              ports=json.dumps(ports),
-                              image_registry_address=image_registry_address)
+    def create_analysis(self,**kwargs) -> AnalysisDB:
+        analysis = AnalysisDB(**kwargs)
         self.session.add(analysis)
         self.session.commit()
         return analysis
 
     def update_analysis(self, analysis_id: str, **kwargs) -> list[AnalysisDB]:
+        valid_fields = {'status', 'log', 'ports', 'pod_ids', 'image_registry_address'}
+        updates = {k: v for k, v in kwargs.items() if k in valid_fields}
+        if not updates:
+            print("No valid fields to update")
+            return []
         analysis = self.get_deployments(analysis_id)
         for deployment in analysis:
             if deployment:
@@ -74,6 +66,10 @@ class Database:
 
     def close(self) -> None:
         self.session.close()
+
+    def get_project_id(self, analysis_id: str) -> str:
+        analysis_deployments = self.get_deployments(analysis_id)
+        return analysis_deployments[0].project_id
 
     def get_analysis_ids(self) -> list[str]:
         return [analysis.analysis_id for analysis in self.session.query(AnalysisDB) if analysis is not None]

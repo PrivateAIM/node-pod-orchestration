@@ -10,6 +10,8 @@ from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, AnalysisStatus, read_db_analysis
 from src.utils.token import delete_keycloak_client, get_hub_token
 from src.status.constants import AnalysisHubStatus
+from src.k8s.kubernetes import get_analysis_logs
+from src.resources.database.minio import save_log_file
 
 
 def status_loop(database: Database, status_loop_interval: int) -> None:
@@ -56,8 +58,8 @@ def _update_finished_status(deployments: list[Analysis],
                             database_status: dict[str, dict[str, str]],
                             internal_status: dict[str, dict[str, Optional[str]]]) -> dict[str, dict[str, str]]:
     """
-    update status of analysis in database from running to finished if deployment is finished
-    and delete analysis TODO:final local log save (minio?)
+    update status of analysis in database from running to finished if deployment is finished, save final logs locally,
+    and delete analysis
     #
     :param deployments:
     :param analysis_id:
@@ -80,7 +82,8 @@ def _update_finished_status(deployments: list[Analysis],
     for deployment_name in newly_finished_deployment_names:
         print("Update status to finished")
         database.update_deployment_status(deployment_name, AnalysisStatus.FINISHED.value)  # change database status to finished
-        # TODO: final local log save (minio?)  # archive logs
+        print(f"Archive logs of successful analysis {analysis_id} (deployment: {deployment_name})")
+        _archive_logs(analysis_id, deployment_name, database)  # archive logs
         print("Delete deployment")
         _delete_analysis(analysis_id, database, deployments)  # delete analysis from database
 
@@ -231,6 +234,26 @@ def _get_node_id() -> Optional[str]:
 def _get_status(deployments: list[Analysis]) -> dict[Literal['status'],
                                                      dict[str, Literal['created', 'running', 'stopped', 'finished']]]:
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
+
+
+def _archive_logs(analysis_id: str, finished_deployment_name: str, database: Database) -> None:
+    """
+    archive logs of analysis
+    :param analysis_id:
+    :param finished_deployment_name:
+    :param database:
+    :return   """
+    project_id = database.get_project_id(analysis_id)
+
+    finished_depl_log_dict = get_analysis_logs([finished_deployment_name], database)
+    save_log_file(project_id, analysis_id, finished_depl_log_dict, 'success')
+
+    stopped_deployment_names = [read_db_analysis(deployment).deployment_name
+                                for deployment in database.get_deployments(analysis_id)
+                                if read_db_analysis(deployment).deployment_name != finished_deployment_name]
+    if stopped_deployment_names:
+        stopped_depl_log_dict = get_analysis_logs(stopped_deployment_names, database)
+        save_log_file(project_id, analysis_id, stopped_depl_log_dict, 'failed')
 
 
 def _delete_analysis(analysis_id: str, database: Database, deployments: list[Analysis]) \

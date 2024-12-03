@@ -1,45 +1,28 @@
-from typing import Any
+# models.py
 from sqlalchemy import JSON, Column, DateTime, Integer, String
-from sqlalchemy.ext.declarative import as_declarative, declared_attr
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.sql import func
 
+Base = declarative_base()
 
-@as_declarative()
-class Base:
-    id: Any
-    __name__: str
+class AnalysisBase(Base):
+    __abstract__ = True
+    id = Column(Integer, primary_key=True, index=True)
+    deployment_name = Column(String, unique=True, index=True, nullable=False)
+    analysis_id = Column(String, index=True, nullable=False)
+    project_id = Column(String, index=True, nullable=False)
+    image_registry_address = Column(String)
+    ports = Column(JSON)
+    status = Column(String)
+    log = Column(String)
+    pod_ids = Column(JSON)
+    time_created = Column(DateTime(timezone=True), server_default=func.now())
+    time_updated = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Generate __tablename__ automatically
-    @declared_attr
-    def __tablename__(cls) -> str:
-        return cls.__name__.lower()
-
-
-class AnalysisDB(Base):
+class AnalysisDB(AnalysisBase):
     __tablename__ = "analysis"
-    id = Column(Integer, primary_key=True, index=True)
-    deployment_name = Column(String, unique=True, index=True)
-    analysis_id = Column(String, unique=False, index=True)
-    project_id = Column(String, unique=False, index=True)
-    image_registry_address = Column(String, nullable=True)
-    ports = Column(JSON, nullable=True)
-    status = Column(String, nullable=True)
-    log = Column(String, nullable=True)
-    pod_ids = Column(JSON, nullable=True)
-    time_created = Column(DateTime, nullable=True)
-    time_updated = Column(DateTime, nullable=True)
 
-
-class ArchiveDB(Base):
+class ArchiveDB(AnalysisBase):
     __tablename__ = "archive"
-    id = Column(Integer, primary_key=True, index=True)
-    deployment_name = Column(String, unique=True, index=True)
-    analysis_id = Column(String, unique=False, index=True)
-    project_id = Column(String, unique=False, index=True)
-    image_registry_address = Column(String, nullable=True)
-    ports = Column(JSON, nullable=True)
-    status = Column(String, nullable=True)
-    log = Column(String, nullable=True)
-    pod_ids = Column(JSON, nullable=True)
-    time_created = Column(DateTime, nullable=True)
-    time_updated = Column(DateTime, nullable=True)
+
 

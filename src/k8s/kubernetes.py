@@ -375,7 +375,10 @@ def _delete_service(name: str, namespace: str = 'default') -> None:
     core_client = client.CoreV1Api()
     core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace)
 
-def get_analysis_logs(deployment_names: list[str], database: Database, namespace: str = 'default') -> dict[str, dict[str, str]]:
+
+def get_analysis_logs(deployment_names: list[str],
+                      database: Database,
+                      namespace: str = 'default') -> dict[str, dict[str, str]]:
     """
     get logs for both the analysis and nginx deployment
     :param name:
@@ -388,6 +391,7 @@ def get_analysis_logs(deployment_names: list[str], database: Database, namespace
             "nginx": {f"nginx-{deployment_name}": _get_logs(f"nginx-{deployment_name}")
                       for deployment_name in deployment_names}
             }
+
 
 def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = 'default') -> list[str]:
     core_client = client.CoreV1Api()

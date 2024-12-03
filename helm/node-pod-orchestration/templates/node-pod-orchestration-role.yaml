@@ -6,10 +6,12 @@ metadata:
 rules:
 - apiGroups: ["networking.k8s.io"] # indicates the network API group
   resources: ["networkpolicies"]
-  verbs: ["*"]
+  verbs: ["create", "delete", "get", "list"]
 - apiGroups: ["apps"] # indicates the apps API group
   resources: ["deployments"]
-  verbs: ["*"]
+  verbs: ["create", "delete", "get", "list"]
 - apiGroups: [""] # indicates the core API group
   resources: ["pods", "secrets", "services", "configmaps", "pods/log"]
-  verbs: ["*"]
+  verbs: ["create", "delete", "get", "list"]
+
+# verbs: ["create", "delete", "deletecollection", "get", "list", "patch", "update", "watch"]  # all verbs
