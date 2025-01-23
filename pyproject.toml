@@ -16,6 +16,7 @@ uvicorn = "^0.27.0"
 docker = "^7.0.0"
 psycopg2-binary = "^2.9.9"
 sqlalchemy = "^2.0.26"
+PyJWT = "^2.10.1"
 python-dotenv = "^0.21.0"
 kong-admin-client = {git = "https://github.com/PrivateAIM/kong-admin-python-client.git"}
 

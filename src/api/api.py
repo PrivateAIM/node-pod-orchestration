@@ -10,7 +10,7 @@ from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_anal
 from src.resources.analysis.constants import AnalysisStatus
 from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
 from src.utils.token import delete_keycloak_client
-
+from src.utils.token import valid_access_token
 
 class PodOrchestrationAPI:
     def __init__(self, database: Database):
@@ -34,12 +34,12 @@ class PodOrchestrationAPI:
         )
         router = APIRouter()
         router.add_api_route("/", self.create_analysis, methods=["POST"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/history", self.retrieve_history, methods=["GET"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/logs", self.retrieve_logs, methods=["GET"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/status", self.get_status, methods=["GET"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/pods", self.get_pods, methods=["GET"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/stop", self.stop_analysis, methods=["PUT"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/delete", self.delete_analysis, methods=["DELETE"], response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/history", self.retrieve_history,dependencies=[Depends(valid_access_token)],methods=["GET"], response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/logs", self.retrieve_logs,dependencies=[Depends(valid_access_token)], methods=["GET"], response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/status", self.get_status,dependencies=[Depends(valid_access_token)], methods=["GET"], response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/pods", self.get_pods,dependencies=[Depends(valid_access_token)], methods=["GET"], response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/stop", self.stop_analysis,dependencies=[Depends(valid_access_token)], methods=["PUT"], response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/delete", self.delete_analysis,dependencies=[Depends(valid_access_token)], methods=["DELETE"], response_class=JSONResponse)
         router.add_api_route("/healthz", self.health, methods=["GET"], response_class=JSONResponse)
 
         app.include_router(
