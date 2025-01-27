@@ -1,5 +1,4 @@
 import os
-
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2AuthorizationCodeBearer
 
@@ -13,6 +12,7 @@ oauth2_scheme = OAuth2AuthorizationCodeBearer(
     refreshUrl=os.getenv("KEYCLOAK_URL") + "/protocol/openid-connect/token",
 )
 
+
 async def valid_access_token(token: Annotated[str, Depends(oauth2_scheme)]) -> dict:
     url = os.getenv("KEYCLOAK_URL") + "/protocol/openid-connect/certs"
     jwks_client = PyJWKClient(url)
@@ -23,9 +23,7 @@ async def valid_access_token(token: Annotated[str, Depends(oauth2_scheme)]) -> d
                           sig_key.key,
                           algorithms=["RS256"],
                           audience="api",
-                          options={"verify_aud": True}
-                          )
+                          options={"verify_aud": True})
         return data
     except jwt.exceptions.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Not authenticated")
-

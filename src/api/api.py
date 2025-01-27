@@ -1,7 +1,6 @@
 import ast
 import uvicorn
-from pydantic import BaseModel
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -10,7 +9,8 @@ from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_anal
 from src.resources.analysis.constants import AnalysisStatus
 from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
 from src.utils.token import delete_keycloak_client
-from src.utils.token import valid_access_token
+from src.api.oauth import valid_access_token
+
 
 class PodOrchestrationAPI:
     def __init__(self, database: Database):
@@ -19,50 +19,68 @@ class PodOrchestrationAPI:
         app = FastAPI(title="FLAME PO",
                       docs_url="/api/docs",
                       redoc_url="/api/redoc",
-                      openapi_url="/api/v1/openapi.json", )
+                      openapi_url="/api/v1/openapi.json")
+        origins = ["http://localhost:8080/"]
 
-        origins = [
-            "http://localhost:8080/",
-        ]
-
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=origins,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+        app.add_middleware(CORSMiddleware,
+                           allow_origins=origins,
+                           allow_credentials=True,
+                           allow_methods=["*"],
+                           allow_headers=["*"])
         router = APIRouter()
-        router.add_api_route("/", self.create_analysis, methods=["POST"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/history", self.retrieve_history,dependencies=[Depends(valid_access_token)],methods=["GET"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/logs", self.retrieve_logs,dependencies=[Depends(valid_access_token)], methods=["GET"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/status", self.get_status,dependencies=[Depends(valid_access_token)], methods=["GET"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/pods", self.get_pods,dependencies=[Depends(valid_access_token)], methods=["GET"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/stop", self.stop_analysis,dependencies=[Depends(valid_access_token)], methods=["PUT"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/delete", self.delete_analysis,dependencies=[Depends(valid_access_token)], methods=["DELETE"], response_class=JSONResponse)
-        router.add_api_route("/healthz", self.health, methods=["GET"], response_class=JSONResponse)
+        router.add_api_route("/",
+                             self.create_analysis,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["POST"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/history",
+                             self.retrieve_history,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/logs",
+                             self.retrieve_logs,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/status",
+                             self.get_status,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/pods",
+                             self.get_pods,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/stop",
+                             self.stop_analysis,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["PUT"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/delete",
+                             self.delete_analysis,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["DELETE"],
+                             response_class=JSONResponse)
+        router.add_api_route("/healthz",
+                             self.health,
+                             methods=["GET"],
+                             response_class=JSONResponse)
 
-        app.include_router(
-            router,
-            prefix="/po",
-        )
-
+        app.include_router(router, prefix="/po")
         uvicorn.run(app, host="0.0.0.0", port=8000)
-
 
     def create_analysis(self, body: CreateAnalysis):
         create_harbor_secret(body.registry_url, body.registry_user, body.registry_password)
 
-        analysis = Analysis(
-            analysis_id=body.analysis_id,
-            project_id=body.project_id,
-            image_registry_address=body.image_url,
-            ports=[8000],
-        )
+        analysis = Analysis(analysis_id=body.analysis_id,
+                            project_id=body.project_id,
+                            image_registry_address=body.image_url,
+                            ports=[8000])
         analysis.start(self.database)
 
         return {"status": analysis.status}
-
 
     def retrieve_history(self, analysis_id: str):
         """
@@ -80,22 +98,18 @@ class PodOrchestrationAPI:
 
         return {"analysis": analysis_logs, "nginx": nginx_logs}
 
-
     def retrieve_logs(self, analysis_id: str):
         deployment_names = [read_db_analysis(deployment).deployment_name
                             for deployment in self.database.get_deployments(analysis_id)
                             if deployment.status == AnalysisStatus.RUNNING.value]
         return get_analysis_logs(deployment_names, database=self.database)
 
-
     def get_status(self, analysis_id: str):
         deployments = [read_db_analysis(deployment) for deployment in self.database.get_deployments(analysis_id)]
         return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
-
     def get_pods(self, analysis_id: str):
         return {"pods": self.database.get_analysis_pod_ids(analysis_id)}
-
 
     def stop_analysis(self, analysis_id: str):
         deployments = [read_db_analysis(deployment) for deployment in self.database.get_deployments(analysis_id)
@@ -104,7 +118,6 @@ class PodOrchestrationAPI:
             log = str(get_analysis_logs([deployment.deployment_name], database=self.database))
             deployment.stop(self.database, log)
         return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
-
 
     def delete_analysis(self, analysis_id: str):
         deployments = [read_db_analysis(deployment) for deployment in self.database.get_deployments(analysis_id)]
@@ -116,7 +129,6 @@ class PodOrchestrationAPI:
         delete_keycloak_client(analysis_id)
         self.database.delete_analysis(analysis_id)
         return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
-
 
     def health(self):
         return {"status": "ok"}
