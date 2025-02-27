@@ -198,8 +198,13 @@ def _get_node_analysis_id(node_id: str, analysis_id: str) -> Optional[str]:
     except httpx.HTTPStatusError as e:
         print(f"Error getting node-analysis id: {e}")
         return None
+    data = response.json().get('data', [])
+    if data:
+        return data[0]['id']
+    else:
+        return None
 
-    return response.json()['data'][0]['id']
+    #return response.json()['data'][0]['id']
 
 
 def _get_node_id() -> Optional[str]:
@@ -225,7 +230,13 @@ def _get_node_id() -> Optional[str]:
     except httpx.HTTPStatusError as e:
         print(f"Error getting node id: {e}")
         return None
-    return response.json()['data'][0]['id']
+    data = response.json().get('data', [])
+    if data:
+        return data[0]['id']
+    else:
+        return None
+
+    #return response.json()['data'][0]['id']
 
 
 def _get_status(deployments: list[Analysis]) -> dict[Literal['status'],
