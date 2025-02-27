@@ -72,7 +72,8 @@ def _update_finished_status(deployments: list[Analysis],
     newly_finished_deployment_names = [deployment_name
                                        for deployment_name in internal_status['status'].keys()
                                        if (deployment_name in running_deployment_names) and
-                                       (internal_status['status'][deployment_name] == 'finished')]
+                                       (internal_status['status'][deployment_name] == 'finished' or
+                                        (internal_status['status'][deployment_name] == 'failed') )]
     print(f"All deployments (name,db_status,internal_status): "
           f"{[(deployment.deployment_name, database_status['status'][deployment.deployment_name], internal_status['status'][deployment.deployment_name]) for deployment in deployments]}\n"
           f"Running deployments: {running_deployment_names}\n"
@@ -101,11 +102,11 @@ def _update_running_status(deployments: list[Analysis],
     """
     newly_created_deployment_names = [deployment.deployment_name
                                       for deployment in deployments if deployment.status == 'created']
-
     running_deployment_names = [deployment_name
                                 for deployment_name in internal_status['status'].keys()
                                 if (deployment_name in newly_created_deployment_names) and
-                                (internal_status['status'][deployment_name] == 'ongoing')]
+                                (internal_status['status'][deployment_name] == 'ongoing') or
+                                (internal_status['status'][deployment_name] == 'failed')]
     for deployment_name in running_deployment_names:
         database.update_deployment_status(deployment_name, AnalysisStatus.RUNNING.value)
         database_status = _get_status(deployments)
@@ -147,7 +148,6 @@ def _set_analysis_hub_status(node_analysis_id: str,
         elif db_depl_status == 'created':
             analysis_hub_status = AnalysisHubStatus.STARTING.value
             break
-    print(f"Analysis hub status: {analysis_hub_status}")
 
     _submit_analysis_status_update(node_analysis_id, analysis_hub_status)
 
@@ -168,7 +168,6 @@ def _submit_analysis_status_update(node_analysis_id: str, status: AnalysisHubSta
                                    .post(f'/analysis-nodes/{node_analysis_id}',
                                          json={"run_status": status},
                                          headers=[('Connection', 'close')]))
-            #print(f"response status update: {response.json()}")
 
             response.raise_for_status()
         except (httpx.HTTPStatusError, httpx.ConnectError) as e:
@@ -224,7 +223,6 @@ def _get_node_id() -> Optional[str]:
                                                 "Authorization": f"Bearer {get_hub_token()['hub_token']}"})
                            .get(f'/nodes?filter[robot_id]={robot_id}',
                                 headers=[('Connection', 'close')]))
-    print(response.json())
     try:
         response.raise_for_status()
     except httpx.HTTPStatusError as e:
@@ -265,16 +263,15 @@ async def _get_internal_deployment_status(deployment_name: str) -> Optional[Lite
     try:
         response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:80')
                           .get('/analysis/healthz', headers=[('Connection', 'close')]))
-        print(f"response nginx-{deployment_name}/analysis/healthz: {response}")
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             print(f"Error getting internal deployment status: {e}")
             return None
-        try:
-            print(f"analyse status: {response.json()}")
-        except json.decoder.JSONDecodeError:
-            print("No JSON in response")
+        #try:
+        #    print(f"analyse status: {response.json()}")
+        #except json.decoder.JSONDecodeError:
+        #    print("No JSON in response")
         analysis_health_status = response.json()['status']
         if analysis_health_status == 'finished':
             health_status = 'finished'
