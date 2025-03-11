@@ -1,10 +1,10 @@
 import time
-import json
 import os
 import asyncio
 from typing import Literal, Optional
-from httpx import AsyncClient
-import httpx
+
+import flame_hub
+from httpx import AsyncClient, HTTPStatusError, ConnectError
 
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, AnalysisStatus, read_db_analysis
@@ -21,14 +21,30 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
     node_id = None
     node_analysis_ids = {}
 
+    robot_id, robot_secret, hub_url_core, hub_auth = (os.getenv('HUB_ROBOT_USER'),
+                                                      os.getenv('HUB_ROBOT_SECRET'),
+                                                      os.getenv('HUB_URL_CORE'),
+                                                      os.getenv('HUB_URL_AUTH'))
+
+    try:
+        hub_client = _get_hub_client(robot_id, robot_secret, hub_url_core, hub_auth)
+    except Exception as e:
+        hub_client = None
+        print(f"Failed to authenticate with hub python client library.\n{e}")
+
     while True:
         if database.get_analysis_ids():
             if node_id is None:
                 node_id = _get_node_id()
+                if hub_client:
+                    new_node_id = hub_client.find_nodes(robot_id=robot_id)[0].id #TODO
+                    print(f"Node IDs are equal {node_id == new_node_id}")
             else:
                 for analysis_id in set(database.get_analysis_ids()):
                     if analysis_id not in node_analysis_ids.keys():
+                        # new_node_analysis_ids = hub_client.fin #TODO
                         node_analysis_id = _get_node_analysis_id(node_id, analysis_id)
+                        # print(f"Node IDs are equal {node_analysis_id == new_node_analysis_ids}")
                         if node_analysis_id is not None:
                             node_analysis_ids[analysis_id] = node_analysis_id
                     else:
@@ -48,6 +64,11 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
 
                         _set_analysis_hub_status(node_analysis_id, db_status, int_status)
         time.sleep(status_loop_interval)
+
+
+def _get_hub_client(robot_id: str, robot_secret: str, hub_url_core: str, hub_auth: str) -> flame_hub.CoreClient:
+    auth = flame_hub.auth.RobotAuth(robot_id=robot_id, robot_secret=robot_secret, base_url=hub_auth)
+    return flame_hub.CoreClient(base_url=hub_url_core, auth=auth)
 
 
 def _update_finished_status(deployments: list[Analysis],
@@ -73,7 +94,7 @@ def _update_finished_status(deployments: list[Analysis],
                                        for deployment_name in internal_status['status'].keys()
                                        if (deployment_name in running_deployment_names) and
                                        (internal_status['status'][deployment_name] == 'finished' or
-                                        (internal_status['status'][deployment_name] == 'failed') )]
+                                        (internal_status['status'][deployment_name] == 'failed'))]
     print(f"All deployments (name,db_status,internal_status): "
           f"{[(deployment.deployment_name, database_status['status'][deployment.deployment_name], internal_status['status'][deployment.deployment_name]) for deployment in deployments]}\n"
           f"Running deployments: {running_deployment_names}\n"
@@ -102,6 +123,7 @@ def _update_running_status(deployments: list[Analysis],
     """
     newly_created_deployment_names = [deployment.deployment_name
                                       for deployment in deployments if deployment.status == 'created']
+
     running_deployment_names = [deployment_name
                                 for deployment_name in internal_status['status'].keys()
                                 if (deployment_name in newly_created_deployment_names) and
@@ -163,14 +185,14 @@ def _submit_analysis_status_update(node_analysis_id: str, status: AnalysisHubSta
     if status is not None:
         try:
             response = asyncio.run(AsyncClient(base_url=os.getenv('HUB_URL_CORE'),
-                                              headers={"accept": "application/json",
-                                                       "Authorization":f"Bearer {get_hub_token()['hub_token']}"})
+                                               headers={"accept": "application/json",
+                                                        "Authorization": f"Bearer {get_hub_token()['hub_token']}"})
                                    .post(f'/analysis-nodes/{node_analysis_id}',
                                          json={"run_status": status},
                                          headers=[('Connection', 'close')]))
 
             response.raise_for_status()
-        except (httpx.HTTPStatusError, httpx.ConnectError) as e:
+        except (HTTPStatusError, ConnectError) as e:
             print(f"Error updating analysis status: {e}")
 
 
@@ -188,13 +210,13 @@ def _get_node_analysis_id(node_id: str, analysis_id: str) -> Optional[str]:
     :return:
     """
     response = asyncio.run(AsyncClient(base_url=os.getenv('HUB_URL_CORE'),
-                                      headers={"accept": "application/json",
-                                               "Authorization": f"Bearer {get_hub_token()['hub_token']}"})
+                                       headers={"accept": "application/json",
+                                                "Authorization": f"Bearer {get_hub_token()['hub_token']}"})
                            .get(f'/analysis-nodes?filter[node_id]={node_id}&filter[analysis_id]={analysis_id}',
                                 headers=[('Connection', 'close')]))
     try:
         response.raise_for_status()
-    except httpx.HTTPStatusError as e:
+    except HTTPStatusError as e:
         print(f"Error getting node-analysis id: {e}")
         return None
     data = response.json().get('data', [])
@@ -217,7 +239,6 @@ def _get_node_id() -> Optional[str]:
                                             os.getenv('HUB_ROBOT_SECRET'),
                                             os.getenv('HUB_URL_CORE'))
 
-
     response = asyncio.run(AsyncClient(base_url=hub_url_core,
                                        headers={"accept": "application/json",
                                                 "Authorization": f"Bearer {get_hub_token()['hub_token']}"})
@@ -225,7 +246,7 @@ def _get_node_id() -> Optional[str]:
                                 headers=[('Connection', 'close')]))
     try:
         response.raise_for_status()
-    except httpx.HTTPStatusError as e:
+    except HTTPStatusError as e:
         print(f"Error getting node id: {e}")
         return None
     data = response.json().get('data', [])
@@ -265,7 +286,7 @@ async def _get_internal_deployment_status(deployment_name: str) -> Optional[Lite
                           .get('/analysis/healthz', headers=[('Connection', 'close')]))
         try:
             response.raise_for_status()
-        except httpx.HTTPStatusError as e:
+        except HTTPStatusError as e:
             print(f"Error getting internal deployment status: {e}")
             return None
         #try:
@@ -281,6 +302,6 @@ async def _get_internal_deployment_status(deployment_name: str) -> Optional[Lite
             health_status = 'failed'
         return health_status
 
-    except httpx.ConnectError as e:
+    except ConnectError as e:
         print(f"Connection to http://nginx-{deployment_name}:80 yielded an error: {e}")
         return None
