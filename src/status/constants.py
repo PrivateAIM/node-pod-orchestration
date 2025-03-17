@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class AnalysisHubStatus(Enum):
+class AnalysisStatus(Enum):
     STARTING = 'starting'
     STARTED = 'started'
 

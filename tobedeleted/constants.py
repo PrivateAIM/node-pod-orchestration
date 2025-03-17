@@ -1,4 +1,4 @@
-from enum import Enum
+'''from enum import Enum
 
 
 class AnalysisStatus(Enum):
@@ -7,3 +7,5 @@ class AnalysisStatus(Enum):
     RUNNING = 'running'
     STOPPED = 'stopped'
     FINISHED = 'finished'
+    FAILED = 'failed'
+'''

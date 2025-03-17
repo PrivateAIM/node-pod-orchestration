@@ -1,11 +1,11 @@
 import json
 import os
-from typing import Optional, List, Type, Literal
+from typing import Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.resources.analysis.constants import AnalysisStatus
-from .db_models import Base, AnalysisDB, ArchiveDB
+from tobedeleted.constants import AnalysisStatus
+from .db_models import Base, AnalysisDB
 
 
 class Database:
@@ -61,6 +61,7 @@ class Database:
     def update_deployment(self, deployment_name: str, **kwargs) -> AnalysisDB:
         deployment = self.get_deployment(deployment_name)
         for key, value in kwargs.items():
+            print(f"Setting {key} to {value}")
             setattr(deployment, key, value)
         self.session.commit()
         return deployment
@@ -91,6 +92,7 @@ class Database:
         self.update_analysis(analysis_id, status=status)
 
     def update_deployment_status(self, deployment_name: str, status: AnalysisStatus) -> None:
+        print(f"Updating deployment {deployment_name} to status {status}")
         self.update_deployment(deployment_name, status=status)
 
     def stop_analysis(self, analysis_id: str) -> None:

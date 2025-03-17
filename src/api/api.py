@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
-from src.resources.analysis.constants import AnalysisStatus
+from src.status.constants import AnalysisStatus
 from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
 from src.utils.token import delete_keycloak_client
 

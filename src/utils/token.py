@@ -48,7 +48,7 @@ def _create_new_hub_token() -> dict[str, str]:
     token = response.json()['access_token']
     time_of_expiration = response.json()['expires_in'] + time.time()
     _hub_token_dict = {"hub_token": token, "hub_token_expiration": time_of_expiration}
-    print('Hub token:', _hub_token_dict)
+    #print('Hub token:', _hub_token_dict)
     return _hub_token_dict
 
 
@@ -76,7 +76,7 @@ def _get_keycloak_token(analysis_id: str) -> str:
     try:
         response = requests.post(keycloak_url, data=data)
         response.raise_for_status()
-        print('Client token:', response.json()['access_token'])
+        #print('Client token:', response.json()['access_token'])
 
         return response.json()['access_token']
     except requests.exceptions.RequestException as e:
@@ -98,7 +98,7 @@ def _get_keycloak_client_secret(analysis_id: str) -> str:
 
     response = requests.get(url_get_client, headers=headers)
     response.raise_for_status()
-    print('Client secret:', response.json()[0]['secret'])
+    #print('Client secret:', response.json()[0]['secret'])
 
     return response.json()[0]['secret']
 
@@ -117,7 +117,7 @@ def _get_keycloak_admin_token() -> str:
     }
     response = requests.post(url_admin_access_token, data=data)
     response.raise_for_status()
-    print('Admin token:', response.json()['access_token'])
+    #print('Admin token:', response.json()['access_token'])
 
     return response.json()['access_token']
 
@@ -128,7 +128,7 @@ def _keycloak_client_exists(analysis_id: str, admin_token: str) -> bool:
 
     response = requests.get(url_get_client, headers=headers)
     response.raise_for_status()
-    print('Does client already exist:', bool(response.json()))
+    #print('Does client already exist:', bool(response.json()))
 
     return bool(response.json())
 
@@ -181,7 +181,7 @@ def _get_kong_token(analysis_id: str, project_id: str) -> str:
                     tags=[project_id],
                 )
             )
-            print(f"Consumer added, id: {api_response.id}")
+            #print(f"Consumer added, id: {api_response.id}")
             consumer_id = api_response.id
     except ApiException as e:
         print(f"Exception when calling ConsumersApi->create_consumer: {e}\n")
@@ -199,9 +199,9 @@ def _get_kong_token(analysis_id: str, project_id: str) -> str:
                     tags=[project_id],
                 ),
             )
-            print(
-                f"ACL plugin configured for consumer, group: {api_response.group}"
-            )
+            #print(
+            #    f"ACL plugin configured for consumer, group: {api_response.group}"
+            #)
     except ApiException as e:
         print(f"Exception when calling ACLsApi->create_acl_for_consumer: {e}\n")
     except Exception as e:
@@ -217,9 +217,9 @@ def _get_kong_token(analysis_id: str, project_id: str) -> str:
                     tags=[project_id],
                 ),
             )
-            print(
-                f"Key authentication plugin configured for consumer, api_key: {api_response.key}"
-            )
+            #print(
+            #    f"Key authentication plugin configured for consumer, api_key: {api_response.key}"
+            #)
             return api_response.key
     except ApiException as e:
         print(

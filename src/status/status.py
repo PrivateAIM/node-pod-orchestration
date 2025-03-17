@@ -7,9 +7,9 @@ import flame_hub
 from httpx import AsyncClient, HTTPStatusError, ConnectError
 
 from src.resources.database.entity import Database
-from src.resources.analysis.entity import Analysis, AnalysisStatus, read_db_analysis
+from src.resources.analysis.entity import Analysis, read_db_analysis
 from src.utils.token import delete_keycloak_client, get_hub_token
-from src.status.constants import AnalysisHubStatus
+from src.status.constants import AnalysisStatus
 
 
 def status_loop(database: Database, status_loop_interval: int) -> None:
@@ -37,7 +37,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
             if node_id is None:
                 node_id = _get_node_id()
                 if hub_client:
-                    new_node_id = hub_client.find_nodes(robot_id=robot_id)[0].id #TODO
+                    new_node_id = hub_client.find_nodes(filter={"robot_id": robot_id})[0].id #TODO
                     print(f"Node IDs are equal {node_id == new_node_id}")
             else:
                 for analysis_id in set(database.get_analysis_ids()):
@@ -57,10 +57,10 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         db_status, int_status = (_get_status(deployments), _get_internal_status(deployments))
 
                         # update created to running status if deployment responsive
-                        db_status = _update_running_status(deployments, database, db_status, int_status)
+                        db_status = _update_running_status(analysis_id, database, db_status, int_status)
 
                         # update running to finished status if analysis finished
-                        db_status = _update_finished_status(deployments, analysis_id, database, db_status, int_status)
+                        db_status = _update_finished_status(analysis_id, database, db_status, int_status)
 
                         _set_analysis_hub_status(node_analysis_id, db_status, int_status)
         time.sleep(status_loop_interval)
@@ -71,8 +71,7 @@ def _get_hub_client(robot_id: str, robot_secret: str, hub_url_core: str, hub_aut
     return flame_hub.CoreClient(base_url=hub_url_core, auth=auth)
 
 
-def _update_finished_status(deployments: list[Analysis],
-                            analysis_id: str,
+def _update_finished_status(analysis_id: str,
                             database: Database,
                             database_status: dict[str, dict[str, str]],
                             internal_status: dict[str, dict[str, Optional[str]]]) -> dict[str, dict[str, str]]:
@@ -80,28 +79,32 @@ def _update_finished_status(deployments: list[Analysis],
     update status of analysis in database from running to finished if deployment is finished
     and delete analysis TODO:final local log save (minio?)
     #
-    :param deployments:
     :param analysis_id:
     :param database:
     :param database_status:
     :param internal_status:
     :return:
     """
+    deployments = [read_db_analysis(deployment)
+                   for deployment in database.get_deployments(analysis_id)]
     running_deployment_names = [deployment.deployment_name
                                 for deployment in deployments if deployment.status == 'running']
 
-    newly_finished_deployment_names = [deployment_name
-                                       for deployment_name in internal_status['status'].keys()
-                                       if (deployment_name in running_deployment_names) and
-                                       (internal_status['status'][deployment_name] == 'finished' or
-                                        (internal_status['status'][deployment_name] == 'failed'))]
+    newly_ended_deployment_names = [deployment_name
+                                    for deployment_name in internal_status['status'].keys()
+                                    if (deployment_name in running_deployment_names) and
+                                    ((internal_status['status'][deployment_name] == 'finished') or
+                                     (internal_status['status'][deployment_name] == 'failed'))]
     print(f"All deployments (name,db_status,internal_status): "
           f"{[(deployment.deployment_name, database_status['status'][deployment.deployment_name], internal_status['status'][deployment.deployment_name]) for deployment in deployments]}\n"
           f"Running deployments: {running_deployment_names}\n"
-          f"Newly finished deployments: {newly_finished_deployment_names}")
-    for deployment_name in newly_finished_deployment_names:
-        print("Update status to finished")
-        database.update_deployment_status(deployment_name, AnalysisStatus.FINISHED.value)  # change database status to finished
+          f"Newly ended deployments: {newly_ended_deployment_names}")
+    for deployment_name in newly_ended_deployment_names:
+        intn_dpl_status = internal_status['status'][deployment_name]
+        print(f"Attempt to update status to {intn_dpl_status}")
+        database.update_deployment_status(deployment_name,
+                                          AnalysisStatus.FINISHED.value
+                                          if intn_dpl_status == 'finished' else AnalysisStatus.FAILED.value)  # change database status
         # TODO: final local log save (minio?)  # archive logs
         print("Delete deployment")
         _delete_analysis(analysis_id, database, deployments)  # delete analysis from database
@@ -109,26 +112,27 @@ def _update_finished_status(deployments: list[Analysis],
     return database_status
 
 
-def _update_running_status(deployments: list[Analysis],
+def _update_running_status(analysis_id: str,
                            database: Database,
                            database_status: dict[str, dict[str, str]],
                            internal_status: dict[str, dict[str, Optional[str]]]) -> dict[str, dict[str, str]]:
     """
     update status of analysis in database from created to running if deployment is ongoing
-    :param deployments:
+    :param analysis_id:
     :param database:
     :param database_status:
     :param internal_status:
     :return:
     """
+    deployments = [read_db_analysis(deployment)
+                   for deployment in database.get_deployments(analysis_id)]
     newly_created_deployment_names = [deployment.deployment_name
                                       for deployment in deployments if deployment.status == 'created']
 
     running_deployment_names = [deployment_name
                                 for deployment_name in internal_status['status'].keys()
                                 if (deployment_name in newly_created_deployment_names) and
-                                (internal_status['status'][deployment_name] == 'ongoing') or
-                                (internal_status['status'][deployment_name] == 'failed')]
+                                (internal_status['status'][deployment_name] == 'ongoing')]
     for deployment_name in running_deployment_names:
         database.update_deployment_status(deployment_name, AnalysisStatus.RUNNING.value)
         database_status = _get_status(deployments)
@@ -150,31 +154,22 @@ def _set_analysis_hub_status(node_analysis_id: str,
             intern_depl_status = None
 
         if intern_depl_status == 'failed':
-            analysis_hub_status = AnalysisHubStatus.FAILED.value
+            analysis_hub_status = AnalysisStatus.FAILED.value
             break
         elif intern_depl_status == 'finished':
-            analysis_hub_status = AnalysisHubStatus.FINISHED.value
+            analysis_hub_status = AnalysisStatus.FINISHED.value
             break
         elif intern_depl_status == 'ongoing':
-            analysis_hub_status = AnalysisHubStatus.RUNNING.value
+            analysis_hub_status = AnalysisStatus.RUNNING.value
             break
-        elif db_depl_status == 'stopped':
-            analysis_hub_status = AnalysisHubStatus.STOPPED.value
-            break
-        elif db_depl_status == 'finished':
-            analysis_hub_status = AnalysisHubStatus.FINISHED.value
-            break
-        elif db_depl_status == 'running':
-            analysis_hub_status = AnalysisHubStatus.RUNNING.value
-            break
-        elif db_depl_status == 'created':
-            analysis_hub_status = AnalysisHubStatus.STARTING.value
+        else:
+            analysis_hub_status = db_depl_status
             break
 
     _submit_analysis_status_update(node_analysis_id, analysis_hub_status)
 
 
-def _submit_analysis_status_update(node_analysis_id: str, status: AnalysisHubStatus) -> None:
+def _submit_analysis_status_update(node_analysis_id: str, status: AnalysisStatus) -> None:
     """
     update status of analysis at hub
 

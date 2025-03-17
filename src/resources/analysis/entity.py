@@ -8,7 +8,7 @@ from src.k8s.kubernetes import create_analysis_deployment, delete_deployment
 from src.utils.token import create_analysis_tokens
 from src.resources.database.db_models import AnalysisDB
 from src.resources.database.entity import Database
-from src.resources.analysis.constants import AnalysisStatus
+from src.status.constants import AnalysisStatus
 
 
 class Analysis(BaseModel):
@@ -19,12 +19,12 @@ class Analysis(BaseModel):
     ports: list[int]
     tokens: Optional[dict[str, str]] = None
     analysis_config: Optional[dict[str, str]] = None
-    status: str = AnalysisStatus.PENDING.value
+    status: str = AnalysisStatus.STARTING.value
     log: Optional[str] = None
     pod_ids: Optional[list[str]] = None
 
     def start(self, database: Database) -> None:
-        self.status = AnalysisStatus.CREATED.value
+        self.status = AnalysisStatus.STARTED.value
         self.deployment_name = "analysis-" + self.analysis_id + str(random.randint(0, 10000))
         # TODO: solution for some analyzes that have to be started multiple times
         self.tokens = create_analysis_tokens(self.deployment_name, self.analysis_id, self.project_id)
