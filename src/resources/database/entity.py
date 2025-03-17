@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from tobedeleted.constants import AnalysisStatus
+from src.status.constants import AnalysisStatus
 from .db_models import Base, AnalysisDB
 
 
