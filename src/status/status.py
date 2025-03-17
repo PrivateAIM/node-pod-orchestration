@@ -127,7 +127,7 @@ def _update_running_status(analysis_id: str,
     deployments = [read_db_analysis(deployment)
                    for deployment in database.get_deployments(analysis_id)]
     newly_created_deployment_names = [deployment.deployment_name
-                                      for deployment in deployments if deployment.status == 'created']
+                                      for deployment in deployments if deployment.status == 'started']
 
     running_deployment_names = [deployment_name
                                 for deployment_name in internal_status['status'].keys()
