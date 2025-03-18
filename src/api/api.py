@@ -35,14 +35,22 @@ class PodOrchestrationAPI:
             allow_headers=["*"],
         )
         router = APIRouter()
-        router.add_api_route("/", self.create_analysis, methods=["POST"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/history", self.retrieve_history, methods=["GET"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/logs", self.retrieve_logs, methods=["GET"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/status", self.get_status, methods=["GET"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/pods", self.get_pods, methods=["GET"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/stop", self.stop_analysis, methods=["PUT"], response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/delete", self.delete_analysis, methods=["DELETE"], response_class=JSONResponse)
-        router.add_api_route("/healthz", self.health, methods=["GET"], response_class=JSONResponse)
+        router.add_api_route("/", self.create_analysis_call, methods=["POST"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/history", self.retrieve_history_call, methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/logs", self.retrieve_logs_call, methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/status", self.get_status_call, methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/pods", self.get_pods_call, methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/stop", self.stop_analysis_call, methods=["PUT"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/delete", self.delete_analysis_call, methods=["DELETE"],
+                             response_class=JSONResponse)
+        router.add_api_route("/healthz", self.health_call, methods=["GET"],
+                             response_class=JSONResponse)
 
         app.include_router(
             router,
