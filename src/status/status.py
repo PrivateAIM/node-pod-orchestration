@@ -8,6 +8,7 @@ from httpx import AsyncClient, HTTPStatusError, ConnectError
 
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, read_db_analysis
+from src.resources.utils import delete_analysis, stop_analysis
 from src.utils.token import delete_keycloak_client, get_hub_token
 from src.status.constants import AnalysisStatus
 
@@ -77,7 +78,7 @@ def _update_finished_status(analysis_id: str,
                             internal_status: dict[str, dict[str, Optional[str]]]) -> dict[str, dict[str, str]]:
     """
     update status of analysis in database from running to finished if deployment is finished
-    and delete analysis TODO:final local log save (minio?)
+    and delete analysis
     #
     :param analysis_id:
     :param database:
@@ -105,9 +106,13 @@ def _update_finished_status(analysis_id: str,
         database.update_deployment_status(deployment_name,
                                           AnalysisStatus.FINISHED.value
                                           if intn_dpl_status == 'finished' else AnalysisStatus.FAILED.value)  # change database status
-        # TODO: final local log save (minio?)  # archive logs
-        print("Delete deployment")
-        _delete_analysis(analysis_id, database, deployments)  # delete analysis from database
+        if intn_dpl_status == 'finished':
+            print("Delete deployment")
+            # TODO: final local log save (minio?)  # archive logs
+            delete_analysis(analysis_id, database)  # delete analysis from database
+        else:
+            print("Stop deployment")
+            stop_analysis(analysis_id, database)  # stop analysis
 
     return database_status
 
@@ -254,18 +259,7 @@ def _get_node_id() -> Optional[str]:
 
 
 def _get_status(deployments: list[Analysis]) -> dict[Literal['status'],
-                                                     dict[str, Literal['created', 'running', 'stopped', 'finished']]]:
-    return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
-
-
-def _delete_analysis(analysis_id: str, database: Database, deployments: list[Analysis]) \
-        -> dict[Literal['status'], dict[str, Literal['created', 'running', 'stopped', 'finished']]]:
-    for deployment in deployments:
-        if deployment.status != AnalysisStatus.STOPPED.value:
-            deployment.stop(database)
-            deployment.status = AnalysisStatus.STOPPED.value
-    delete_keycloak_client(analysis_id)
-    database.delete_analysis(analysis_id)
+                                                     dict[str, Literal['started', 'running', 'stopped', 'finished']]]:
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 

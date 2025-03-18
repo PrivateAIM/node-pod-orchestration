@@ -69,7 +69,7 @@ def _get_keycloak_token(analysis_id: str) -> str:
 
     client_secret = _get_keycloak_client_secret(analysis_id)
 
-    keycloak_url = os.getenv('KEYCLOAK_URL') + "/realms/flame/protocol/openid-connect/token"
+    keycloak_url = f"{_KEYCLOAK_URL}/realms/flame/protocol/openid-connect/token"
     data = {"grant_type": "client_credentials", "client_id": analysis_id, "client_secret": client_secret}
 
     # get token from keycloak like in the above curl command
