@@ -54,6 +54,7 @@ class Database:
         for deployment in analysis:
             if deployment:
                 for key, value in kwargs.items():
+                    print(f"in update analysis Setting {key} to {value}")
                     setattr(deployment, key, value)
                 self.session.commit()
         return analysis
