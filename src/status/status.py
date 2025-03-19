@@ -39,20 +39,17 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                 node_id = _get_node_id()
                 if hub_client:
                     new_node_id = str(hub_client.find_nodes(filter={"robot_id": robot_id})[0].id) #TODO
-                    print(f"Node IDs are equal {node_id == new_node_id}\n\tnode_id={node_id}, new_node_id={new_node_id}")
-                    print(f"\t\thub_client.find_nodes(filter={{'robot_id': robot_id}})="
-                          f"{hub_client.find_nodes(filter={'robot_id': robot_id})}")
-                    print(f"\t\tids: {[n.id for n in hub_client.find_nodes(filter={'robot_id': robot_id})]}")
+                    test_new_vs_old(old=node_id, new=new_node_id, i=1, obj_str='node_id')
             else:
                 for analysis_id in set(database.get_analysis_ids()):
                     if analysis_id not in node_analysis_ids.keys():
-                        # new_node_analysis_ids = hub_client.fin #TODO
                         node_analysis_id = _get_node_analysis_id(node_id, analysis_id)
-                        # print(f"Node IDs are equal {node_analysis_id == new_node_analysis_ids}")
                         if node_analysis_id is not None:
                             node_analysis_ids[analysis_id] = node_analysis_id
                     else:
                         node_analysis_id = node_analysis_ids[analysis_id]
+                    new_node_analysis_id = str(hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id, "node_id": node_id})[0].id)
+                    test_new_vs_old(old=node_analysis_id, new=new_node_analysis_id, i=2, obj_str='node_analysis_id')
 
                     if node_analysis_id is not None:
                         deployments = [read_db_analysis(deployment)
@@ -66,7 +63,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         # update running to finished status if analysis finished
                         db_status = _update_finished_status(analysis_id, database, db_status, int_status)
 
-                        _set_analysis_hub_status(node_analysis_id, db_status, int_status)
+                        _set_analysis_hub_status(hub_client,node_analysis_id, db_status, int_status)
         time.sleep(status_loop_interval)
 
 
@@ -150,7 +147,8 @@ def _update_running_status(analysis_id: str,
     return database_status
 
 
-def _set_analysis_hub_status(node_analysis_id: str,
+def _set_analysis_hub_status(hub_client: flame_hub.CoreClient,
+                             node_analysis_id: str,
                              database_status: dict[str, dict[str, str]],
                              internal_status: dict[str, dict[str, Optional[str]]]) -> None:
 
@@ -176,7 +174,8 @@ def _set_analysis_hub_status(node_analysis_id: str,
             analysis_hub_status = db_depl_status
             break
 
-    _submit_analysis_status_update(node_analysis_id, analysis_hub_status)
+    #_submit_analysis_status_update(node_analysis_id, analysis_hub_status)
+    hub_client.update_analysis_node(node_analysis_id, run_status=analysis_hub_status)
 
 
 def _submit_analysis_status_update(node_analysis_id: str, status: AnalysisStatus) -> None:
@@ -296,3 +295,10 @@ async def _get_internal_deployment_status(deployment_name: str) -> Optional[Lite
     except ConnectError as e:
         print(f"Connection to http://nginx-{deployment_name}:80 yielded an error: {e}")
         return None
+
+def test_new_vs_old(new, old, i=1, obj_str='_'): #TODO: Remove
+    if not obj_str.startswith('_'):
+        obj_str = '_' + obj_str
+    print(f"Check {i}...{'Success' if old == new else 'Failed'}")
+    if old != new:
+        print(f"\told{obj_str}={old}, new{obj_str}={new}")
