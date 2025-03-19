@@ -9,7 +9,7 @@ from httpx import AsyncClient, HTTPStatusError, ConnectError
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, read_db_analysis
 from src.resources.utils import delete_analysis, stop_analysis
-from src.utils.token import delete_keycloak_client, get_hub_token
+from src.utils.token import get_hub_token
 from src.status.constants import AnalysisStatus
 
 
@@ -137,7 +137,7 @@ def _update_running_status(analysis_id: str,
     deployments = [read_db_analysis(deployment)
                    for deployment in database.get_deployments(analysis_id)]
     newly_created_deployment_names = [deployment.deployment_name
-                                      for deployment in deployments if deployment.status == 'started']
+                                      for deployment in deployments if deployment.status == AnalysisStatus.STARTED.value]
 
     running_deployment_names = [deployment_name
                                 for deployment_name in internal_status['status'].keys()
@@ -163,10 +163,10 @@ def _set_analysis_hub_status(node_analysis_id: str,
         except KeyError:
             intern_depl_status = None
 
-        if intern_depl_status == 'failed':
+        if intern_depl_status == AnalysisStatus.FAILED.value:
             analysis_hub_status = AnalysisStatus.FAILED.value
             break
-        elif intern_depl_status == 'finished':
+        elif intern_depl_status == AnalysisStatus.FINISHED.value:
             analysis_hub_status = AnalysisStatus.FINISHED.value
             break
         elif intern_depl_status == 'ongoing':
@@ -260,11 +260,8 @@ def _get_node_id() -> Optional[str]:
     else:
         return None
 
-    #return response.json()['data'][0]['id']
 
-
-def _get_status(deployments: list[Analysis]) -> dict[Literal['status'],
-                                                     dict[str, Literal['started', 'running', 'stopped', 'finished']]]:
+def _get_status(deployments: list[Analysis]) -> dict[Literal['status'], dict[str, str]]:
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
@@ -288,12 +285,12 @@ async def _get_internal_deployment_status(deployment_name: str) -> Optional[Lite
         #except json.decoder.JSONDecodeError:
         #    print("No JSON in response")
         analysis_health_status = response.json()['status']
-        if analysis_health_status == 'finished':
-            health_status = 'finished'
+        if analysis_health_status == AnalysisStatus.FINISHED.value:
+            health_status = AnalysisStatus.FINISHED.value
         elif analysis_health_status == 'ongoing':
             health_status = 'ongoing'
         else:
-            health_status = 'failed'
+            health_status = AnalysisStatus.FAILED.value
         return health_status
 
     except ConnectError as e:

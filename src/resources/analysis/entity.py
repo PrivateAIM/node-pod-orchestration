@@ -54,7 +54,7 @@ class Analysis(BaseModel):
         self.status = status
         delete_deployment(self.deployment_name, namespace=namespace)
         database.update_deployment(self.deployment_name, status=self.status)
-        database.update_deployment(self.analysis_id, log=self.log)
+        database.update_deployment(self.deployment_name, log=self.log)
 
 
 def read_db_analysis(analysis: AnalysisDB) -> Analysis:
