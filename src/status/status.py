@@ -39,10 +39,10 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                 node_id = _get_node_id()
                 if hub_client:
                     new_node_id = hub_client.find_nodes(filter={"robot_id": robot_id})[0].id #TODO
-                    print(f"Node IDs are equal {node_id == new_node_id}\n\tnode_id={node_id}, new_node_id={new_node_id}"
-                          f"\n\t\thub_client.find_nodes(filter={'robot_id': robot_id})="
-                          f"{hub_client.find_nodes(filter={'robot_id': robot_id})}"
-                          f"\n\t\tids: {[n.id for n in hub_client.find_nodes(filter={'robot_id': robot_id})]}")
+                    print(f"Node IDs are equal {node_id == new_node_id}\n\tnode_id={node_id}, new_node_id={new_node_id}")
+                    print(f"\t\thub_client.find_nodes(filter={{'robot_id': robot_id}})="
+                          f"{hub_client.find_nodes(filter={'robot_id': robot_id})}")
+                    print(f"\t\tids: {[n.id for n in hub_client.find_nodes(filter={'robot_id': robot_id})]}")
             else:
                 for analysis_id in set(database.get_analysis_ids()):
                     if analysis_id not in node_analysis_ids.keys():
