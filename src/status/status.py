@@ -38,7 +38,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
             if node_id is None:
                 node_id = _get_node_id()
                 if hub_client:
-                    new_node_id = hub_client.find_nodes(filter={"robot_id": robot_id})[0].id #TODO
+                    new_node_id = str(hub_client.find_nodes(filter={"robot_id": robot_id})[0].id) #TODO
                     print(f"Node IDs are equal {node_id == new_node_id}\n\tnode_id={node_id}, new_node_id={new_node_id}")
                     print(f"\t\thub_client.find_nodes(filter={{'robot_id': robot_id}})="
                           f"{hub_client.find_nodes(filter={'robot_id': robot_id})}")
@@ -92,13 +92,14 @@ def _update_finished_status(analysis_id: str,
     deployments = [read_db_analysis(deployment)
                    for deployment in database.get_deployments(analysis_id)]
     running_deployment_names = [deployment.deployment_name
-                                for deployment in deployments if deployment.status == 'running']
+                                for deployment in deployments
+                                if deployment.status in [AnalysisStatus.STARTED.value, AnalysisStatus.RUNNING.value]]
 
     newly_ended_deployment_names = [deployment_name
                                     for deployment_name in internal_status['status'].keys()
                                     if (deployment_name in running_deployment_names) and
-                                    ((internal_status['status'][deployment_name] == 'finished') or
-                                     (internal_status['status'][deployment_name] == 'failed'))]
+                                    ((internal_status['status'][deployment_name] == AnalysisStatus.FINISHED.value) or
+                                     (internal_status['status'][deployment_name] == AnalysisStatus.FAILED.value))]
     print(f"All deployments (name,db_status,internal_status): "
           f"{[(deployment.deployment_name, database_status['status'][deployment.deployment_name], internal_status['status'][deployment.deployment_name]) for deployment in deployments]}\n"
           f"Running deployments: {running_deployment_names}\n"
@@ -108,7 +109,8 @@ def _update_finished_status(analysis_id: str,
         print(f"Attempt to update status to {intn_dpl_status}")
         database.update_deployment_status(deployment_name,
                                           AnalysisStatus.FINISHED.value
-                                          if intn_dpl_status == 'finished' else AnalysisStatus.FAILED.value)  # change database status
+                                          if intn_dpl_status == AnalysisStatus.FINISHED.value
+                                          else AnalysisStatus.FAILED.value)  # change database status
         if intn_dpl_status == 'finished':
             print("Delete deployment")
             # TODO: final local log save (minio?)  # archive logs
