@@ -398,7 +398,7 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
         try:
             pod_logs = [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
                         for pod in pods.items if pod.metadata.name in pod_ids]
-            print("Depl logs (pod_ids not None): " + pod_logs[:100])
+            print(f"Depl logs (pod_ids not None): {[log[:100] for log in pod_logs]}") #TODO: Remove
             return pod_logs
         except client.exceptions.ApiException as e:
             print(e)
@@ -406,7 +406,7 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
     try:
         pod_logs = [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
                     for pod in pods.items]
-        print("Depl logs (pod_ids are None): " + pod_logs[:100])
+        print(f"Depl logs (pod_ids are None): {[log[:100] for log in pod_logs]}") #TODO: Remove
         return pod_logs
     except client.exceptions.ApiException as e:
         print(e)
