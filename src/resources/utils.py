@@ -56,8 +56,10 @@ def get_pods(analysis_id: str, database: Database):
 
 
 def stop_analysis(analysis_id: str, database: Database):
+    # Apply STOP to running and failed analyses
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)
-                   if deployment.status == AnalysisStatus.RUNNING.value]
+                   if deployment.status in [AnalysisStatus.RUNNING.value, AnalysisStatus.FAILED.value]] #TODO: Test this (added: status='failed')
+    # TODO: Alternative: Apply to all deployments of analysis (like during delete)?
     for deployment in deployments:
         log = str(get_analysis_logs([deployment.deployment_name], database=database))
         print(f"log to be saved in stop_analysis {log[:100]}")
