@@ -45,10 +45,14 @@ class Analysis(BaseModel):
                                  ports=self.ports,
                                  image_registry_address=self.image_registry_address)
 
-    def stop(self, database: Database, log: Optional[str] = '', namespace: str = 'default') -> None:
+    def stop(self,
+             database: Database,
+             log: Optional[str] = '',
+             status: str = AnalysisStatus.STOPPED.value,
+             namespace: str = 'default') -> None:
         self.log = log
+        self.status = status
         delete_deployment(self.deployment_name, namespace=namespace)
-        self.status = AnalysisStatus.STOPPED.value
         database.update_deployment(self.deployment_name, status=self.status)
         database.update_deployment(self.analysis_id, log=self.log)
 
