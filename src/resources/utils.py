@@ -29,7 +29,7 @@ def retrieve_history(analysis_id: str, database: Database):
     :return:
     """
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)
-                   if deployment.status == AnalysisStatus.STOPPED.value]
+                   if deployment.status == [AnalysisStatus.STOPPED.value, AnalysisStatus.FAILED.value]]
     analysis_logs, nginx_logs = ({}, {})
     for deployment in deployments:
         log = ast.literal_eval(deployment.log)
