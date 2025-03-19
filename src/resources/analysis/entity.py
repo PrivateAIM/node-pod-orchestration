@@ -49,7 +49,7 @@ class Analysis(BaseModel):
         self.log = log
         delete_deployment(self.deployment_name, namespace=namespace)
         self.status = AnalysisStatus.STOPPED.value
-        database.update_analysis(self.analysis_id, status=self.status, log=self.log)
+        database.update_deployment(self.deployment_name, status=self.status, log=self.log)
 
 
 def read_db_analysis(analysis: AnalysisDB) -> Analysis:
