@@ -396,14 +396,18 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
 
     if pod_ids is not None:
         try:
-            return [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
-                    for pod in pods.items if pod.metadata.name in pod_ids]
+            pod_logs = [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
+                        for pod in pods.items if pod.metadata.name in pod_ids]
+            print("Depl logs (pod_ids not None): " + pod_logs[:100])
+            return pod_logs
         except client.exceptions.ApiException as e:
             print(e)
             return []
     try:
-        return [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
-                for pod in pods.items]
+        pod_logs = [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
+                    for pod in pods.items]
+        print("Depl logs (pod_ids are None): " + pod_logs[:100])
+        return pod_logs
     except client.exceptions.ApiException as e:
         print(e)
         return []
