@@ -16,47 +16,6 @@ from kong_admin_client.rest import ApiException
 _KEYCLOAK_URL = os.getenv('KEYCLOAK_URL')
 _KEYCLOAK_REALM = os.getenv('KEYCLOAK_REALM')
 
-_hub_token_dict = {}
-
-
-def get_hub_token() -> dict[str, str]:
-    """
-    Get the token for the hub
-    :return: dict with the token and the expiration time
-    """
-    current_time = time.time()
-
-    if not _hub_token_dict:
-        _create_new_hub_token()
-    elif _hub_token_dict["hub_token_expiration"] < current_time:
-        _create_new_hub_token()  # TODO: _refresh_hub_token()
-
-    return _hub_token_dict
-
-
-def _create_new_hub_token() -> dict[str, str]:
-    global _hub_token_dict
-    hub_url_auth, robot_id, robot_secret = (os.getenv('HUB_URL_AUTH'),
-                                            os.getenv('HUB_ROBOT_USER'),
-                                            os.getenv('HUB_ROBOT_SECRET'))
-
-    response = asyncio.run(AsyncClient(base_url=hub_url_auth, headers={"accept": "application/json"})
-                           .post(url="/token",
-                                 data={"id": robot_id, "secret": robot_secret},
-                                 headers=[('Connection', 'close')]))
-    response.raise_for_status()
-    token = response.json()['access_token']
-    time_of_expiration = response.json()['expires_in'] + time.time()
-    _hub_token_dict = {"hub_token": token, "hub_token_expiration": time_of_expiration}
-    #print('Hub token:', _hub_token_dict)
-    return _hub_token_dict
-
-
-def _refresh_hub_token() -> dict[str, str]:
-    global _hub_token_dict
-    # TODO
-    return {}
-
 
 def create_analysis_tokens(deployment_name: str, analysis_id: str, project_id: str) -> dict[str, str]:
     tokens = {'DATA_SOURCE_TOKEN': _get_kong_token(deployment_name, project_id),

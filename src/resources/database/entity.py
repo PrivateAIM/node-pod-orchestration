@@ -61,10 +61,8 @@ class Database:
 
     def update_deployment(self, deployment_name: str, **kwargs) -> AnalysisDB:
         deployment = self.get_deployment(deployment_name)
-        print(f"{deployment_name}: {deployment} (isNone: {deployment is None})")
         print(kwargs.items())
         for key, value in kwargs.items():
-            print(f"Setting {key} to {value}")
             setattr(deployment, key, value)
         self.session.commit()
         return deployment

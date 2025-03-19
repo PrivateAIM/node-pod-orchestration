@@ -9,7 +9,6 @@ from httpx import AsyncClient, HTTPStatusError, ConnectError
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, read_db_analysis
 from src.resources.utils import delete_analysis, stop_analysis
-from src.utils.token import get_hub_token
 from src.status.constants import AnalysisStatus
 
 
@@ -36,20 +35,16 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
     while True:
         if database.get_analysis_ids():
             if node_id is None:
-                node_id = _get_node_id()
-                if hub_client:
-                    new_node_id = str(hub_client.find_nodes(filter={"robot_id": robot_id})[0].id) #TODO
-                    test_new_vs_old(old=node_id, new=new_node_id, i=1, obj_str='node_id')
+                node_id = str(hub_client.find_nodes(filter={"robot_id": robot_id})[0].id)
             else:
                 for analysis_id in set(database.get_analysis_ids()):
                     if analysis_id not in node_analysis_ids.keys():
-                        node_analysis_id = _get_node_analysis_id(node_id, analysis_id)
+                        node_analysis_id = str(hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id,
+                                                                                      "node_id": node_id})[0].id)
                         if node_analysis_id is not None:
                             node_analysis_ids[analysis_id] = node_analysis_id
                     else:
                         node_analysis_id = node_analysis_ids[analysis_id]
-                    new_node_analysis_id = str(hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id, "node_id": node_id})[0].id)
-                    test_new_vs_old(old=node_analysis_id, new=new_node_analysis_id, i=2, obj_str='node_analysis_id')
 
                     if node_analysis_id is not None:
                         deployments = [read_db_analysis(deployment)
@@ -178,86 +173,26 @@ def _set_analysis_hub_status(hub_client: flame_hub.CoreClient,
     hub_client.update_analysis_node(node_analysis_id, run_status=analysis_hub_status)
 
 
-def _submit_analysis_status_update(node_analysis_id: str, status: AnalysisStatus) -> None:
-    """
-    update status of analysis at hub
-
-    POST https://core.privateaim.dev/analysis-nodes/3c895658-69f1-4fbe-b65c-768601b83f83
-    Payload { "run_status": "started" }
-    :return:
-    """
-    if status is not None:
-        try:
-            response = asyncio.run(AsyncClient(base_url=os.getenv('HUB_URL_CORE'),
-                                               headers={"accept": "application/json",
-                                                        "Authorization": f"Bearer {get_hub_token()['hub_token']}"})
-                                   .post(f'/analysis-nodes/{node_analysis_id}',
-                                         json={"run_status": status},
-                                         headers=[('Connection', 'close')]))
-
-            response.raise_for_status()
-        except (HTTPStatusError, ConnectError) as e:
-            print(f"Error updating analysis status: {e}")
-
-
-def _get_node_analysis_id(node_id: str, analysis_id: str) -> Optional[str]:
-    """
-    get node-analysis id from hub
-    analysis-id: 893761b5-d8ac-42be-ad71-a2d3e70b3990
-    node-id: e64a1551-4007-4754-a7b9-57c9cb56a7c5
-    endpoint: GET https://core.privateaim.dev/analysis-nodes?filter[node_id]=e64a1551-4007-4754-a7b9-57c9cb56a7c5&filter[analysis_id]=893761b5-d8ac-42be-ad71-a2d3e70b3990
-    retrieve analysis id from object: 1b1b1b1b-1b1b-1b1b-1b1b-1b1b1b1b1b1b
-
-    :param analysis_id:
-    :param node_id:
-    :param analysis_id:
-    :return:
-    """
-    response = asyncio.run(AsyncClient(base_url=os.getenv('HUB_URL_CORE'),
-                                       headers={"accept": "application/json",
-                                                "Authorization": f"Bearer {get_hub_token()['hub_token']}"})
-                           .get(f'/analysis-nodes?filter[node_id]={node_id}&filter[analysis_id]={analysis_id}',
-                                headers=[('Connection', 'close')]))
-    try:
-        response.raise_for_status()
-    except HTTPStatusError as e:
-        print(f"Error getting node-analysis id: {e}")
-        return None
-    data = response.json().get('data', [])
-    if data:
-        return data[0]['id']
-    else:
-        return None
-
-    #return response.json()['data'][0]['id']
-
-
-def _get_node_id() -> Optional[str]:
-    """
-    robot-id: 170c1cd8-d468-41c3-9bee-8e3cb1813210
-    endpoint: GET https://core.privateaim.dev/nodes?filter[robot_id]=170c1cd8-d468-41c3-9bee-8e3cb1813210
-    node id read from object: e64a1551-4007-4754-a7b9-57c9cb56a7c5
-    :return: node ID
-    """
-    robot_id, robot_secret, hub_url_core = (os.getenv('HUB_ROBOT_USER'),
-                                            os.getenv('HUB_ROBOT_SECRET'),
-                                            os.getenv('HUB_URL_CORE'))
-
-    response = asyncio.run(AsyncClient(base_url=hub_url_core,
-                                       headers={"accept": "application/json",
-                                                "Authorization": f"Bearer {get_hub_token()['hub_token']}"})
-                           .get(f'/nodes?filter[robot_id]={robot_id}',
-                                headers=[('Connection', 'close')]))
-    try:
-        response.raise_for_status()
-    except HTTPStatusError as e:
-        print(f"Error getting node id: {e}")
-        return None
-    data = response.json().get('data', [])
-    if data:
-        return data[0]['id']
-    else:
-        return None
+# def _submit_analysis_status_update(node_analysis_id: str, status: AnalysisStatus) -> None:
+#     """
+#     update status of analysis at hub
+#
+#     POST https://core.privateaim.dev/analysis-nodes/3c895658-69f1-4fbe-b65c-768601b83f83
+#     Payload { "run_status": "started" }
+#     :return:
+#     """
+#     if status is not None:
+#         try:
+#             response = asyncio.run(AsyncClient(base_url=os.getenv('HUB_URL_CORE'),
+#                                                headers={"accept": "application/json",
+#                                                         "Authorization": f"Bearer {get_hub_token()['hub_token']}"})
+#                                    .post(f'/analysis-nodes/{node_analysis_id}',
+#                                          json={"run_status": status},
+#                                          headers=[('Connection', 'close')]))
+#
+#             response.raise_for_status()
+#         except (HTTPStatusError, ConnectError) as e:
+#             print(f"Error updating analysis status: {e}")
 
 
 def _get_status(deployments: list[Analysis]) -> dict[Literal['status'], dict[str, str]]:
@@ -279,10 +214,7 @@ async def _get_internal_deployment_status(deployment_name: str) -> Optional[Lite
         except HTTPStatusError as e:
             print(f"Error getting internal deployment status: {e}")
             return None
-        #try:
-        #    print(f"analyse status: {response.json()}")
-        #except json.decoder.JSONDecodeError:
-        #    print("No JSON in response")
+
         analysis_health_status = response.json()['status']
         if analysis_health_status == AnalysisStatus.FINISHED.value:
             health_status = AnalysisStatus.FINISHED.value
@@ -295,10 +227,3 @@ async def _get_internal_deployment_status(deployment_name: str) -> Optional[Lite
     except ConnectError as e:
         print(f"Connection to http://nginx-{deployment_name}:80 yielded an error: {e}")
         return None
-
-def test_new_vs_old(new, old, i=1, obj_str='_'): #TODO: Remove
-    if not obj_str.startswith('_'):
-        obj_str = '_' + obj_str
-    print(f"Check {i}...{'Success' if old == new else 'Failed'}")
-    if old != new:
-        print(f"\told{obj_str}={old}, new{obj_str}={new}")
