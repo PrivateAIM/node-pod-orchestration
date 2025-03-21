@@ -403,17 +403,18 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
         try:
             pod_logs = [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
                         for pod in pods.items if pod.metadata.name in pod_ids]
-            return pod_logs
         except client.exceptions.ApiException as e:
             print(e)
             return []
     try:
         pod_logs = [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
                     for pod in pods.items]
-        return pod_logs
     except client.exceptions.ApiException as e:
         print(e)
         return []
+
+    # sanitize pod logs
+    return [re.sub(r'[^\x00-\x7f]', '?', log) for log in pod_logs]
 
 
 def get_service_names(namespace: str = 'default') -> list[str]:
