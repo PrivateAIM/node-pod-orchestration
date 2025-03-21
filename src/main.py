@@ -23,7 +23,9 @@ def main():
     api_thread.start()
 
     # start status loop
-    status_loop(database, os.getenv('STATUS_LOOP_INTERVAL', 10))
+    if not os.getenv('STATUS_LOOP_INTERVAL'):
+        os.environ['STATUS_LOOP_INTERVAL'] = '10'
+    status_loop(database, int(os.getenv('STATUS_LOOP_INTERVAL')))
 
 
 def start_po_api(database: Database):
