@@ -1,5 +1,6 @@
 import time
 import json
+import re
 import base64
 from typing import Optional
 
@@ -406,12 +407,13 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
         except client.exceptions.ApiException as e:
             print(e)
             return []
-    try:
-        pod_logs = [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
-                    for pod in pods.items]
-    except client.exceptions.ApiException as e:
-        print(e)
-        return []
+    else:
+        try:
+            pod_logs = [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
+                        for pod in pods.items]
+        except client.exceptions.ApiException as e:
+            print(e)
+            return []
 
     # sanitize pod logs
     return [re.sub(r'[^\x00-\x7f]', '?', log) for log in pod_logs]
