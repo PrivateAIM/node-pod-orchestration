@@ -39,8 +39,14 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
             else:
                 for analysis_id in set(database.get_analysis_ids()):
                     if analysis_id not in node_analysis_ids.keys():
-                        node_analyzes = hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id,
-                                                                               "node_id": node_id})
+                        try:
+                            node_analyzes = hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id,
+                                                                                   "node_id": node_id})
+                        except HTTPStatusError as e:
+                            # TODO: Address this in hub python client
+                            print(f"Error in hub python client whilst retrieving node analysis id!\n{e}")
+                            node_analyzes = None
+
                         if node_analyzes:
                             node_analysis_id = str(node_analyzes[0].id)
                         else:
