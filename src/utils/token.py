@@ -1,8 +1,6 @@
 import os
-import time
-import asyncio
-from httpx import AsyncClient
 import requests
+from typing import Optional
 from kong_admin_client import Configuration, ApiClient, ConsumersApi, ACLsApi, KeyAuthsApi
 from kong_admin_client.models.create_acl_for_consumer_request import (
     CreateAclForConsumerRequest,
@@ -19,11 +17,11 @@ _KEYCLOAK_REALM = os.getenv('KEYCLOAK_REALM')
 
 def create_analysis_tokens(deployment_name: str, analysis_id: str, project_id: str) -> dict[str, str]:
     tokens = {'DATA_SOURCE_TOKEN': _get_kong_token(deployment_name, project_id),
-              'KEYCLOAK_TOKEN': _get_keycloak_token(analysis_id)}
+              'KEYCLOAK_TOKEN': get_keycloak_token(analysis_id)}
     return tokens
 
 
-def _get_keycloak_token(analysis_id: str) -> str:
+def get_keycloak_token(analysis_id: str) -> Optional[str]:
     # curl -q -X POST -d "grant_type=client_credentials&client_id=service1&client_secret=9dd01665c2f3f02f93c32d03bd854569f03cd62f439ccf9f0861c141b9d6330e" http://flame-node-keycloak-service:8080/realms/flame/protocol/openid-connect/token
 
     client_secret = _get_keycloak_client_secret(analysis_id)
