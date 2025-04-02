@@ -3,6 +3,7 @@ import json
 import re
 import base64
 from typing import Optional
+import string
 
 from kubernetes import client, config
 
