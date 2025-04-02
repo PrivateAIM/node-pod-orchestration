@@ -62,7 +62,8 @@ def create_analysis_deployment(name: str,
     container1 = client.V1Container(name=name, image=image, image_pull_policy="IfNotPresent",
                                     ports=[client.V1ContainerPort(port) for port in ports],
                                     env=[client.V1EnvVar(name=key, value=val) for key, val in env.items()],
-                                    liveness_probe=liveness_probe)
+                                    #liveness_probe=liveness_probe,
+                                    )
     containers.append(container1)
 
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
@@ -416,7 +417,7 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
             return []
 
     # sanitize pod logs
-    return [re.sub(r'[^\x00-\x7f]', '?', log) for log in pod_logs]
+    return [''.join(filter(lambda x: x in string.printable, log)) for log in pod_logs]
 
 
 def get_service_names(namespace: str = 'default') -> list[str]:

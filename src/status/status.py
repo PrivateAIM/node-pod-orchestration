@@ -12,6 +12,7 @@ from src.resources.utils import delete_analysis, stop_analysis
 from src.status.constants import AnalysisStatus
 from src.utils.token import get_keycloak_token
 
+
 def status_loop(database: Database, status_loop_interval: int) -> None:
     """
     Send the status of the analysis to the HUB, kill deployment if analysis finished
