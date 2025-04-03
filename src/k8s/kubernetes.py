@@ -352,6 +352,7 @@ def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespa
 
 
 def delete_deployment(depl_name: str, namespace: str = 'default') -> None:
+    print(f"Deleting deployment {depl_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     app_client = client.AppsV1Api()
     for name in [depl_name, f'nginx-{depl_name}']:
         try:
