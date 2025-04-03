@@ -112,7 +112,7 @@ def delete_keycloak_client(analysis_id: str) -> None:
     try:
         uuid = response.json()[0]['id']
     except (KeyError, IndexError):
-        print('Client not found')
+        print('keycloak Client not found')
         return
 
     # curl -X DELETE -H "Authorization: Bearer $token" "http://flame-node-keycloak-service:8080/admin/realms/flame/clients/6094fabe-823f-4cce-a251-0782be5611e3"
