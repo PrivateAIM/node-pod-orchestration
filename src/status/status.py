@@ -235,11 +235,9 @@ async def refresh_keycloak_token(deployment_name: str, analysis_id: str, token_r
     Refresh the keycloak token
     :return:
     """
-    #if token_remaining_time < (int(os.getenv('STATUS_LOOP_INTERVAL')) * 2 + 1):
-    if token_remaining_time < 1700:
+    if token_remaining_time < (int(os.getenv('STATUS_LOOP_INTERVAL')) * 2 + 1):
         keycloak_token = get_keycloak_token(analysis_id)
         try:
-            print(f"Refreshing keycloak token for deployment {deployment_name} : {keycloak_token}")
             response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:80')
                               .post('/analysis/token_refresh',
                                     json={"token": keycloak_token},
