@@ -242,7 +242,7 @@ async def refresh_keycloak_token(deployment_name: str, analysis_id: str, token_r
             print(f"Refreshing keycloak token for deployment {deployment_name} : {keycloak_token}")
             response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:80')
                               .post('/analysis/token_refresh',
-                                    data={"token": keycloak_token},
+                                    json={"token": keycloak_token},
                                     headers=[('Connection', 'close')]))
             response.raise_for_status()
         except HTTPStatusError as e:
