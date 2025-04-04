@@ -19,7 +19,6 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
 
     :return:
     """
-    node_id = None
     hub_client = None
     node_analysis_ids = {}
 
@@ -27,6 +26,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                                       os.getenv('HUB_ROBOT_SECRET'),
                                                       os.getenv('HUB_URL_CORE'),
                                                       os.getenv('HUB_URL_AUTH'))
+    # Enter lifecycle loop
     while True:
         if not hub_client:
             # Attempt to init hub client
@@ -37,49 +37,48 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                 hub_client = None
                 print(f"Failed to authenticate with hub python client library.\n{e}")
         else:
+            # Catch unresponsive hub client
+            try:
+                node_id = str(hub_client.find_nodes(filter={"robot_id": robot_id})[0].id)
+            except HTTPStatusError as e:
+                print(f"Error in hub python client whilst retrieving node id!\n{e}")
+                print("Resetting hub client...")
+                hub_client = None
+                continue
+            # If running analyzes exist, enter status loop
             if database.get_analysis_ids():
-                if node_id is None:
-                    try:
-                        node_id = str(hub_client.find_nodes(filter={"robot_id": robot_id})[0].id)
-                        continue
-                    except HTTPStatusError as e:
-                        # TODO: Address this in hub python client
-                        print(f"Error in hub python client whilst retrieving node id!\n{e}")
-                        node_id = None
-                else:
-                    for analysis_id in set(database.get_analysis_ids()):
-                        if analysis_id not in node_analysis_ids.keys():
-                            try:
-                                node_analyzes = hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id,
-                                                                                       "node_id": node_id})
-                            except HTTPStatusError as e:
-                                # TODO: Address this in hub python client
-                                print(f"Error in hub python client whilst retrieving node analysis id!\n{e}")
-                                node_analyzes = None
-                            if node_analyzes:
-                                node_analysis_id = str(node_analyzes[0].id)
-                            else:
-                                node_analysis_id = None
-
-                            if node_analysis_id:
-                                node_analysis_ids[analysis_id] = node_analysis_id
+                for analysis_id in set(database.get_analysis_ids()):
+                    if analysis_id not in node_analysis_ids.keys():
+                        try:
+                            node_analyzes = hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id,
+                                                                                   "node_id": node_id})
+                        except HTTPStatusError as e:
+                            print(f"Error in hub python client whilst retrieving node analysis id!\n{e}")
+                            node_analyzes = None
+                        if node_analyzes:
+                            node_analysis_id = str(node_analyzes[0].id)
                         else:
-                            node_analysis_id = node_analysis_ids[analysis_id]
+                            node_analysis_id = None
 
                         if node_analysis_id:
-                            deployments = [read_db_analysis(deployment)
-                                           for deployment in database.get_deployments(analysis_id)]
+                            node_analysis_ids[analysis_id] = node_analysis_id
+                    else:
+                        node_analysis_id = node_analysis_ids[analysis_id]
 
-                            db_status, int_status = (_get_status(deployments),
-                                                     _get_internal_status(deployments, analysis_id))
+                    if node_analysis_id:
+                        deployments = [read_db_analysis(deployment)
+                                       for deployment in database.get_deployments(analysis_id)]
 
-                            # update created to running status if deployment responsive
-                            db_status = _update_running_status(analysis_id, database, db_status, int_status)
+                        db_status, int_status = (_get_status(deployments),
+                                                 _get_internal_status(deployments, analysis_id))
 
-                            # update running to finished status if analysis finished
-                            db_status = _update_finished_status(analysis_id, database, db_status, int_status)
+                        # update created to running status if deployment responsive
+                        db_status = _update_running_status(analysis_id, database, db_status, int_status)
 
-                            _set_analysis_hub_status(hub_client, node_analysis_id, db_status, int_status)
+                        # update running to finished status if analysis finished
+                        db_status = _update_finished_status(analysis_id, database, db_status, int_status)
+
+                        _set_analysis_hub_status(hub_client, node_analysis_id, db_status, int_status)
             time.sleep(status_loop_interval)
 
 
