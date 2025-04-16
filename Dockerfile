@@ -1,5 +1,6 @@
-FROM python:3.11-buster
+FROM python:3.11-alpine
 
+RUN adduser -u 10000 -D podorchestrator
 
 RUN pip install poetry==1.7.1
 
@@ -28,5 +29,8 @@ ENV POSTGRES_HOST=<postgres_host>
 ENV POSTGRES_DB=<postgres_db>
 ENV POSTGRES_USER=<postgres_user>
 ENV POSTGRES_PASSWORD=<postgres_password>
+
+RUN chown -R podorchestrator:podorchestrator /app
+USER 10000:10000
 
 ENTRYPOINT ["poetry", "run", "python", "-m", "src.main"]
