@@ -22,20 +22,24 @@ class Analysis(BaseModel):
     status: str = AnalysisStatus.STARTING.value
     log: Optional[str] = None
     pod_ids: Optional[list[str]] = None
+    namespace: str = 'default'
 
-    def start(self, database: Database) -> None:
+    def start(self, database: Database, kong_token: str, namespace: str = 'default') -> None:
         self.status = AnalysisStatus.STARTED.value
         self.deployment_name = "analysis-" + self.analysis_id + str(random.randint(0, 10000))
         # TODO: solution for some analyzes that have to be started multiple times
-        self.tokens = create_analysis_tokens(self.deployment_name, self.analysis_id, self.project_id)
+        self.tokens = create_analysis_tokens(kong_token=kong_token, analysis_id=self.analysis_id)
+        print(f"Tokens: {self.tokens}")
         self.analysis_config = self.tokens
         self.analysis_config['ANALYSIS_ID'] = self.analysis_id
         self.analysis_config['PROJECT_ID'] = self.project_id
         self.analysis_config['DEPLOYMENT_NAME'] = self.deployment_name
+        self.namespace = namespace
         self.pod_ids = create_analysis_deployment(name=self.deployment_name,
                                                   image=self.image_registry_address,
                                                   ports=self.ports,
-                                                  env=self.analysis_config)
+                                                  env=self.analysis_config,
+                                                  namespace=namespace)
 
         database.create_analysis(analysis_id=self.analysis_id,
                                  deployment_name=self.deployment_name,
@@ -43,16 +47,16 @@ class Analysis(BaseModel):
                                  pod_ids=self.pod_ids,
                                  status=self.status,
                                  ports=self.ports,
-                                 image_registry_address=self.image_registry_address)
+                                 image_registry_address=self.image_registry_address,
+                                 namespace=self.namespace)
 
     def stop(self,
              database: Database,
              log: Optional[str] = '',
-             status: str = AnalysisStatus.STOPPED.value,
-             namespace: str = 'default') -> None:
+             status: str = AnalysisStatus.STOPPED.value) -> None:
         self.log = log
         self.status = status
-        delete_deployment(self.deployment_name, namespace=namespace)
+        delete_deployment(self.deployment_name, namespace=self.namespace)
         database.update_deployment(self.deployment_name, status=self.status)
         database.update_deployment(self.deployment_name, log=self.log)
 
@@ -65,7 +69,8 @@ def read_db_analysis(analysis: AnalysisDB) -> Analysis:
                     ports=json.loads(analysis.ports),
                     status=analysis.status,
                     pod_ids=json.loads(analysis.pod_ids),
-                    log=analysis.log)
+                    log=analysis.log,
+                    namespace=analysis.namespace)
 
 
 class CreateAnalysis(BaseModel):
@@ -75,3 +80,5 @@ class CreateAnalysis(BaseModel):
     image_url: str = 'harbor.privateaim/node_id/analysis_id'
     registry_user: str = 'robot_user'
     registry_password: str = 'default_pw'
+    namespace: str = 'default'
+    kong_token: str = 'default_kong_token'

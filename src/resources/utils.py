@@ -7,16 +7,17 @@ from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
 from src.utils.token import delete_keycloak_client
 
 
-def create_analysis(body: CreateAnalysis, database: Database):
-    create_harbor_secret(body.registry_url, body.registry_user, body.registry_password)
+def create_analysis(body: CreateAnalysis, database: Database, namespace: str = 'default'):
+    create_harbor_secret(body.registry_url, body.registry_user, body.registry_password, namespace=namespace)
 
     analysis = Analysis(
         analysis_id=body.analysis_id,
         project_id=body.project_id,
         image_registry_address=body.image_url,
         ports=[8000],
+        namespace=namespace,
     )
-    analysis.start(database)
+    analysis.start(database, namespace, body.kong_token)
 
     return {"status": analysis.status}
 

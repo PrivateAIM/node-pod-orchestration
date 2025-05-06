@@ -37,14 +37,16 @@ class Database:
                         pod_ids: list[str],
                         status: str,
                         ports: list[int],
-                        image_registry_address: str) -> AnalysisDB:
+                        image_registry_address: str,
+                        namespace: str = 'default') -> AnalysisDB:
         analysis = AnalysisDB(analysis_id=analysis_id,
                               deployment_name=deployment_name,
                               project_id=project_id,
                               pod_ids=json.dumps(pod_ids),
                               status=status,
                               ports=json.dumps(ports),
-                              image_registry_address=image_registry_address)
+                              image_registry_address=image_registry_address,
+                              namespace=namespace)
         self.session.add(analysis)
         self.session.commit()
         return analysis

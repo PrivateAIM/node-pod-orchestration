@@ -8,7 +8,7 @@ import string
 from kubernetes import client, config
 
 from src.resources.database.entity import Database
-from src.utils.other import get_element_by_substring
+from .utils import get_cluster_name_by_substring
 
 
 def load_cluster_config():
@@ -166,19 +166,18 @@ def _create_nginx_config_map(analysis_name: str,
     core_client = client.CoreV1Api()
 
     # extract data sources
-    service_names = get_service_names(namespace)
-    hub_adapter_service_name = get_element_by_substring(service_names, 'hub-adapter-service')
+    hub_adapter_service_name = get_cluster_name_by_substring('hub-adapter-service', 'service', namespace)
     # data_sources = get_project_data_source(analysis_env['KEYCLOAK_TOKEN'],
     #                                        analysis_env['PROJECT_ID'],
     #                                        hub_adapter_service_name,
     #                                        namespace)
 
     # get the service ip of the message broker and analysis service
-    message_broker_service_name = get_element_by_substring(service_names, 'message-broker')
+    message_broker_service_name = get_cluster_name_by_substring('message-broker', 'service', namespace)
     message_broker_service_ip = core_client.read_namespaced_service(name=message_broker_service_name,
                                                                     namespace=namespace).spec.cluster_ip
 
-    message_broker_pod_name = get_element_by_substring(get_pod_names(namespace), 'message-broker')
+    message_broker_pod_name = get_cluster_name_by_substring('message-broker', 'pod', namespace)
     message_broker_pod = None
     while message_broker_pod is None:
         try:
@@ -191,7 +190,7 @@ def _create_nginx_config_map(analysis_name: str,
             print(message_broker_ip)
         time.sleep(1)
     # get the pod ip of the pod orchestration
-    pod_orchestration_name = get_element_by_substring(get_pod_names(namespace), 'po-')
+    pod_orchestration_name = get_cluster_name_by_substring('po-', 'pod', namespace)
 
     pod_orchestration_pod = None
     while pod_orchestration_pod is None:
@@ -217,11 +216,8 @@ def _create_nginx_config_map(analysis_name: str,
             print(analysis_ip)
         time.sleep(1)
 
-    # analysis_ip = core_client.read_namespaced_pod(name=analysis_name, namespace=namespace).spec.cluster_ip
-    # analysis_service_ip = core_client.read_namespaced_service(name=analysis_service_name,
-    #                                                           namespace=namespace).spec.cluster_ip
-    kong_proxy_name = get_element_by_substring(service_names, 'kong-proxy')
-    result_service_name = get_element_by_substring(service_names, 'result-service')
+    kong_proxy_name = get_cluster_name_by_substring('kong-proxy', 'service', namespace)
+    result_service_name = get_cluster_name_by_substring('result-service', 'service', namespace)
     data = {
             "nginx.conf": f"""
             worker_processes 1;
@@ -420,16 +416,6 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
 
     # sanitize pod logs
     return [''.join(filter(lambda x: x in string.printable, log)) for log in pod_logs]
-
-
-def get_service_names(namespace: str = 'default') -> list[str]:
-    core_client = client.CoreV1Api()
-    return [service.metadata.name for service in core_client.list_namespaced_service(namespace=namespace).items]
-
-
-def get_pod_names(namespace: str = 'default') -> list[str]:
-    core_client = client.CoreV1Api()
-    return [pod.metadata.name for pod in core_client.list_namespaced_pod(namespace=namespace).items]
 
 
 def _get_pods(name: str, namespace: str = 'default') -> list[str]:

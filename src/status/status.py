@@ -244,4 +244,3 @@ async def refresh_keycloak_token(deployment_name: str, analysis_id: str, token_r
             response.raise_for_status()
         except HTTPStatusError as e:
             print(f"Failed to refresh keycloak token in deployment {deployment_name}.\n{e}")
-            return None
