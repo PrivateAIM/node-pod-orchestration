@@ -80,5 +80,4 @@ class CreateAnalysis(BaseModel):
     image_url: str = 'harbor.privateaim/node_id/analysis_id'
     registry_user: str = 'robot_user'
     registry_password: str = 'default_pw'
-    namespace: str = 'default'
     kong_token: str = 'default_kong_token'
