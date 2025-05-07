@@ -17,7 +17,7 @@ def create_analysis(body: CreateAnalysis, database: Database, namespace: str = '
         ports=[8000],
         namespace=namespace,
     )
-    analysis.start(database, namespace, body.kong_token)
+    analysis.start(database=database, kong_token=body.kong_token, namespace=namespace)
 
     return {"status": analysis.status}
 
