@@ -15,20 +15,25 @@ class Database:
         user = os.getenv("POSTGRES_USER")
         password = os.getenv("POSTGRES_PASSWORD")
         print(f'postgresql+psycopg2://{user}:{password}@{host}:{port}')
-        self.engine = create_engine(f'postgresql+psycopg2://{user}:{password}@{host}:{port}')
+        self.engine = create_engine(f'postgresql+psycopg2://{user}:{password}@{host}:{port}',
+                                    pool_pre_ping=True,
+                                    pool_recycle=3600)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         Base.metadata.create_all(bind=self.engine)
-        self.session = self.SessionLocal()
+
 
     def reset_db(self) -> None:
         Base.metadata.drop_all(bind=self.engine)
         Base.metadata.create_all(bind=self.engine)
 
     def get_deployment(self, deployment_name: str) -> Optional[AnalysisDB]:
-        return self.session.query(AnalysisDB).filter_by(**{"deployment_name": deployment_name}).first()
+        with self.SessionLocal() as session:
+            return session.query(AnalysisDB).filter_by(**{"deployment_name": deployment_name}).first()
+
 
     def get_deployments(self, analysis_id: str) -> list[AnalysisDB]:
-        return self.session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
+        with self.SessionLocal() as session:
+            return session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
 
     def create_analysis(self,
                         analysis_id: str,
@@ -47,8 +52,10 @@ class Database:
                               ports=json.dumps(ports),
                               image_registry_address=image_registry_address,
                               namespace=namespace)
-        self.session.add(analysis)
-        self.session.commit()
+        with self.SessionLocal() as session:
+            session.add(analysis)
+            session.commit()
+            session.refresh(analysis)
         return analysis
 
     def update_analysis(self, analysis_id: str, **kwargs) -> list[AnalysisDB]:
@@ -58,7 +65,8 @@ class Database:
                 for key, value in kwargs.items():
                     print(f"in update analysis Setting {key} to {value}")
                     setattr(deployment, key, value)
-                self.session.commit()
+                with self.SessionLocal() as session:
+                    session.commit()
         return analysis
 
     def update_deployment(self, deployment_name: str, **kwargs) -> AnalysisDB:
@@ -66,24 +74,30 @@ class Database:
         print(kwargs.items())
         for key, value in kwargs.items():
             setattr(deployment, key, value)
-        self.session.commit()
+        with self.SessionLocal() as session:
+            session.commit()
         return deployment
 
     def delete_analysis(self, analysis_id: str) -> None:
         analysis = self.get_deployments(analysis_id)
         for deployment in analysis:
             if deployment:
-                self.session.delete(deployment)
-                self.session.commit()
+                with self.SessionLocal() as session:
+                    session.delete(deployment)
+                    session.commit()
 
     def close(self) -> None:
-        self.session.close()
+        with self.SessionLocal() as session:
+            session.close()
 
     def get_analysis_ids(self) -> list[str]:
-        return [analysis.analysis_id for analysis in self.session.query(AnalysisDB) if analysis is not None]
+        with self.SessionLocal() as session:
+            return [analysis.analysis_id for analysis in session.query(AnalysisDB).all() if analysis is not None]
+
 
     def get_deployment_ids(self) -> list[str]:
-        return [analysis.deployment_name for analysis in self.session.query(AnalysisDB) if analysis is not None]
+        with self.SessionLocal() as session:
+            return [analysis.deployment_name for analysis in session.query(AnalysisDB).all() if analysis is not None]
 
     def get_deployment_pod_ids(self, deployment_name: str) -> list[str]:
         return self.get_deployment(deployment_name).pod_ids
