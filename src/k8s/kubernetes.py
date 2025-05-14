@@ -1,6 +1,5 @@
 import time
 import json
-import re
 import base64
 from typing import Optional
 import string
@@ -78,7 +77,6 @@ def create_analysis_deployment(name: str,
 
     depl_spec = client.V1DeploymentSpec(selector=depl_selector, template=depl_template)
     depl_body = client.V1Deployment(api_version='apps/v1', kind='Deployment', metadata=depl_metadata, spec=depl_spec)
-    print("in kubernetes script:", {'namespace': get_current_namespace()})
     app_client.create_namespaced_deployment(async_req=False, namespace=namespace, body=depl_body)
     time.sleep(.1)
 

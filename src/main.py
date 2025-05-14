@@ -20,7 +20,6 @@ def main():
     # init database
     database = Database()
 
-    print("in main script:", {'namespace': get_current_namespace()})
     api_thread = Thread(target=start_po_api, kwargs={'database': database, 'namespace': get_current_namespace()})
     api_thread.start()
 
