@@ -1,4 +1,5 @@
 import uvicorn
+import threading
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -81,4 +82,8 @@ class PodOrchestrationAPI:
         return delete_analysis(analysis_id, self.database)
 
     def health_call(self):
-        return {"status": "ok"}
+        main_alive = threading.main_thread().is_alive()
+        if not main_alive:
+            raise RuntimeError("Main thread is not alive.")
+        else:
+            return {"status": "ok"}
