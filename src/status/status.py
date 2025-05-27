@@ -46,12 +46,14 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                 hub_client = None
                 continue
             # If running analyzes exist, enter status loop
+            print(f"Checking for running analyzes...{database.get_analysis_ids()}") #TODO:250527
             if database.get_analysis_ids():
                 for analysis_id in set(database.get_analysis_ids()):
                     if analysis_id not in node_analysis_ids.keys():
                         try:
                             node_analyzes = hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id,
                                                                                    "node_id": node_id})
+                            print(f"Found node analyzes: {node_analyzes}") #TODO:250527
                         except HTTPStatusError as e:
                             print(f"Error in hub python client whilst retrieving node analysis id!\n{e}")
                             node_analyzes = None
@@ -64,22 +66,30 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                             node_analysis_ids[analysis_id] = node_analysis_id
                     else:
                         node_analysis_id = node_analysis_ids[analysis_id]
-
+                    print(f"Node analysis id: {node_analysis_id}")  # TODO:250527
                     if node_analysis_id:
                         deployments = [read_db_analysis(deployment)
                                        for deployment in database.get_deployments(analysis_id)]
 
                         db_status, int_status = (_get_status(deployments),
                                                  _get_internal_status(deployments, analysis_id))
+                        print(f"Database status: {db_status}")  # TODO:250527
+                        print(f"Internal status: {int_status}")  # TODO:250527
 
                         # update created to running status if deployment responsive
                         db_status = _update_running_status(analysis_id, database, db_status, int_status)
+                        print(f"Update created to running database status: {db_status}")  # TODO:250527
+
 
                         # update running to finished status if analysis finished
                         db_status = _update_finished_status(analysis_id, database, db_status, int_status)
+                        print(f"Update running to finished database status: {db_status}")  # TODO:250527
 
                         _set_analysis_hub_status(hub_client, node_analysis_id, db_status, int_status)
+                        print(f"Setting Hub with node_analysis={node_analysis_id}, db_status={db_status}, internal_status={int_status}")  # TODO:250527
+
             time.sleep(status_loop_interval)
+            print(f"Status loop iteration completed. Sleeping for {status_loop_interval} seconds.") #TODO:250527
 
 
 def _get_hub_client(robot_id: str, robot_secret: str, hub_url_core: str, hub_auth: str) -> flame_hub.CoreClient:
