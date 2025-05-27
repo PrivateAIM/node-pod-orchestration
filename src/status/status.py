@@ -1,6 +1,7 @@
 import time
 import os
 import asyncio
+from json import JSONDecodeError
 from typing import Literal, Optional
 
 import flame_hub
@@ -40,7 +41,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
             # Catch unresponsive hub client
             try:
                 node_id = str(hub_client.find_nodes(filter={"robot_id": robot_id})[0].id)
-            except HTTPStatusError as e:
+            except (HTTPStatusError, JSONDecodeError) as e:
                 print(f"Error in hub python client whilst retrieving node id!\n{e}")
                 print("Resetting hub client...")
                 hub_client = None
