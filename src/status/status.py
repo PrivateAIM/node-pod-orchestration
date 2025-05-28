@@ -115,7 +115,7 @@ def _update_finished_status(analysis_id: str,
                                     for deployment_name in database_status['status'].keys()
                                     if (database_status['status'][deployment_name] in [AnalysisStatus.STARTED.value,
                                                                                        AnalysisStatus.RUNNING.value])
-                                    and (internal_status['status'][deployment_name] == [AnalysisStatus.FINISHED.value,
+                                    and (internal_status['status'][deployment_name] in [AnalysisStatus.FINISHED.value,
                                                                                         AnalysisStatus.FAILED.value])
                                     ]
     for deployment_name in newly_ended_deployment_names:
