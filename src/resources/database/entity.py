@@ -57,30 +57,31 @@ class Database:
         return analysis
 
     def update_analysis(self, analysis_id: str, **kwargs) -> list[AnalysisDB]:
-        analysis = self.get_deployments(analysis_id)
-        for deployment in analysis:
-            if deployment:
-                for key, value in kwargs.items():
-                    print(f"in update analysis Setting {key} to {value}")
-                    setattr(deployment, key, value)
-                with self.SessionLocal() as session:
+        with self.SessionLocal() as session:
+            analysis = session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
+            for deployment in analysis:
+                if deployment:
+                    for key, value in kwargs.items():
+                        print(f"in update analysis Setting {key} to {value}")
+                        setattr(deployment, key, value)
+
                     session.commit()
-        return analysis
+            return analysis
 
     def update_deployment(self, deployment_name: str, **kwargs) -> AnalysisDB:
-        deployment = self.get_deployment(deployment_name)
-        print(kwargs.items())
-        for key, value in kwargs.items():
-            setattr(deployment, key, value)
         with self.SessionLocal() as session:
+            deployment = session.query(AnalysisDB).filter_by(**{"deployment_name": deployment_name}).first()
+            print(kwargs.items())
+            for key, value in kwargs.items():
+                setattr(deployment, key, value)
             session.commit()
-        return deployment
+            return deployment
 
     def delete_analysis(self, analysis_id: str) -> None:
-        analysis = self.get_deployments(analysis_id)
-        for deployment in analysis:
-            if deployment:
-                with self.SessionLocal() as session:
+        with self.SessionLocal() as session:
+            analysis = session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
+            for deployment in analysis:
+                if deployment:
                     session.delete(deployment)
                     session.commit()
 
