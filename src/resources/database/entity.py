@@ -21,7 +21,6 @@ class Database:
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         Base.metadata.create_all(bind=self.engine)
 
-
     def reset_db(self) -> None:
         Base.metadata.drop_all(bind=self.engine)
         Base.metadata.create_all(bind=self.engine)
@@ -29,7 +28,6 @@ class Database:
     def get_deployment(self, deployment_name: str) -> Optional[AnalysisDB]:
         with self.SessionLocal() as session:
             return session.query(AnalysisDB).filter_by(**{"deployment_name": deployment_name}).first()
-
 
     def get_deployments(self, analysis_id: str) -> list[AnalysisDB]:
         with self.SessionLocal() as session:

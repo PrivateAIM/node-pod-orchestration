@@ -81,7 +81,6 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         db_status = _update_running_status(analysis_id, database, db_status, int_status)
                         print(f"Update created to running database status: {db_status}")  # TODO:250527
 
-
                         # update running to finished status if analysis finished
                         db_status = _update_finished_status(analysis_id, database, db_status, int_status)
                         print(f"Update running to finished database status: {db_status}")  # TODO:250527
@@ -112,17 +111,13 @@ def _update_finished_status(analysis_id: str,
     :param internal_status:
     :return:
     """
-    deployments = [read_db_analysis(deployment)
-                   for deployment in database.get_deployments(analysis_id)]
-    running_deployment_names = [deployment.deployment_name
-                                for deployment in deployments
-                                if deployment.status in [AnalysisStatus.STARTED.value, AnalysisStatus.RUNNING.value]]
-
     newly_ended_deployment_names = [deployment_name
-                                    for deployment_name in internal_status['status'].keys()
-                                    if (deployment_name in running_deployment_names) and
-                                    ((internal_status['status'][deployment_name] == AnalysisStatus.FINISHED.value) or
-                                     (internal_status['status'][deployment_name] == AnalysisStatus.FAILED.value))]
+                                    for deployment_name in database_status['status'].keys()
+                                    if (database_status['status'][deployment_name] in [AnalysisStatus.STARTED.value,
+                                                                                       AnalysisStatus.RUNNING.value])
+                                    and (internal_status['status'][deployment_name] == [AnalysisStatus.FINISHED.value,
+                                                                                        AnalysisStatus.FAILED.value])
+                                    ]
     for deployment_name in newly_ended_deployment_names:
         intn_dpl_status = internal_status['status'][deployment_name]
         print(f"Attempt to update status to {intn_dpl_status}")
@@ -133,10 +128,19 @@ def _update_finished_status(analysis_id: str,
         if intn_dpl_status == AnalysisStatus.FINISHED.value:
             print("Delete deployment")
             # TODO: final local log save (minio?)  # archive logs
-            delete_analysis(analysis_id, database)  # delete analysis from database
+            # delete_analysis(analysis_id, database)  # delete analysis from database
+            stop_analysis(analysis_id, database)  # stop analysis TODO: Change to delete in the future (when archive logs implemented)
+
+            #database_status = {k: (AnalysisStatus.FINISHED.value if k == deployment_name else v)
+            #                   for k,v in database_status.items()}
         else:
             print("Stop deployment")
             stop_analysis(analysis_id, database)  # stop analysis
+
+        # update database status
+        deployments = [read_db_analysis(deployment)
+                       for deployment in database.get_deployments(analysis_id)]
+        database_status = _get_status(deployments)
 
     return database_status
 
@@ -153,19 +157,18 @@ def _update_running_status(analysis_id: str,
     :param internal_status:
     :return:
     """
+    newly_running_deployment_names = [deployment_name
+                                      for deployment_name in database_status['status'].keys()
+                                      if (database_status['status'][deployment_name] == AnalysisStatus.STARTED.value)
+                                      and (internal_status['status'][deployment_name] == AnalysisStatus.RUNNING.value)]
+
+    for deployment_name in newly_running_deployment_names:
+        database.update_deployment_status(deployment_name, AnalysisStatus.RUNNING.value)
+
+    # update database status
     deployments = [read_db_analysis(deployment)
                    for deployment in database.get_deployments(analysis_id)]
-    newly_created_deployment_names = [deployment.deployment_name
-                                      for deployment in deployments
-                                      if deployment.status == AnalysisStatus.STARTED.value]
-
-    running_deployment_names = [deployment_name
-                                for deployment_name in internal_status['status'].keys()
-                                if (deployment_name in newly_created_deployment_names) and
-                                (internal_status['status'][deployment_name] == AnalysisStatus.RUNNING.value)]
-    for deployment_name in running_deployment_names:
-        database.update_deployment_status(deployment_name, AnalysisStatus.RUNNING.value)
-        database_status = _get_status(deployments)
+    database_status = _get_status(deployments)
 
     return database_status
 

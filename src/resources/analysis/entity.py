@@ -1,4 +1,3 @@
-import random
 import json
 from typing import Optional
 
@@ -26,10 +25,8 @@ class Analysis(BaseModel):
 
     def start(self, database: Database, kong_token: str, namespace: str = 'default') -> None:
         self.status = AnalysisStatus.STARTED.value
-        self.deployment_name = "analysis-" + self.analysis_id + str(random.randint(0, 10000))
-        # TODO: solution for some analyzes that have to be started multiple times
+        self.deployment_name = "analysis-" + self.analysis_id + "-" + str(len(database.get_deployments(self.analysis_id)) + 1)
         self.tokens = create_analysis_tokens(kong_token=kong_token, analysis_id=self.analysis_id)
-        print(f"Tokens: {self.tokens}")
         self.analysis_config = self.tokens
         self.analysis_config['ANALYSIS_ID'] = self.analysis_id
         self.analysis_config['PROJECT_ID'] = self.project_id
@@ -56,7 +53,9 @@ class Analysis(BaseModel):
              status: str = AnalysisStatus.STOPPED.value) -> None:
         self.log = log
         self.status = status
+        # Delete the deployment from Kubernetes
         delete_deployment(self.deployment_name, namespace=self.namespace)
+        # Update the database
         database.update_deployment(self.deployment_name, status=self.status)
         database.update_deployment(self.deployment_name, log=self.log)
 
