@@ -97,6 +97,7 @@ def _get_hub_client(robot_id: str, robot_secret: str, hub_url_core: str, hub_aut
     return flame_hub.CoreClient(base_url=hub_url_core, auth=auth)
 
 
+#TODO find why newly ended is empty
 def _update_finished_status(analysis_id: str,
                             database: Database,
                             database_status: dict[str, dict[str, str]],
@@ -117,7 +118,7 @@ def _update_finished_status(analysis_id: str,
                                                                                        AnalysisStatus.RUNNING.value])
                                     and (internal_status['status'][deployment_name] in [AnalysisStatus.FINISHED.value,
                                                                                         AnalysisStatus.FAILED.value])
-                                    ]
+                                   ]
     for deployment_name in newly_ended_deployment_names:
         intn_dpl_status = internal_status['status'][deployment_name]
         print(f"Attempt to update status to {intn_dpl_status}")
@@ -131,8 +132,8 @@ def _update_finished_status(analysis_id: str,
             # delete_analysis(analysis_id, database)  # delete analysis from database
             stop_analysis(analysis_id, database)  # stop analysis TODO: Change to delete in the future (when archive logs implemented)
 
-            #database_status = {k: (AnalysisStatus.FINISHED.value if k == deployment_name else v)
-            #                   for k,v in database_status.items()}
+            database_status = {k: (AnalysisStatus.FINISHED.value if k == deployment_name else v)
+                               for k,v in database_status.items()}
         else:
             print("Stop deployment")
             stop_analysis(analysis_id, database)  # stop analysis
