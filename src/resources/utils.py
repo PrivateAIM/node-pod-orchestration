@@ -37,6 +37,7 @@ def retrieve_history(analysis_id: str, database: Database):
                                             AnalysisStatus.FAILED.value]]
     analysis_logs, nginx_logs = ({}, {})
     for deployment in deployments:
+        # interpret log string as a dictionary
         log = ast.literal_eval(deployment.log)
         analysis_logs[deployment.deployment_name] = log["analysis"][deployment.deployment_name]
         nginx_logs[f"nginx-{deployment.deployment_name}"] = log["nginx"][f"nginx-{deployment.deployment_name}"]
@@ -64,6 +65,7 @@ def stop_analysis(analysis_id: str, database: Database):
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
 
     for deployment in deployments:
+        # save logs as string to database (will be read as dict in retrieve_history)
         log = str(get_analysis_logs([deployment.deployment_name], database=database))
         print(f"log to be saved in stop_analysis for {deployment.deployment_name}: {log[:10]}...")
         if deployment.status in [AnalysisStatus.FAILED.value, AnalysisStatus.FINISHED.value]:

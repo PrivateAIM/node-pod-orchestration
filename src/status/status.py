@@ -113,7 +113,7 @@ def _get_internal_status(deployments: list[Analysis], analysis_id: str) \
                        for deployment in deployments}}
 
 
-async def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> Optional[str]:
+async def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> str:
     try:
         response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:80')
                           .get('/analysis/healthz', headers=[('Connection', 'close')]))
@@ -121,7 +121,7 @@ async def _get_internal_deployment_status(deployment_name: str, analysis_id: str
             response.raise_for_status()
         except HTTPStatusError as e:
             print(f"Error getting internal deployment status: {e}")
-            return None
+            return AnalysisStatus.FAILED.value
 
         analysis_health_status, analysis_token_remaining_time = (response.json()['status'],
                                                                  response.json()['token_remaining_time'])
