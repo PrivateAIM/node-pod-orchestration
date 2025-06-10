@@ -90,6 +90,63 @@ def create_analysis_deployment(name: str,
     return _get_pods(name)
 
 
+def delete_deployment(depl_name: str, namespace: str = 'default') -> None:
+    print(f"Deleting deployment {depl_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    app_client = client.AppsV1Api()
+    for name in [depl_name, f'nginx-{depl_name}']:
+        try:
+            app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
+            _delete_service(name, namespace)
+        except client.exceptions.ApiException as e:
+            if e.reason != 'Not Found':
+                print(f"Not Found {name}")
+    network_client = client.NetworkingV1Api()
+    try:
+        network_client.delete_namespaced_network_policy(name=f'nginx-to-{depl_name}-policy', namespace=namespace)
+    except client.exceptions.ApiException as e:
+        if e.reason != 'Not Found':
+            print(f"Not Found nginx-to-{depl_name}-policy")
+    core_client = client.CoreV1Api()
+    try:
+        core_client.delete_namespaced_config_map(name=f"nginx-{depl_name}-config", namespace=namespace)
+    except client.exceptions.ApiException as e:
+        if e.reason != 'Not Found':
+            print(f"Not Found {depl_name}-config")
+
+
+def get_analysis_logs(deployment_names: list[str],
+                      database: Database,
+                      namespace: str = 'default') -> dict[str, dict[str, list[str]]]:
+    """
+    get logs for both the analysis and nginx deployment
+    :param deployment_names:
+    :param database:
+    :param namespace:
+    :return:
+    """
+    return {"analysis": {deployment_name: _get_logs(name=deployment_name,
+                                                    pod_ids=database.get_deployment_pod_ids(deployment_name),
+                                                    namespace=namespace)
+                         for deployment_name in deployment_names},
+            "nginx": {f"nginx-{deployment_name}": _get_logs(name=f"nginx-{deployment_name}",
+                                                            namespace=namespace)
+                      for deployment_name in deployment_names}
+            }
+
+
+def delete_pods(deployment_name: str, namespace: str = 'default') -> None:
+    print(f"Deleting pods of deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    core_client = client.CoreV1Api()
+    # get pods in deployment
+    pod_names = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}')
+    for pod_name in pod_names:
+        try:
+            core_client.delete_namespaced_pod(name=pod_name, namespace=namespace)
+        except client.exceptions.ApiException as e:
+            if e.reason != 'Not Found':
+                print(f"Not Found {pod_name} pod")
+
+
 def _create_analysis_nginx_deployment(analysis_name: str,
                                       analysis_service_name: str,
                                       analysis_service_ports: list[int],
@@ -345,52 +402,10 @@ def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespa
     network_client.create_namespaced_network_policy(namespace=namespace, body=network_body)
 
 
-def delete_deployment(depl_name: str, namespace: str = 'default') -> None:
-    print(f"Deleting deployment {depl_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    app_client = client.AppsV1Api()
-    for name in [depl_name, f'nginx-{depl_name}']:
-        try:
-            app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
-            _delete_service(name, namespace)
-        except client.exceptions.ApiException as e:
-            if e.reason != 'Not Found':
-                print(f"Not Found {name}")
-    network_client = client.NetworkingV1Api()
-    try:
-        network_client.delete_namespaced_network_policy(name=f'nginx-to-{depl_name}-policy', namespace=namespace)
-    except client.exceptions.ApiException as e:
-        if e.reason != 'Not Found':
-            print(f"Not Found nginx-to-{depl_name}-policy")
-    core_client = client.CoreV1Api()
-    try:
-        core_client.delete_namespaced_config_map(name=f"nginx-{depl_name}-config", namespace=namespace)
-    except client.exceptions.ApiException as e:
-        if e.reason != 'Not Found':
-            print(f"Not Found {depl_name}-config")
-
-
 def _delete_service(name: str, namespace: str = 'default') -> None:
     core_client = client.CoreV1Api()
     core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace)
 
-def get_analysis_logs(deployment_names: list[str],
-                      database: Database,
-                      namespace: str = 'default') -> dict[str, dict[str, list[str]]]:
-    """
-    get logs for both the analysis and nginx deployment
-    :param deployment_names:
-    :param database:
-    :param namespace:
-    :return:
-    """
-    return {"analysis": {deployment_name: _get_logs(name=deployment_name,
-                                                    pod_ids=database.get_deployment_pod_ids(deployment_name),
-                                                    namespace=namespace)
-                         for deployment_name in deployment_names},
-            "nginx": {f"nginx-{deployment_name}": _get_logs(name=f"nginx-{deployment_name}",
-                                                            namespace=namespace)
-                      for deployment_name in deployment_names}
-            }
 
 def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = 'default') -> list[str]:
     core_client = client.CoreV1Api()

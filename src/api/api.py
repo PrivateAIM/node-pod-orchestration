@@ -61,7 +61,7 @@ class PodOrchestrationAPI:
         uvicorn.run(app, host="0.0.0.0", port=8000)
 
     def create_analysis_call(self, body: CreateAnalysis):
-        return create_analysis(body, self.database, self.namespace)
+        return create_analysis(body, self.database)
 
     def retrieve_history_call(self, analysis_id: str):
         return retrieve_history(analysis_id, self.database)

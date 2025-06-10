@@ -8,6 +8,8 @@ class AnalysisStatus(Enum):
     STOPPING = 'stopping'
     STOPPED = 'stopped'
 
+    STUCK = 'stuck'
+
     RUNNING = 'running'
     FINISHED = 'finished'
 

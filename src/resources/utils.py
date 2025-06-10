@@ -3,11 +3,13 @@ import ast
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
 from src.status.constants import AnalysisStatus
-from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
+from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs, delete_pods
+from src.k8s.utils import get_current_namespace
 from src.utils.token import delete_keycloak_client
 
 
-def create_analysis(body: CreateAnalysis, database: Database, namespace: str = 'default'):
+def create_analysis(body: CreateAnalysis, database: Database):
+    namespace = get_current_namespace()
     create_harbor_secret(body.registry_url, body.registry_user, body.registry_password, namespace=namespace)
 
     analysis = Analysis(
@@ -81,3 +83,11 @@ def delete_analysis(analysis_id: str, database: Database):
     delete_keycloak_client(analysis_id)
     database.delete_analysis(analysis_id)
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
+
+
+def unstuck_analysis_deployments(analysis_id: str, database: Database):
+    deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
+
+    for deployment in deployments:
+        if deployment.status == AnalysisStatus.STUCK.value:
+            delete_pods(deployment.deployment_name, get_current_namespace())
