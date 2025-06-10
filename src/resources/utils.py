@@ -30,7 +30,9 @@ def retrieve_history(analysis_id: str, database: Database):
     :return:
     """
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)
-                   if deployment.status in [AnalysisStatus.STOPPED.value, AnalysisStatus.FAILED.value]]
+                   if deployment.status in [AnalysisStatus.STOPPED.value,
+                                            AnalysisStatus.FINISHED.value,
+                                            AnalysisStatus.FAILED.value]]
     analysis_logs, nginx_logs = ({}, {})
     for deployment in deployments:
         log = ast.literal_eval(deployment.log)
@@ -61,7 +63,7 @@ def stop_analysis(analysis_id: str, database: Database):
 
     for deployment in deployments:
         log = str(get_analysis_logs([deployment.deployment_name], database=database))
-        print(f"log to be saved in stop_analysis {log[:100]}")
+        print(f"log to be saved in stop_analysis for {deployment.deployment_name}: {log[:10]}...")
         if deployment.status in [AnalysisStatus.FAILED.value, AnalysisStatus.FINISHED.value]:
             deployment.stop(database, log=log, status=deployment.status)
         else:
@@ -74,7 +76,7 @@ def delete_analysis(analysis_id: str, database: Database):
 
     for deployment in deployments:
         if deployment.status != AnalysisStatus.STOPPED.value:
-            deployment.stop(database)
+            deployment.stop(database, log='')
             deployment.status = AnalysisStatus.STOPPED.value
     delete_keycloak_client(analysis_id)
     database.delete_analysis(analysis_id)

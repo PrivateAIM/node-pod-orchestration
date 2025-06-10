@@ -241,6 +241,7 @@ async def _get_internal_deployment_status(deployment_name: str, analysis_id: str
         print(f"Connection to http://nginx-{deployment_name}:80 yielded an error: {e}")
         return None
 
+
 async def refresh_keycloak_token(deployment_name: str, analysis_id: str, token_remaining_time: int) -> None:
     """
     Refresh the keycloak token

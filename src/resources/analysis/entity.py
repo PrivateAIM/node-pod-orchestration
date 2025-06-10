@@ -49,9 +49,10 @@ class Analysis(BaseModel):
 
     def stop(self,
              database: Database,
-             log: Optional[str] = '',
+             log: Optional[str] = None,
              status: str = AnalysisStatus.STOPPED.value) -> None:
-        self.log = log
+        if log is not None:
+            self.log = log
         self.status = status
         # Delete the deployment from Kubernetes
         delete_deployment(self.deployment_name, namespace=self.namespace)
