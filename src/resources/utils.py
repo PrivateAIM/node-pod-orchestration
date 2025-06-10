@@ -62,7 +62,7 @@ def stop_analysis(analysis_id: str, database: Database):
     for deployment in deployments:
         log = str(get_analysis_logs([deployment.deployment_name], database=database))
         print(f"log to be saved in stop_analysis {log[:100]}")
-        if deployment.status == AnalysisStatus.FAILED.value:
+        if deployment.status in [AnalysisStatus.FAILED.value, AnalysisStatus.FINISHED.value]:
             deployment.stop(database, log=log, status=deployment.status)
         else:
             deployment.stop(database, log=log)

@@ -131,9 +131,6 @@ def _update_finished_status(analysis_id: str,
             # TODO: final local log save (minio?)  # archive logs
             # delete_analysis(analysis_id, database)  # delete analysis from database
             stop_analysis(analysis_id, database)  # stop analysis TODO: Change to delete in the future (when archive logs implemented)
-
-            database_status = {k: (AnalysisStatus.FINISHED.value if k == deployment_name else v)
-                               for k,v in database_status.items()}
         else:
             print("Stop deployment")
             stop_analysis(analysis_id, database)  # stop analysis
