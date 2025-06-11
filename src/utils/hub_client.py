@@ -12,11 +12,10 @@ def init_hub_client_with_robot(robot_id: str,
                                hub_auth: str) -> Optional[flame_hub.CoreClient]:
     # Attempt to init hub client
     try:
-        hub_client = (flame_hub.CoreClient(base_url=hub_url_core,
+        hub_client = flame_hub.CoreClient(base_url=hub_url_core,
                                           auth=flame_hub.auth.RobotAuth(robot_id=robot_id,
                                                                         robot_secret=robot_secret,
                                                                         base_url=hub_auth))
-                      (robot_id, robot_secret, hub_url_core, hub_auth))
         print("Hub client init successful")
     except Exception as e:
         hub_client = None
