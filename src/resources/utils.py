@@ -6,6 +6,7 @@ from src.status.constants import AnalysisStatus
 from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs, delete_pods
 from src.k8s.utils import get_current_namespace
 from src.utils.token import delete_keycloak_client
+from src.utils.hub_client import init_hub_client_and_update_hub_status_with_robot
 
 
 def create_analysis(body: CreateAnalysis, database: Database):
@@ -20,6 +21,9 @@ def create_analysis(body: CreateAnalysis, database: Database):
         namespace=namespace,
     )
     analysis.start(database=database, kong_token=body.kong_token, namespace=namespace)
+
+    # update hub status
+    init_hub_client_and_update_hub_status_with_robot(body.analysis_id, AnalysisStatus.STARTED.value)
 
     return {"status": analysis.status}
 
@@ -63,6 +67,7 @@ def get_pods(analysis_id: str, database: Database):
 
 def stop_analysis(analysis_id: str, database: Database):
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
+    final_status = None
 
     for deployment in deployments:
         # save logs as string to database (will be read as dict in retrieve_history)
@@ -70,8 +75,22 @@ def stop_analysis(analysis_id: str, database: Database):
         print(f"log to be saved in stop_analysis for {deployment.deployment_name}: {log[:10]}...")
         if deployment.status in [AnalysisStatus.FAILED.value, AnalysisStatus.FINISHED.value]:
             deployment.stop(database, log=log, status=deployment.status)
+
+            # set final status (finished overwrites any other case)
+            if deployment.status == AnalysisStatus.FINISHED.value:
+                final_status = AnalysisStatus.FINISHED.value
+            elif final_status != AnalysisStatus.FINISHED.value:
+                final_status = AnalysisStatus.FAILED.value
         else:
             deployment.stop(database, log=log)
+
+            # set final status (finished overwrites any other case)
+            if final_status is None:
+                final_status = AnalysisStatus.STOPPED.value
+
+    # update hub status
+    init_hub_client_and_update_hub_status_with_robot(analysis_id, final_status)
+
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 

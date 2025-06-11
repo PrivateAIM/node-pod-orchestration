@@ -93,7 +93,6 @@ class Database:
         with self.SessionLocal() as session:
             return [analysis.analysis_id for analysis in session.query(AnalysisDB).all() if analysis is not None]
 
-
     def get_deployment_ids(self) -> list[str]:
         with self.SessionLocal() as session:
             return [analysis.deployment_name for analysis in session.query(AnalysisDB).all() if analysis is not None]
