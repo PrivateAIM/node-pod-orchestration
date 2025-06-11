@@ -42,7 +42,7 @@ def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, nod
         print(f"Error in hub python client whilst retrieving node analyzes!\n{e}")
         node_analyzes = None
 
-    if node_analyzes is not None:
+    if node_analyzes:
         node_analysis_id = str(node_analyzes[0].id)
     else:
         node_analysis_id = None
