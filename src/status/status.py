@@ -26,14 +26,21 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
     hub_client = None
     node_analysis_ids = {}
 
-    robot_id, robot_secret, hub_url_core, hub_auth = (os.getenv('HUB_ROBOT_USER'),
-                                                      os.getenv('HUB_ROBOT_SECRET'),
-                                                      os.getenv('HUB_URL_CORE'),
-                                                      os.getenv('HUB_URL_AUTH'))
+    robot_id, robot_secret, hub_url_core, hub_auth, http_proxy, https_proxy = (os.getenv('HUB_ROBOT_USER'),
+                                                                               os.getenv('HUB_ROBOT_SECRET'),
+                                                                               os.getenv('HUB_URL_CORE'),
+                                                                               os.getenv('HUB_URL_AUTH'),
+                                                                               os.getenv('PO_HTTP_PROXY'),
+                                                                               os.getenv('PO_HTTPS_PROXY'))
     # Enter lifecycle loop
     while True:
         if hub_client is None:
-            hub_client = init_hub_client_with_robot(robot_id, robot_secret, hub_url_core, hub_auth)
+            hub_client = init_hub_client_with_robot(robot_id,
+                                                    robot_secret,
+                                                    hub_url_core,
+                                                    hub_auth,
+                                                    http_proxy,
+                                                    https_proxy)
         else:
             node_id = get_node_id_by_robot(hub_client, robot_id)
             # Catch unresponsive hub client

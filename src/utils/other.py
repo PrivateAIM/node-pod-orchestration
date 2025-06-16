@@ -33,6 +33,16 @@ def get_element_by_substring(data: list[str], substring: str) -> str:  # TODO: B
     return min(matching_elements, key=len) if matching_elements else None
 
 
+def split_logs(logs: str) -> dict:
+    """
+
+    :param logs:
+    :return:
+    """
+    logs = [tuple(line.rsplit('!suff!', 1)) for line in logs.split('\n') if line]
+    pass
+
+
 async def call_sources(client, project_id) -> list[dict[str, str]]:
     response = await client.get(f"/kong/datastore?project_id={project_id}")
     response.raise_for_status()
