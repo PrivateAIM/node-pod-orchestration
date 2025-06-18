@@ -20,8 +20,8 @@ def init_hub_client_with_robot(robot_id: str,
                                              base_url=hub_auth)
         if (http_proxy is not None) and (https_proxy is not None):
             proxies = {
-                "http://": httpx.HTTPTransport(http_proxy),
-                "https://":  httpx.HTTPTransport(https_proxy)
+                "http://": httpx.HTTPTransport(proxy=http_proxy),
+                "https://":  httpx.HTTPTransport(proxy=https_proxy)
             }
             client = httpx.Client(base_url= hub_url_core, mounts=proxies ,auth=hub_robot)
             hub_client = flame_hub.CoreClient(client=client)
