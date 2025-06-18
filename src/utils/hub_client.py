@@ -2,7 +2,7 @@ import os
 from json import JSONDecodeError
 from typing import Optional
 import httpx
-from httpx import HTTPStatusError, ConnectError
+from httpx import HTTPStatusError, ConnectError, ConnectTimeout
 
 import flame_hub
 
@@ -39,7 +39,7 @@ def get_node_id_by_robot(hub_client: flame_hub.CoreClient, robot_id: str) -> Opt
     try:
         node_id = str(hub_client.find_nodes(filter={"robot_id": robot_id})[0].id)
         print(f"Found node id: {node_id}")
-    except (HTTPStatusError, JSONDecodeError) as e:
+    except (HTTPStatusError, JSONDecodeError, ConnectTimeout) as e:
         print(f"Error in hub python client whilst retrieving node id!\n{e}")
         node_id = None
     return node_id
