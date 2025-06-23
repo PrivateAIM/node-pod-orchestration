@@ -308,9 +308,10 @@ def _set_analysis_hub_logs(hub_client: flame_hub.CoreClient,
                                             node_id=node_id)
         new_log_update_id_dict[log_type] = log_update_id
 
-    # keep older entries even if no updates were applied here in this iteration
-    for log_type in latest_log_update_id_dict.keys():
-        if log_type not in new_log_update_id_dict.keys():
-            new_log_update_id_dict[log_type] = latest_log_update_id_dict[log_type]
+    if latest_log_update_id_dict:
+        # keep older entries even if no updates were applied here in this iteration
+        for log_type in latest_log_update_id_dict.keys():
+            if log_type not in new_log_update_id_dict.keys():
+                new_log_update_id_dict[log_type] = latest_log_update_id_dict[log_type]
 
     return new_log_update_id_dict
