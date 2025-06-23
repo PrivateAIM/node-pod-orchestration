@@ -91,16 +91,19 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         print(f"Set Hub analysis status with node_analysis={node_analysis_id}, db_status={db_status}, "
                               f"internal_status={int_status}")
 
-                        # update hub analysis logs
-                        analysis_hub_log_update_ids[analysis_id] = (
-                            _set_analysis_hub_logs(hub_client,
-                                                   analysis_id,
-                                                   node_id,
-                                                   database,
-                                                   analysis_hub_log_update_ids[analysis_id])
-                        )
-                        print(f"Set Hub analysis logs for analysis={analysis_id}, "
-                              f"received hub_log_ids={analysis_hub_log_update_ids[analysis_id]}")
+                        try:
+                            # update hub analysis logs
+                            analysis_hub_log_update_ids[analysis_id] = (
+                                _set_analysis_hub_logs(hub_client,
+                                                       analysis_id,
+                                                       node_id,
+                                                       database,
+                                                       analysis_hub_log_update_ids[analysis_id])
+                            )
+                            print(f"Set Hub analysis logs for analysis={analysis_id}, "
+                                  f"received hub_log_ids={analysis_hub_log_update_ids[analysis_id]}")
+                        except KeyError:
+                            print(f"Unable to find analysis={analysis_id}.")
 
 
             time.sleep(status_loop_interval)
