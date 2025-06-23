@@ -9,7 +9,7 @@ from src.utils.token import delete_keycloak_client
 from src.utils.hub_client import init_hub_client_and_update_hub_status_with_robot
 
 
-def create_analysis(body: CreateAnalysis, database: Database):
+def create_analysis(body: CreateAnalysis, database: Database) -> dict[str, str]:
     namespace = get_current_namespace()
     create_harbor_secret(body.registry_url, body.registry_user, body.registry_password, namespace=namespace)
 
@@ -28,7 +28,7 @@ def create_analysis(body: CreateAnalysis, database: Database):
     return {"status": analysis.status}
 
 
-def retrieve_history(analysis_id: str, database: Database):
+def retrieve_history(analysis_id: str, database: Database) -> dict[str, dict[str, list[str]]]:
     """
     Retrieve the history of logs for a given analysis
     :param analysis_id:
@@ -49,23 +49,23 @@ def retrieve_history(analysis_id: str, database: Database):
     return {"analysis": analysis_logs, "nginx": nginx_logs}
 
 
-def retrieve_logs(analysis_id: str, database: Database):
+def retrieve_logs(analysis_id: str, database: Database) -> dict[str, dict[str, list[str]]]:
     deployment_names = [read_db_analysis(deployment).deployment_name
                         for deployment in database.get_deployments(analysis_id)
                         if deployment.status == AnalysisStatus.RUNNING.value]
     return get_analysis_logs(deployment_names, database=database)
 
 
-def get_status(analysis_id: str, database: Database):
+def get_status(analysis_id: str, database: Database) -> dict[str, dict[str, str]]:
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
-def get_pods(analysis_id: str, database: Database):
+def get_pods(analysis_id: str, database: Database) -> dict[str, list[str]]:
     return {"pods": database.get_analysis_pod_ids(analysis_id)}
 
 
-def stop_analysis(analysis_id: str, database: Database):
+def stop_analysis(analysis_id: str, database: Database) -> dict[str, dict[str, str]]:
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
     final_status = None
 
@@ -94,7 +94,7 @@ def stop_analysis(analysis_id: str, database: Database):
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
-def delete_analysis(analysis_id: str, database: Database):
+def delete_analysis(analysis_id: str, database: Database) -> dict[str, dict[str, str]]:
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
 
     for deployment in deployments:
@@ -106,7 +106,7 @@ def delete_analysis(analysis_id: str, database: Database):
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
-def unstuck_analysis_deployments(analysis_id: str, database: Database):
+def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
 
     for deployment in deployments:

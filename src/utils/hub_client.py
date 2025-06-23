@@ -1,8 +1,12 @@
 import os
 from json import JSONDecodeError
 from typing import Optional
-import httpx
-from httpx import HTTPStatusError, ConnectError, ConnectTimeout
+from httpx import (Client,
+                   HTTPTransport,
+                   HTTPStatusError,
+                   ConnectError,
+                   ConnectTimeout)
+from enum import Enum
 
 import flame_hub
 
@@ -20,10 +24,10 @@ def init_hub_client_with_robot(robot_id: str,
                                              base_url=hub_auth)
         if (http_proxy is not None) and (https_proxy is not None):
             proxies = {
-                "http://": httpx.HTTPTransport(proxy=http_proxy),
-                "https://":  httpx.HTTPTransport(proxy=https_proxy)
+                "http://": HTTPTransport(proxy=http_proxy),
+                "https://":  HTTPTransport(proxy=https_proxy)
             }
-            client = httpx.Client(base_url= hub_url_core, mounts=proxies ,auth=hub_robot)
+            client = Client(base_url= hub_url_core, mounts=proxies ,auth=hub_robot)
             hub_client = flame_hub.CoreClient(client=client)
         else:
             hub_client = flame_hub.CoreClient(base_url=hub_url_core,
@@ -97,3 +101,44 @@ def init_hub_client_and_update_hub_status_with_robot(analysis_id: str, status: s
         return
     update_hub_status(hub_client, node_analysis_id, run_status=status)
     return
+
+
+# TODO: Import this from flame sdk? (from flamesdk import HUB_LOG_LITERALS)
+class HUB_LOG_LITERALS(Enum):
+    status_message = 'status_message'
+    error_code = 'error_code'
+
+
+def send_log_to_hub(hub_client: flame_hub.CoreClient,
+                    log_type: str,
+                    log: str,
+                    analysis_id: Optional[str] = None,
+                    node_id: Optional[str] = None,
+                    log_update_id: Optional[str] = None) -> str:
+    if log_update_id or (analysis_id and node_id):
+        error, error_code, status, status_message = (False, '', '', '')
+        if log_type == HUB_LOG_LITERALS.error_code.value:
+            error = True
+            error_code = log
+        else:
+            status = log_type
+            status_message = log
+        # TODO: Add other cases?
+
+        if log_update_id is None:
+            analysis_node_log_id = hub_client.create_analysis_node_log(analysis_id,
+                                                                       node_id,
+                                                                       error=error,
+                                                                       error_code=error_code,
+                                                                       status=status,
+                                                                       status_message=status_message).id
+        else:
+            # TODO: Log update needed? Or should we just create new logs over and over?
+            analysis_node_log_id = hub_client.update_analysis_node_log(error=error,
+                                                                       error_code=error_code,
+                                                                       status=status,
+                                                                       status_message=status_message).id
+        return analysis_node_log_id
+    else:
+        raise ValueError(f"In order to update hub logs, either the uuid of an existing log entry, or the node and "
+                         f"analysis id have to be provided.")

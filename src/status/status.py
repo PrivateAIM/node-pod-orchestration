@@ -11,9 +11,14 @@ from src.resources.analysis.entity import Analysis, read_db_analysis
 from src.utils.hub_client import (init_hub_client_with_robot,
                                   get_node_id_by_robot,
                                   get_node_analysis_id,
-                                  update_hub_status)
-from src.resources.utils import unstuck_analysis_deployments, stop_analysis, delete_analysis
+                                  update_hub_status,
+                                  send_log_to_hub)
+from src.resources.utils import (unstuck_analysis_deployments,
+                                 stop_analysis,
+                                 delete_analysis,
+                                 retrieve_logs)
 from src.status.constants import AnalysisStatus
+from src.utils.other import split_logs
 from src.utils.token import get_keycloak_token
 
 
@@ -25,6 +30,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
     """
     hub_client = None
     node_analysis_ids = {}
+    analysis_hub_log_update_ids = {}
 
     robot_id, robot_secret, hub_url_core, hub_auth, http_proxy, https_proxy = (os.getenv('HUB_ROBOT_USER'),
                                                                                os.getenv('HUB_ROBOT_SECRET'),
@@ -80,9 +86,22 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         db_status = _update_finished_status(analysis_id, database, db_status, int_status)
                         print(f"Update running to finished database status: {db_status}")
 
+                        # update hub analysis status
                         _set_analysis_hub_status(hub_client, node_analysis_id, db_status, int_status)
-                        print(f"Setting Hub with node_analysis={node_analysis_id}, db_status={db_status}, "
+                        print(f"Set Hub analysis status with node_analysis={node_analysis_id}, db_status={db_status}, "
                               f"internal_status={int_status}")
+
+                        # update hub analysis logs
+                        analysis_hub_log_update_ids[analysis_id] = (
+                            _set_analysis_hub_logs(hub_client,
+                                                   analysis_id,
+                                                   node_id,
+                                                   database,
+                                                   analysis_hub_log_update_ids[analysis_id])
+                        )
+                        print(f"Set Hub analysis logs for analysis={analysis_id}, "
+                              f"received hub_log_ids={analysis_hub_log_update_ids[analysis_id]}")
+
 
             time.sleep(status_loop_interval)
             print(f"Status loop iteration completed. Sleeping for {status_loop_interval} seconds.")
@@ -113,8 +132,8 @@ async def _get_internal_deployment_status(deployment_name: str, analysis_id: str
         analysis_health_status, analysis_token_remaining_time = (response.json()['status'],
                                                                  response.json()['token_remaining_time'])
         await _refresh_keycloak_token(deployment_name=deployment_name,
-                                     analysis_id=analysis_id,
-                                     token_remaining_time=analysis_token_remaining_time)
+                                      analysis_id=analysis_id,
+                                      token_remaining_time=analysis_token_remaining_time)
 
         if analysis_health_status == AnalysisStatus.FINISHED.value:
             health_status = AnalysisStatus.FINISHED.value
@@ -259,3 +278,35 @@ def _set_analysis_hub_status(hub_client: flame_hub.CoreClient,
             break
 
     update_hub_status(hub_client, node_analysis_id, analysis_hub_status)
+
+
+def _set_analysis_hub_logs(hub_client: flame_hub.CoreClient,
+                           analysis_id: str,
+                           node_id: str,
+                           database: Database,
+                           latest_log_update_id_dict: Optional[dict[str, str]] = None) -> dict[str, str]:
+    analysis_logs = retrieve_logs(analysis_id, database)["analysis"]
+
+    log_dict = split_logs(analysis_logs)
+
+    new_log_update_id_dict = {}
+    for log_type, log in log_dict.keys():
+        if log_type in latest_log_update_id_dict.keys():
+            log_update_id = send_log_to_hub(hub_client=hub_client,
+                                            log_type=log_type,
+                                            log=log,
+                                            log_update_id=latest_log_update_id_dict[log_type])
+        else:
+            log_update_id = send_log_to_hub(hub_client=hub_client,
+                                            log_type=log_type,
+                                            log=log,
+                                            analysis_id=analysis_id,
+                                            node_id=node_id)
+        new_log_update_id_dict[log_type] = log_update_id
+
+    # keep older entries even if no updates were applied here in this iteration
+    for log_type in latest_log_update_id_dict.keys():
+        if log_type not in new_log_update_id_dict.keys():
+            new_log_update_id_dict[log_type] = latest_log_update_id_dict[log_type]
+
+    return new_log_update_id_dict
