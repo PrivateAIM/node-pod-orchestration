@@ -98,7 +98,8 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                                        analysis_id,
                                                        node_id,
                                                        database,
-                                                       analysis_hub_log_update_ids[analysis_id])
+                                                       analysis_hub_log_update_ids[analysis_id]
+                                                       if analysis_id in analysis_hub_log_update_ids.keys() else None)
                             )
                             print(f"Set Hub analysis logs for analysis={analysis_id}, "
                                   f"received hub_log_ids={analysis_hub_log_update_ids[analysis_id]}")
