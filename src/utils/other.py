@@ -42,45 +42,22 @@ def split_logs(analysis_logs: dict[str, list[str]]) -> dict[str, str]:
     log_dict = {}
 
     is_multi_deployment_analysis = len(analysis_logs) > 1
-    index = {}
-    for i, (deployment_name, raw_logs) in enumerate(analysis_logs.items()):
+    for deployment_name, raw_logs in analysis_logs.items():
         is_multi_pod_deployment = len(raw_logs) > 1
-        for j, raw_log in enumerate(raw_logs):
+        for i, raw_log in enumerate(raw_logs):
             log_splits = [tuple(line.rsplit('!suff!', 1)) for line in raw_log.split('\n') if line]
             for line, suffix in log_splits:
-                line_ident = '\t' if is_multi_deployment_analysis or is_multi_pod_deployment else ''
+                log = []
+                if is_multi_deployment_analysis:
+                    log.append(deployment_name)
+                if is_multi_pod_deployment:
+                    log.append(f"pod_{i + 1}")
+                log.append(line)
+                log = ' - '.join(log) + '\n'
                 if suffix not in log_dict.keys():
-                    if is_multi_deployment_analysis and is_multi_pod_deployment:
-                        head = f"{deployment_name} - pod_{j + 1}:\n"
-                        index[suffix] = {}
-                        index[suffix]['i'] = i
-                        index[suffix]['j'] = j
-                    elif is_multi_deployment_analysis:
-                        head = f"{deployment_name}:\n"
-                        index[suffix] = {}
-                        index[suffix]['i'] = i
-                    elif is_multi_pod_deployment:
-                        head = f"pod_{j + 1}:\n"
-                        index[suffix] = {}
-                        index[suffix]['j'] = j
-                    else:
-                        head = ''
-                    log_dict[suffix] = head + line_ident + line + '\n'
+                    log_dict[suffix] = log
                 else:
-                    if is_multi_deployment_analysis and is_multi_pod_deployment:
-                        head = f"{deployment_name} - pod_{j + 1}:\n" if (index[suffix]['i'] != i) or (index[suffix]['j'] != j) else ''
-                        index[suffix]['i'] = i
-                        index[suffix]['j'] = j
-                    elif is_multi_deployment_analysis:
-                        head = f"{deployment_name}:\n" if index[suffix]['i'] != i else ''
-                        index[suffix]['i'] = i
-                    elif is_multi_pod_deployment:
-                        head = f"pod_{j + 1}:\n" if index[suffix]['j'] != j else ''
-                        index[suffix]['j'] = j
-                    else:
-                        head = ''
-                    log_dict[suffix] += head + line_ident + line + '\n'
-
+                    log_dict[suffix] += log
     return log_dict
 
 
