@@ -1,29 +1,64 @@
-from typing import Literal
+from typing import Literal, Optional, Union
 
 from kubernetes import client
-from src.utils.other import get_element_by_substring
 
 
-def get_cluster_name_by_substring(substring: str,
-                                  resource_type: Literal['pod', 'service'],
-                                  namespace: str = 'default') -> str:
-    if resource_type == 'pod':
-        cluster_names = get_pod_names(namespace)
-    elif resource_type == 'service':
-        cluster_names = get_service_names(namespace)
+def get_k8s_resource_names(resource_type: str,
+                           selector_type: Optional[Literal['label', 'field']] = None,
+                           selector_arg: Optional[str] = None,
+                           manual_name_selector: Optional[str] = None,
+                           namespace: str = "default") -> Optional[Union[str, list[str]]]:
+    if resource_type not in ['deployment', 'pod', 'service', 'networkpolicy', 'configmap']:
+        raise ValueError("For k8s resource search: resource_type must be one of 'deployment', 'pod', 'service', "
+                         "'networkpolicy', or 'configmap'")
+    if (selector_type is not None) and (selector_type not in ['label', 'field']):
+        raise ValueError("For k8s resource search: selector_type must be either 'label' or 'field'")
+    if (selector_type is not None) and (selector_arg is None):
+        raise ValueError("For k8s resource search: if given a resource_type, selector_arg must not be None")
+
+    kwargs = {'namespace': namespace}
+    if selector_type:
+        kwargs[f'{selector_type}_selector'] = selector_arg
+        
+    if resource_type == 'deployment':
+        resources = client.AppsV1Api().list_namespaced_deployment(**kwargs)
+    elif resource_type == 'networkpolicy':
+        resources = client.NetworkingV1Api().list_namespaced_network_policy(**kwargs)
+    elif resource_type in ['pod', 'service', 'configmap']:
+        core_client = client.CoreV1Api()
+        if resource_type == 'pod':
+            resources = core_client.list_namespaced_pod(**kwargs)
+        elif resource_type == 'service':
+            resources = core_client.list_namespaced_service(**kwargs)
+        elif resource_type == 'configmap':
+            resources = core_client.list_namespaced_config_map(**kwargs)
     else:
-        raise ValueError("resource_type must be 'pod' or 'service'")
-    return get_element_by_substring(cluster_names, substring)
+        raise ValueError(f"Uncaptured resource type discovered! Message the Devs... (found={resource_type})")
+
+    if not resources:
+        return None
+    else:
+        resource_names = [resource.metadata.name for resource in resources.items]
+        if len(resource_names) > 1:
+            if manual_name_selector is not None:
+                resource_names = [name for name in resource_names if manual_name_selector in name]
+                return resource_names if len(resource_names) > 1 else resource_names[0]
+            else:
+                return resource_names
+        else:
+            return resource_names[0]
 
 
-def get_service_names(namespace: str = 'default') -> list[str]:
-    core_client = client.CoreV1Api()
-    return [service.metadata.name for service in core_client.list_namespaced_service(namespace=namespace).items]
-
-
-def get_pod_names(namespace: str = 'default') -> list[str]:
-    core_client = client.CoreV1Api()
-    return [pod.metadata.name for pod in core_client.list_namespaced_pod(namespace=namespace).items]
+def get_all_analysis_deployment_names(namespace: str = 'default') -> list[str]:
+    """
+    Get all analysis deployments in the specified namespace.
+    :param namespace: The namespace to search for deployments.
+    :return: A list of deployment names.
+    """
+    return get_k8s_resource_names('deployment',
+                                  'label',
+                                  'flame-component=analysis',
+                                  namespace=namespace)
 
 
 def get_current_namespace() -> str:

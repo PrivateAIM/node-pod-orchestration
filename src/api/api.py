@@ -12,7 +12,8 @@ from src.resources.utils import (create_analysis,
                                  get_status,
                                  get_pods,
                                  stop_analysis,
-                                 delete_analysis)
+                                 delete_analysis,
+                                 cleanup)
 
 
 class PodOrchestrationAPI:
@@ -50,6 +51,7 @@ class PodOrchestrationAPI:
                              response_class=JSONResponse)
         router.add_api_route("/{analysis_id}/delete", self.delete_analysis_call, methods=["DELETE"],
                              response_class=JSONResponse)
+        router.add_api_route("/cleanup/{type}", self.cleanup_call, methods=["DELETE"])
         router.add_api_route("/healthz", self.health_call, methods=["GET"],
                              response_class=JSONResponse)
 
@@ -80,6 +82,12 @@ class PodOrchestrationAPI:
 
     def delete_analysis_call(self, analysis_id: str):
         return delete_analysis(analysis_id, self.database)
+
+    def cleanup_call(self, cleanup_type: str):
+        return cleanup(cleanup_type, self.database, self.namespace)
+
+    def get_service_status_call(self):
+        pass
 
     def health_call(self):
         main_alive = threading.main_thread().is_alive()

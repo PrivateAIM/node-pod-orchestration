@@ -22,17 +22,6 @@ def get_project_data_source(keycloak_token, project_id, hub_adapter_service_name
     return asyncio.run(call_sources(client, project_id))
 
 
-def get_element_by_substring(data: list[str], substring: str) -> str:  # TODO: Better solution for this
-    """
-    Get the smallest element in a list that contains a substring
-    :param data:
-    :param substring:
-    :return:
-    """
-    matching_elements = [element for element in data if (substring in element) and ('-db-' not in element)]  # TODO: '-db-'- hack for messagebroker
-    return min(matching_elements, key=len) if matching_elements else None
-
-
 def split_logs(analysis_logs: dict[str, list[str]]) -> dict[str, str]:
     """
     Splits and collects raw logs according to line suffixes into a dictionary using the suffixes as keys

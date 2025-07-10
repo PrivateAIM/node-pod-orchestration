@@ -1,10 +1,14 @@
 import ast
+from typing import Literal
 
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
 from src.status.constants import AnalysisStatus
-from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs, delete_pods
-from src.k8s.utils import get_current_namespace
+from src.k8s.kubernetes import (create_harbor_secret,
+                                get_analysis_logs,
+                                delete_deployment,
+                                delete_pods)
+from src.k8s.utils import get_current_namespace, get_all_analysis_deployment_names
 from src.utils.token import delete_keycloak_client
 from src.utils.hub_client import init_hub_client_and_update_hub_status_with_robot
 
@@ -112,3 +116,41 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
     for deployment in deployments:
         if deployment.status == AnalysisStatus.STUCK.value:
             delete_pods(deployment.deployment_name, get_current_namespace())
+
+
+def cleanup(cleanup_type: Literal['all', 'old', 'service', 'mb', 'rs'],
+            database: Database,
+            namespace: str = "default") -> None:
+    """
+    """
+    # delete_deployment(depl_name: str, namespace: str = 'default') -> None
+    # delete_pods(deployment_name: str, namespace: str = 'default') -> None
+
+    if cleanup_type == 'all':
+        # cleanup all deployments and associated services, policies and configmaps
+
+        # delete all deployments
+        for depl_name in get_all_analysis_deployment_names(namespace=namespace):
+            delete_deployment(depl_name, namespace=namespace)
+    elif cleanup_type == 'old':
+        # cleanup old deployments and associated services, policies and configmaps
+        analysis_ids = database.get_analysis_ids()
+
+        # delete all deployments that are not in the database
+        for depl_name in get_all_analysis_deployment_names(namespace=namespace):
+            analysis_id = depl_name_to_analysis(depl_name)
+            if analysis_id not in analysis_ids:
+                delete_deployment(depl_name, namespace=namespace)
+    elif cleanup_type == 'service':
+        pass
+    elif cleanup_type == 'mb':
+        pass
+    elif cleanup_type == 'rs':
+        pass
+    else:
+        raise ValueError(f"Unknown cleanup type: {cleanup_type} (known types: 'all', 'old', 'service', 'mb', 'rs')")
+
+
+def depl_name_to_analysis(deployment_name: str):
+    # deployment_name = "analysis-" + self.analysis_id + "-" + str(len(database.get_deployments(self.analysis_id)) + 1)
+    return deployment_name.split("analysis-")[-1].rsplit('-', 1)[0]
