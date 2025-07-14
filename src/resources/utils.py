@@ -167,10 +167,11 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
                                              'networkpolicy': ('flame-component=nginx-to-analysis-policy', 2),
                                              'configmap': ('flame-component=nginx-analysis-config-map', 2)}.items():
         resources = get_k8s_resource_names(res, 'label', selector_arg, namespace=namespace)
-        print(type(resources), resources)
-        zombie_resources = [r for r in resources if resource_name_to_analysis(r, max_r_split) not in known_analysis_ids]
-        print(type(zombie_resources), zombie_resources)
-        for z in zombie_resources:
-            delete_resource(z, res, namespace=namespace)
-        result_str += f"Deleted {len(zombie_resources)} zombie {res}s\n"
+        resources = [resources] if type(resources) == str else resources
+        if resources is not None:
+            zombie_resources = [r for r in resources
+                                if resource_name_to_analysis(r, max_r_split) not in known_analysis_ids]
+            for z in zombie_resources:
+                delete_resource(z, res, namespace=namespace)
+            result_str += f"Deleted {len(zombie_resources)} zombie {res}s\n"
     return result_str
