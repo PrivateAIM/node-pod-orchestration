@@ -161,17 +161,19 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
     known_analysis_ids = database.get_analysis_ids()
 
     result_str = ""
-    for res, (selector_arg, max_r_split) in {'deployment': ('flame-component=analysis', 1),
-                                             'pod': ('flame-component=analysis', 2),
-                                             'service': ('flame-component=analysis', 1),
-                                             'networkpolicy': ('flame-component=nginx-to-analysis-policy', 2),
-                                             'configmap': ('flame-component=nginx-analysis-config-map', 2)}.items():
-        resources = get_k8s_resource_names(res, 'label', selector_arg, namespace=namespace)
-        resources = [resources] if type(resources) == str else resources
-        if resources is not None:
-            zombie_resources = [r for r in resources
-                                if resource_name_to_analysis(r, max_r_split) not in known_analysis_ids]
-            for z in zombie_resources:
-                delete_resource(z, res, namespace=namespace)
-            result_str += f"Deleted {len(zombie_resources)} zombie {res}s\n"
+    for res, (selector_args, max_r_split) in {'deployment': (['flame-component=analysis', 'flame-component=analysis-nginx'], 1),
+                                              'pod': (['flame-component=analysis', 'flame-component=analysis-nginx'], 2),
+                                              'service': (['flame-component=analysis', 'flame-component=analysis-nginx'], 1),
+                                              'networkpolicy': (['flame-component=nginx-to-analysis-policy'], 2),
+                                              'configmap': (['flame-component=nginx-analysis-config-map'], 2)}.items():
+        for selector_arg in selector_args:
+            resources = get_k8s_resource_names(res, 'label', selector_arg, namespace=namespace)
+            resources = [resources] if type(resources) == str else resources
+            if resources is not None:
+                zombie_resources = [r for r in resources
+                                    if resource_name_to_analysis(r, max_r_split) not in known_analysis_ids]
+                for z in zombie_resources:
+                    delete_resource(z, res, namespace=namespace)
+                result_str += f"Deleted {len(zombie_resources)} zombie " + \
+                              f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
     return result_str
