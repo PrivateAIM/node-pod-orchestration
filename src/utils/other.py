@@ -2,8 +2,8 @@ from httpx import AsyncClient
 import asyncio
 
 
-def _add_slash(string: str) -> str:
-    return string + ('' if string.endswith('/') else '/')
+def depl_name_to_analysis(deployment_name: str) -> str:
+    return deployment_name.split("analysis-")[-1].rsplit('-', 1)[0]
 
 
 def get_project_data_source(keycloak_token, project_id, hub_adapter_service_name, namespace="default") -> dict:

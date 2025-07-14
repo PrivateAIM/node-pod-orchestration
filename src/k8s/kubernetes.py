@@ -139,18 +139,23 @@ def get_analysis_logs(deployment_names: list[str],
             }
 
 
-def delete_pods(deployment_name: str, namespace: str = 'default') -> None:
+def delete_analysis_pods(deployment_name: str, namespace: str = 'default') -> None:
     print(f"Deleting pods of deployment {deployment_name} in namespace {namespace} at "
           f"{time.strftime('%Y-%m-%d %H:%M:%S')}")
     core_client = client.CoreV1Api()
     # get pods in deployment
     pod_names = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}')
     for pod_name in pod_names:
-        try:
-            core_client.delete_namespaced_pod(name=pod_name, namespace=namespace)
-        except client.exceptions.ApiException as e:
-            if e.reason != 'Not Found':
-                print(f"Not Found {pod_name} pod")
+        delete_pod(pod_name, namespace)
+
+
+def delete_pod(pod_name: str, namespace: str = 'default') -> None:
+    core_client = client.CoreV1Api()
+    try:
+        core_client.delete_namespaced_pod(name=pod_name, namespace=namespace)
+    except client.exceptions.ApiException as e:
+        if e.reason != 'Not Found':
+            print(f"Not Found: {pod_name} pod")
 
 
 def _create_analysis_nginx_deployment(analysis_name: str,
@@ -235,8 +240,6 @@ def _create_nginx_config_map(analysis_name: str,
                                                          'label',
                                                          'flame-component=message-broker',
                                                          namespace=namespace)
-    message_broker_service_ip = core_client.read_namespaced_service(name=message_broker_service_name,
-                                                                    namespace=namespace).spec.cluster_ip
 
     # await and get the pod id and name of the message broker
     message_broker_pod_name = get_k8s_resource_names('pod',

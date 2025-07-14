@@ -5,12 +5,11 @@ class AnalysisStatus(Enum):
     STARTING = 'starting'
     STARTED = 'started'
 
+    STUCK = 'stuck'
+    RUNNING = 'running'
+
     STOPPING = 'stopping'
     STOPPED = 'stopped'
 
-    STUCK = 'stuck'
-
-    RUNNING = 'running'
     FINISHED = 'finished'
-
     FAILED = 'failed'

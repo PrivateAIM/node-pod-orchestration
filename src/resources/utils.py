@@ -1,5 +1,4 @@
 import ast
-from typing import Literal
 
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
@@ -7,10 +6,12 @@ from src.status.constants import AnalysisStatus
 from src.k8s.kubernetes import (create_harbor_secret,
                                 get_analysis_logs,
                                 delete_deployment,
-                                delete_pods)
-from src.k8s.utils import get_current_namespace, get_all_analysis_deployment_names
+                                delete_analysis_pods,
+                                delete_pod)
+from src.k8s.utils import get_current_namespace, get_all_analysis_deployment_names, get_k8s_resource_names
 from src.utils.token import delete_keycloak_client
 from src.utils.hub_client import init_hub_client_and_update_hub_status_with_robot
+from src.utils.other import depl_name_to_analysis
 
 
 def create_analysis(body: CreateAnalysis, database: Database) -> dict[str, str]:
@@ -115,42 +116,53 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
 
     for deployment in deployments:
         if deployment.status == AnalysisStatus.STUCK.value:
-            delete_pods(deployment.deployment_name, get_current_namespace())
+            delete_analysis_pods(deployment.deployment_name, get_current_namespace())
 
 
-def cleanup(cleanup_type: Literal['all', 'old', 'service', 'mb', 'rs'],
+def cleanup(cleanup_type: str,
             database: Database,
-            namespace: str = "default") -> None:
-    """
-    """
-    # delete_deployment(depl_name: str, namespace: str = 'default') -> None
-    # delete_pods(deployment_name: str, namespace: str = 'default') -> None
+            namespace: str = "default") -> dict[str, str]:
+    cleanup_types = set(cleanup_type.split(',')) if ',' in cleanup_type else [cleanup_type]
 
-    if cleanup_type == 'all':
-        # cleanup all deployments and associated services, policies and configmaps
+    response_content = {}
+    for cleanup_type in cleanup_types:
+        if cleanup_type in ['all', 'analyzes', 'old_analyzes', 'services', 'mb', 'rs']:
+            # Analysis cleanup
+            if cleanup_type in ['all', 'analyzes']:
+                # cleanup all analysis deployments, associated services, policies and configmaps
+                target_deployments = get_all_analysis_deployment_names(namespace=namespace)
+                for depl_name in target_deployments:
+                    delete_deployment(depl_name, namespace=namespace)
+                response_content[cleanup_type] = f"Deleted {len(target_deployments)} analysis deployments and " + \
+                                                 f"associated resources"
+            elif cleanup_type == 'old_analyzes':
+                # cleanup old (that which are not in the database) analysis deployments, associated services, policies and configmaps
+                known_analysis_ids = database.get_analysis_ids()
+                target_deployments = [d for d in get_all_analysis_deployment_names(namespace=namespace)
+                                      if depl_name_to_analysis(d) not in known_analysis_ids]
+                for depl_name in target_deployments:
+                    delete_deployment(depl_name, namespace=namespace)
+                response_content[cleanup_type] = f"Deleted {len(target_deployments)} analysis deployments and " + \
+                                                 "associated resources"
 
-        # delete all deployments
-        for depl_name in get_all_analysis_deployment_names(namespace=namespace):
-            delete_deployment(depl_name, namespace=namespace)
-    elif cleanup_type == 'old':
-        # cleanup old deployments and associated services, policies and configmaps
-        analysis_ids = database.get_analysis_ids()
-
-        # delete all deployments that are not in the database
-        for depl_name in get_all_analysis_deployment_names(namespace=namespace):
-            analysis_id = depl_name_to_analysis(depl_name)
-            if analysis_id not in analysis_ids:
-                delete_deployment(depl_name, namespace=namespace)
-    elif cleanup_type == 'service':
-        pass
-    elif cleanup_type == 'mb':
-        pass
-    elif cleanup_type == 'rs':
-        pass
-    else:
-        raise ValueError(f"Unknown cleanup type: {cleanup_type} (known types: 'all', 'old', 'service', 'mb', 'rs')")
-
-
-def depl_name_to_analysis(deployment_name: str):
-    # deployment_name = "analysis-" + self.analysis_id + "-" + str(len(database.get_deployments(self.analysis_id)) + 1)
-    return deployment_name.split("analysis-")[-1].rsplit('-', 1)[0]
+            # Service cleanup/reinit
+            if cleanup_type in ['all', 'services', 'mb']:
+                # reinitialize message-broker pod
+                message_broker_pod_name = get_k8s_resource_names('pod',
+                                                                 'label',
+                                                                 'flame-component=message-broker',
+                                                                 namespace=namespace)
+                delete_pod(message_broker_pod_name, namespace)
+                response_content[cleanup_type] = "Reset message broker"
+            if cleanup_type in ['all', 'services', 'rs']:
+                # reinitialize result-service pod
+                result_service_name = get_k8s_resource_names('pod',
+                                                             'label',
+                                                             'flame-component=result-service',
+                                                             namespace=namespace)
+                delete_pod(result_service_name, namespace)
+                response_content[cleanup_type] = "Reset result service"
+        else:
+            response_content[cleanup_type] = f"Unknown cleanup type: {cleanup_type} (known types: 'all', " + \
+                                             "'analyzes', 'old_analyzes', 'services', 'mb', and 'rs')"
+    return response_content

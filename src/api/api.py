@@ -23,7 +23,7 @@ class PodOrchestrationAPI:
         app = FastAPI(title="FLAME PO",
                       docs_url="/api/docs",
                       redoc_url="/api/redoc",
-                      openapi_url="/api/v1/openapi.json", )
+                      openapi_url="/api/v1/openapi.json")
 
         origins = [
             "http://localhost:8080/",
@@ -51,7 +51,8 @@ class PodOrchestrationAPI:
                              response_class=JSONResponse)
         router.add_api_route("/{analysis_id}/delete", self.delete_analysis_call, methods=["DELETE"],
                              response_class=JSONResponse)
-        router.add_api_route("/cleanup/{type}", self.cleanup_call, methods=["DELETE"])
+        router.add_api_route("/cleanup/{type}", self.cleanup_call, methods=["DELETE"],
+                             response_class=JSONResponse)
         router.add_api_route("/healthz", self.health_call, methods=["GET"],
                              response_class=JSONResponse)
 
