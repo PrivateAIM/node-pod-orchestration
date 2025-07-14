@@ -22,6 +22,7 @@ class Database:
         Base.metadata.create_all(bind=self.engine)
 
     def reset_db(self) -> None:
+        #TODO : for archive purposes only
         Base.metadata.drop_all(bind=self.engine)
         Base.metadata.create_all(bind=self.engine)
 

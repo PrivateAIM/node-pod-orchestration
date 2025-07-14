@@ -95,6 +95,52 @@ def create_analysis_deployment(name: str,
     return _get_pods(name)
 
 
+def delete_resource(name: str, resource_type: str, namespace: str = 'default') -> None:
+    """
+    Deletes a Kubernetes resource by name and type.
+    :param name: Name of the resource to delete.
+    :param resource_type: Type of the resource (e.g., 'deployment', 'service', 'pod', 'configmap').
+    :param namespace: Namespace in which the resource exists.
+    """
+    if resource_type == 'deployment':
+        try:
+            app_client = client.AppsV1Api()
+            app_client.delete_namespaced_deployment(name=name, namespace=namespace)
+        except client.exceptions.ApiException as e:
+            if e.reason != 'Not Found':
+                print(f"Not Found: {name} deployment")
+    elif resource_type == 'service':
+        try:
+            core_client = client.CoreV1Api()
+            core_client.delete_namespaced_service(name=name, namespace=namespace)
+        except client.exceptions.ApiException as e:
+            if e.reason != 'Not Found':
+                print(f"Not Found: {name} service")
+    elif resource_type == 'pod':
+        try:
+            core_client = client.CoreV1Api()
+            core_client.delete_namespaced_pod(name=name, namespace=namespace)
+        except client.exceptions.ApiException as e:
+            if e.reason != 'Not Found':
+                print(f"Not Found: {name} pod")
+    elif resource_type == 'configmap':
+        try:
+            core_client = client.CoreV1Api()
+            core_client.delete_namespaced_config_map(name=name, namespace=namespace)
+        except client.exceptions.ApiException as e:
+            if e.reason != 'Not Found':
+                print(f"Not Found: {name} configmap")
+    elif resource_type == 'networkpolicy':
+        try:
+            network_client = client.NetworkingV1Api()
+            network_client.delete_namespaced_network_policy(name=name, namespace=namespace)
+        except client.exceptions.ApiException as e:
+            if e.reason != 'Not Found':
+                print(f"Not Found: {name} networkpolicy")
+    else:
+        raise ValueError(f"Unsupported resource type: {resource_type}")
+
+
 def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
     print(f"Deleting deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     app_client = client.AppsV1Api()
@@ -146,16 +192,7 @@ def delete_analysis_pods(deployment_name: str, namespace: str = 'default') -> No
     # get pods in deployment
     pod_names = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}')
     for pod_name in pod_names:
-        delete_pod(pod_name, namespace)
-
-
-def delete_pod(pod_name: str, namespace: str = 'default') -> None:
-    core_client = client.CoreV1Api()
-    try:
-        core_client.delete_namespaced_pod(name=pod_name, namespace=namespace)
-    except client.exceptions.ApiException as e:
-        if e.reason != 'Not Found':
-            print(f"Not Found: {pod_name} pod")
+        delete_resource(pod_name, 'pod', namespace)
 
 
 def _create_analysis_nginx_deployment(analysis_name: str,

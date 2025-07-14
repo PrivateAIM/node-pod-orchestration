@@ -2,8 +2,8 @@ from httpx import AsyncClient
 import asyncio
 
 
-def depl_name_to_analysis(deployment_name: str) -> str:
-    return deployment_name.split("analysis-")[-1].rsplit('-', 1)[0]
+def resource_name_to_analysis(deployment_name: str, max_r_split: int = 1) -> str:
+    return deployment_name.split("analysis-")[-1].rsplit('-', max_r_split)[0]
 
 
 def get_project_data_source(keycloak_token, project_id, hub_adapter_service_name, namespace="default") -> dict:

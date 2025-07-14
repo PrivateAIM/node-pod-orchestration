@@ -46,7 +46,10 @@ def get_k8s_resource_names(resource_type: str,
             else:
                 return resource_names
         else:
-            return resource_names[0]
+            if len(resource_names) == 1:
+                return resource_names[0]
+            else:
+                return None
 
 
 def get_all_analysis_deployment_names(namespace: str = 'default') -> list[str]:
