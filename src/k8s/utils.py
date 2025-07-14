@@ -55,10 +55,13 @@ def get_all_analysis_deployment_names(namespace: str = 'default') -> list[str]:
     :param namespace: The namespace to search for deployments.
     :return: A list of deployment names.
     """
-    return get_k8s_resource_names('deployment',
-                                  'label',
-                                  'flame-component=analysis',
-                                  namespace=namespace)
+    analysis_deployment_names = get_k8s_resource_names('deployment',
+                                                       'label',
+                                                       'flame-component=analysis',
+                                                       namespace=namespace)
+    analysis_deployment_names = [analysis_deployment_names] if type(analysis_deployment_names) == str \
+        else analysis_deployment_names
+    return analysis_deployment_names
 
 
 def get_current_namespace() -> str:
