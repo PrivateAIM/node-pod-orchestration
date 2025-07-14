@@ -165,7 +165,7 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
                                              'pod': ('flame-component=analysis', 2),
                                              'service': ('flame-component=analysis', 1),
                                              'networkpolicy': ('flame-component=nginx-to-analysis-policy', 2),
-                                             'configmap': ('flame-component=nginx-analysis-config-map', 2)}:
+                                             'configmap': ('flame-component=nginx-analysis-config-map', 2)}.items():
         resources = get_k8s_resource_names(res, 'label', selector_arg, namespace=namespace)
         zombie_resources = [r for r in resources if resource_name_to_analysis(r, max_r_split) not in known_analysis_ids]
         for z in zombie_resources:
