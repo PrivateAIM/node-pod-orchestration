@@ -102,6 +102,7 @@ def delete_resource(name: str, resource_type: str, namespace: str = 'default') -
     :param resource_type: Type of the resource (e.g., 'deployment', 'service', 'pod', 'configmap').
     :param namespace: Namespace in which the resource exists.
     """
+    print(f"Deleting resource: {name} of type {resource_type} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     if resource_type == 'deployment':
         try:
             app_client = client.AppsV1Api()

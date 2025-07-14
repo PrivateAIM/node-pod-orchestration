@@ -130,9 +130,9 @@ def cleanup(cleanup_type: str,
             # Analysis cleanup
             if cleanup_type in ['all', 'analyzes']:
                 # cleanup all analysis deployments, associated services, policies and configmaps
-                database.reset_db()
                 response_content[cleanup_type] = f"Deleted {len(database.get_analysis_ids())} analysis deployments " + \
                                                  f"and associated resources from database ({database.get_analysis_ids()})"
+                database.reset_db()
             # Service cleanup/reinit
             if cleanup_type in ['all', 'services', 'mb']:
                 # reinitialize message-broker pod
@@ -167,7 +167,9 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
                                              'networkpolicy': ('flame-component=nginx-to-analysis-policy', 2),
                                              'configmap': ('flame-component=nginx-analysis-config-map', 2)}.items():
         resources = get_k8s_resource_names(res, 'label', selector_arg, namespace=namespace)
+        print(type(resources), resources)
         zombie_resources = [r for r in resources if resource_name_to_analysis(r, max_r_split) not in known_analysis_ids]
+        print(type(zombie_resources), zombie_resources)
         for z in zombie_resources:
             delete_resource(z, res, namespace=namespace)
         result_str += f"Deleted {len(zombie_resources)} zombie {res}s\n"
