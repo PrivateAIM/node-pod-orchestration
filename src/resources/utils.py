@@ -126,26 +126,13 @@ def cleanup(cleanup_type: str,
 
     response_content = {}
     for cleanup_type in cleanup_types:
-        if cleanup_type in ['all', 'analyzes', 'old_analyzes', 'services', 'mb', 'rs']:
+        if cleanup_type in ['all', 'analyzes', 'services', 'mb', 'rs']:
             # Analysis cleanup
             if cleanup_type in ['all', 'analyzes']:
                 # cleanup all analysis deployments, associated services, policies and configmaps
-                target_deployments = get_all_analysis_deployment_names(namespace=namespace)
-                for depl_name in target_deployments:
-                    delete_deployment(depl_name, namespace=namespace)
                 database.reset_db()
-                response_content[cleanup_type] = f"Deleted {len(target_deployments)} analysis deployments and " + \
-                                                 f"associated resources"
-            elif cleanup_type == 'old_analyzes':
-                # cleanup old (that which are not in the database) analysis deployments, associated services, policies and configmaps
-                known_analysis_ids = database.get_analysis_ids()
-                target_deployments = [d for d in get_all_analysis_deployment_names(namespace=namespace)
-                                      if resource_name_to_analysis(d) not in known_analysis_ids]
-                for depl_name in target_deployments:
-                    delete_deployment(depl_name, namespace=namespace)
-                response_content[cleanup_type] = f"Deleted {len(target_deployments)} analysis deployments and " + \
-                                                 "associated resources"
-
+                response_content[cleanup_type] = f"Deleted {len(database.get_analysis_ids())} analysis deployments " + \
+                                                 f"and associated resources from database ({database.get_analysis_ids()})"
             # Service cleanup/reinit
             if cleanup_type in ['all', 'services', 'mb']:
                 # reinitialize message-broker pod
@@ -165,7 +152,7 @@ def cleanup(cleanup_type: str,
                 response_content[cleanup_type] = "Reset result service"
         else:
             response_content[cleanup_type] = f"Unknown cleanup type: {cleanup_type} (known types: 'all', " + \
-                                             "'analyzes', 'old_analyzes', 'services', 'mb', and 'rs')"
+                                             "'analyzes', 'services', 'mb', and 'rs')"
     response_content['zombies'] = clean_up_the_rest(database, namespace)
     return response_content
 
