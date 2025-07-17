@@ -60,7 +60,7 @@ def get_all_analysis_deployment_names(namespace: str = 'default') -> list[str]:
     """
     analysis_deployment_names = get_k8s_resource_names('deployment',
                                                        'label',
-                                                       'flame-component=analysis',
+                                                       'component=flame-analysis',
                                                        namespace=namespace)
     analysis_deployment_names = [analysis_deployment_names] if type(analysis_deployment_names) == str \
         else analysis_deployment_names

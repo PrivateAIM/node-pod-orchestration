@@ -66,7 +66,7 @@ def create_analysis_deployment(name: str,
                                     )
     containers.append(container1)
 
-    labels = {'app': name, 'flame-component': 'analysis'}
+    labels = {'app': name, 'component': 'flame-analysis'}
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace, labels=labels)
     depl_pod_metadata = client.V1ObjectMeta(labels=labels)
     depl_selector = client.V1LabelSelector(match_labels=labels)
@@ -243,8 +243,8 @@ def _create_analysis_nginx_deployment(analysis_name: str,
 
     depl_metadata = client.V1ObjectMeta(name=nginx_name,
                                         namespace=namespace,
-                                        labels={'app': nginx_name, 'flame-component': 'analysis-nginx'})
-    labels = {'app': nginx_name, 'flame-component': 'analysis-nginx'}
+                                        labels={'app': nginx_name, 'component': 'flame-analysis-nginx'})
+    labels = {'app': nginx_name, 'component': 'flame-analysis-nginx'}
     depl_pod_metadata = client.V1ObjectMeta(labels=labels)
     depl_selector = client.V1LabelSelector(match_labels={'app': nginx_name})
     depl_pod_spec = client.V1PodSpec(containers=containers,
@@ -276,13 +276,13 @@ def _create_nginx_config_map(analysis_name: str,
     # get the service ip and name of the message broker
     message_broker_service_name = get_k8s_resource_names('service',
                                                          'label',
-                                                         'flame-component=message-broker',
+                                                         'component=flame-message-broker',
                                                          namespace=namespace)
 
     # await and get the pod id and name of the message broker
     message_broker_pod_name = get_k8s_resource_names('pod',
                                                      'label',
-                                                     'flame-component=message-broker',
+                                                     'component=flame-message-broker',
                                                      namespace=namespace)
     message_broker_pod = None
     while message_broker_pod is None:
@@ -290,7 +290,7 @@ def _create_nginx_config_map(analysis_name: str,
             message_broker_pod = core_client.read_namespaced_pod(name=message_broker_pod_name,
                                                                  namespace=namespace)
         except:
-            pass
+            raise ValueError(f"Could not find message broker pod with name {message_broker_pod_name} in namespace {namespace}. ")
         if message_broker_pod is not None:
             message_broker_ip = message_broker_pod.status.pod_ip
         time.sleep(1)
@@ -298,7 +298,7 @@ def _create_nginx_config_map(analysis_name: str,
     # await and get the pod ip and name of the pod orchestration
     pod_orchestration_name = get_k8s_resource_names('pod',
                                                    'label',
-                                                   'flame-component=po',
+                                                   'component=flame-po',
                                                    namespace=namespace)
     pod_orchestration_pod = None
     while pod_orchestration_pod is None:
@@ -306,7 +306,7 @@ def _create_nginx_config_map(analysis_name: str,
             pod_orchestration_pod = core_client.read_namespaced_pod(name=pod_orchestration_name,
                                                                     namespace=namespace)
         except:
-            pass
+            raise ValueError(f"Could not find pod orchestration pod with name {pod_orchestration_name} in namespace {namespace}. ")
         if pod_orchestration_pod is not None:
             pod_orchestration_ip = pod_orchestration_pod.status.pod_ip
         time.sleep(1)
@@ -326,7 +326,7 @@ def _create_nginx_config_map(analysis_name: str,
     # get the name of the hub adapter, kong proxy, and result service
     hub_adapter_service_name = get_k8s_resource_names('service',
                                                       'label',
-                                                      'flame-component=hub-adapter',
+                                                      'component=flame-hub-adapter',
                                                       namespace=namespace)
     kong_proxy_name = get_k8s_resource_names('service',
                                              'label',
@@ -335,7 +335,7 @@ def _create_nginx_config_map(analysis_name: str,
                                              namespace=namespace)
     result_service_name = get_k8s_resource_names('service',
                                                  'label',
-                                                 'flame-component=result-service',
+                                                 'component=flame-result-service',
                                                  namespace=namespace)
 
     # generate config map
@@ -411,7 +411,7 @@ def _create_nginx_config_map(analysis_name: str,
         kind="ConfigMap",
         metadata=client.V1ObjectMeta(name=name,
                                      namespace=namespace,
-                                     labels={'flame-component': 'nginx-analysis-config-map'}),
+                                     labels={'component': 'flame-nginx-analysis-config-map'}),
         data=data
     )
     core_client.create_namespaced_config_map(namespace=namespace, body=config_map)
@@ -468,7 +468,7 @@ def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespa
                                               egress=egress)
     network_metadata = client.V1ObjectMeta(name=f'nginx-to-{analysis_name}-policy',
                                            namespace=namespace,
-                                           labels={'flame-component': 'nginx-to-analysis-policy'})
+                                           labels={'component': 'flame-nginx-to-analysis-policy'})
     network_body = client.V1NetworkPolicy(api_version='networking.k8s.io/v1',
                                           kind='NetworkPolicy',
                                           metadata=network_metadata,

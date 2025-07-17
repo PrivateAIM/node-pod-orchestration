@@ -138,7 +138,7 @@ def cleanup(cleanup_type: str,
                 # reinitialize message-broker pod
                 message_broker_pod_name = get_k8s_resource_names('pod',
                                                                  'label',
-                                                                 'flame-component=message-broker',
+                                                                 'component=flame-message-broker',
                                                                  namespace=namespace)
                 delete_resource(message_broker_pod_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset message broker"
@@ -146,7 +146,7 @@ def cleanup(cleanup_type: str,
                 # reinitialize result-service pod
                 result_service_name = get_k8s_resource_names('pod',
                                                              'label',
-                                                             'flame-component=result-service',
+                                                             'component=flame-result-service',
                                                              namespace=namespace)
                 delete_resource(result_service_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset result service"
@@ -161,11 +161,11 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
     known_analysis_ids = database.get_analysis_ids()
 
     result_str = ""
-    for res, (selector_args, max_r_split) in {'deployment': (['flame-component=analysis', 'flame-component=analysis-nginx'], 1),
-                                              'pod': (['flame-component=analysis', 'flame-component=analysis-nginx'], 2),
-                                              'service': (['flame-component=analysis', 'flame-component=analysis-nginx'], 1),
-                                              'networkpolicy': (['flame-component=nginx-to-analysis-policy'], 2),
-                                              'configmap': (['flame-component=nginx-analysis-config-map'], 2)}.items():
+    for res, (selector_args, max_r_split) in {'deployment': (['component=flame-analysis', 'component=flame-analysis-nginx'], 1),
+                                              'pod': (['component=flame-analysis', 'component=flame-analysis-nginx'], 2),
+                                              'service': (['component=flame-analysis', 'component=flame-analysis-nginx'], 1),
+                                              'networkpolicy': (['component=flame-nginx-to-analysis-policy'], 2),
+                                              'configmap': (['component=flame-nginx-analysis-config-map'], 2)}.items():
         for selector_arg in selector_args:
             resources = get_k8s_resource_names(res, 'label', selector_arg, namespace=namespace)
             resources = [resources] if type(resources) == str else resources
