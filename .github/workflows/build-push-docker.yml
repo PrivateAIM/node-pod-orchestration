@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_lower }}
+  IMAGE_NAME: ${{ github.repository  }}
 
 jobs:
   build-and-push-image:
@@ -37,14 +37,14 @@ jobs:
         id: costom-tag
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/canary" ]]; then
-            echo "TAG=ghcr.io/${{ github.repository }}:canary" >> $GITHUB_ENV
+            echo ":canary" >> $GITHUB_ENV
           else
-            echo "TAG=ghcr.io/${{ github.repository }}:latest" >> $GITHUB_ENV
+            echo ":latest" >> $GITHUB_ENV
           fi
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags:  ${{ steps.meta.outputs.tags }},${{ env.TAG }}
+          tags: ${{ steps.meta.outputs.tags }},ghcr.io/privateaim/node-pod-orchestration${{ env.TAG }}
           labels: ${{ steps.meta.outputs.labels }}
