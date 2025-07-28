@@ -2,7 +2,7 @@ import time
 import os
 import asyncio
 from typing import Literal, Optional
-from httpx import AsyncClient, HTTPStatusError, ConnectError
+from httpx import AsyncClient, HTTPStatusError, ConnectError, ConnectTimeout
 
 import flame_hub
 
@@ -141,7 +141,7 @@ async def _get_internal_deployment_status(deployment_name: str, analysis_id: str
             health_status = AnalysisStatus.FAILED.value
         return health_status
 
-    except ConnectError as e:
+    except ConnectError  as e:
         print(f"Connection to http://nginx-{deployment_name}:80 yielded an error: {e}")
         return None
 
