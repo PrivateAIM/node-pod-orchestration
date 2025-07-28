@@ -46,5 +46,5 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }},ghcr.io/privateaim/node-pod-orchestration:${{ env.TAG }}
+          tags:  ${{ steps.meta.outputs.tags }},${{ env.TAG }}
           labels: ${{ steps.meta.outputs.labels }}
