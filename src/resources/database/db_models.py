@@ -25,6 +25,7 @@ class AnalysisDB(Base):
     status = Column(String, nullable=True)
     log = Column(String, nullable=True)
     pod_ids = Column(JSON, nullable=True)
+    namespace = Column(String, nullable=True)
     time_created = Column(DateTime, nullable=True)
     time_updated = Column(DateTime, nullable=True)
 
@@ -40,6 +41,7 @@ class ArchiveDB(Base):
     status = Column(String, nullable=True)
     log = Column(String, nullable=True)
     pod_ids = Column(JSON, nullable=True)
+    namespace = Column(String, nullable=True)
     time_created = Column(DateTime, nullable=True)
     time_updated = Column(DateTime, nullable=True)
 

@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - main
+      - canary
+
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: ghcr.io/privateaim/node-pod-orchestration
 
 jobs:
   build-and-push-image:
@@ -31,10 +33,20 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=sha
+      - name: Set custom tag if on canary branch
+        id: custom-tag
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/canary" ]]; then
+          echo "CUSTOM_TAG=canary" >> $GITHUB_ENV
+          else
+          echo "CUSTOM_TAG=latest" >> $GITHUB_ENV
+          fi
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }},ghcr.io/privateaim/node-pod-orchestration:latest
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.CUSTOM_TAG }}
           labels: ${{ steps.meta.outputs.labels }}
