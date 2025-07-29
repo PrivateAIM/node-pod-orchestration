@@ -19,11 +19,8 @@ async def valid_access_token(token: Annotated[str, Depends(oauth2_scheme)]) -> d
 
     try:
         sig_key = jwks_client.get_signing_key_from_jwt(token)
-        data = jwt.decode(token,
-                          sig_key.key,
-                          algorithms=["RS256"],
-                          audience="api",
-                          options={"verify_aud": True})
-        return data
+        return jwt.decode(token,
+                          key=sig_key,
+                          options={"verify_signature": True, "verify_aud": False, "exp": True})
     except jwt.exceptions.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Not authenticated")
