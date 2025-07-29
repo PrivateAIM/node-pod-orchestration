@@ -22,21 +22,16 @@ def init_hub_client_with_robot(robot_id: str,
     if http_proxy and https_proxy:
         proxies = {
             "http://": HTTPTransport(proxy=http_proxy),
-            "https://": HTTPTransport(proxy=https_proxy)
+            "https://":  HTTPTransport(proxy=https_proxy)
         }
     try:
-        robot_client = Client(base_url=hub_url_core,
-                              mounts=proxies)
+        robot_client = Client(base_url=hub_auth, mounts=proxies)
         hub_robot = flame_hub.auth.RobotAuth(robot_id=robot_id,
                                              robot_secret=robot_secret,
                                              client=robot_client)
-        if http_proxy and https_proxy:
-            client = Client(base_url= hub_url_core, mounts=proxies ,auth=hub_robot)
-            hub_client = flame_hub.CoreClient(client=client)
 
-        else:
-            hub_client = flame_hub.CoreClient(base_url=hub_url_core,
-                                              auth=hub_robot)
+        client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_robot)
+        hub_client = flame_hub.CoreClient(client=client)
         print("Hub client init successful")
     except Exception as e:
         hub_client = None
