@@ -38,33 +38,49 @@ class PodOrchestrationAPI:
             allow_headers=["*"],
         )
         router = APIRouter()
-        router.add_api_route("/", self.create_analysis_call,
+        router.add_api_route("/",
+                             self.create_analysis_call,
                              dependencies=[Depends(valid_access_token)],
                              methods=["POST"],
                              response_class=JSONResponse)
         router.add_api_route("/{analysis_id}/history",
-                             self.retrieve_history_call,dependencies=[Depends(valid_access_token)],
+                             self.retrieve_history_call,
+                             dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/logs", self.retrieve_logs_call,
-                             dependencies=[Depends(valid_access_token)], methods=["GET"],
-                             response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/status", self.get_status_call,dependencies=[Depends(valid_access_token)],
+        router.add_api_route("/{analysis_id}/logs",
+                             self.retrieve_logs_call,
+                             dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/pods", self.get_pods_call,dependencies=[Depends(valid_access_token)],
+        router.add_api_route("/{analysis_id}/status",
+                             self.get_status_call,
+                             dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/stop", self.stop_analysis_call,dependencies=[Depends(valid_access_token)],
+        router.add_api_route("/{analysis_id}/pods",
+                             self.get_pods_call,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/{analysis_id}/stop",
+                             self.stop_analysis_call,
+                             dependencies=[Depends(valid_access_token)],
                              methods=["PUT"],
                              response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/delete", self.delete_analysis_call,dependencies=[Depends(valid_access_token)],
+        router.add_api_route("/{analysis_id}/delete",
+                             self.delete_analysis_call,
+                             dependencies=[Depends(valid_access_token)],
                              methods=["DELETE"],
                              response_class=JSONResponse)
-        router.add_api_route("/cleanup/{type}", self.cleanup_call,dependencies=[Depends(valid_access_token)],
+        router.add_api_route("/cleanup/{type}",
+                             self.cleanup_call,
+                             dependencies=[Depends(valid_access_token)],
                              methods=["DELETE"],
                              response_class=JSONResponse)
-        router.add_api_route("/healthz", self.health_call, methods=["GET"],
+        router.add_api_route("/healthz",
+                             self.health_call,
+                             methods=["GET"],
                              response_class=JSONResponse)
 
         app.include_router(
