@@ -346,7 +346,7 @@ def _create_nginx_config_map(analysis_name: str,
             http {{
                 sendfile on;
                 
-                server {{
+                 server {{
                     listen 80;
                     
                     client_max_body_size 0;
@@ -369,40 +369,28 @@ def _create_nginx_config_map(analysis_name: str,
                         allow       {analysis_ip};
                         deny        all;
                     }}
+                    
                     location /storage/(final|global|local)/ {{
                         rewrite     ^/storage(/.*) $1 break;
                         proxy_pass http://{result_service_name}:8080;
                         allow       {analysis_ip};
                         deny        all;
                     }}
-                    location /hub-adapter/kong/datastore/{analysis_env['PROJECT_ID']} {{
+                    
+                    location /hub-adapter {{
                         rewrite     ^/hub-adapter(/.*) $1 break;
                         proxy_pass http://{hub_adapter_service_name}:5000;
                         allow       {analysis_ip};
                         deny        all;
                     }}
-                    # analysis deployment to message broker: participants
-                    location /message-broker/analyses/{analysis_env['ANALYSIS_ID']}/participants(|/self) {{
+                    
+                    # analysis deployment to message broker
+                    location /message-broker {{
                         rewrite     ^/message-broker(/.*) $1 break;
                         proxy_pass  http://{message_broker_service_name};
                         allow       {analysis_ip};
                         deny        all;
                     }}
-                    # analysis deployment to message broker: healthz
-                    location /message-broker/healthz {{
-                        rewrite     ^/message-broker(/.*) $1 break;
-                        proxy_pass  http://{message_broker_service_name};
-                        allow       {analysis_ip};
-                        deny        all;
-                    }}
-                    # analysis deployment to message broker: analysis message
-                    location /message-broker/analyses/{analysis_env['ANALYSIS_ID']}/messages(|/subscriptions) {{
-                        rewrite     ^/message-broker(/.*) $1 break;
-                        proxy_pass  http://{message_broker_service_name};
-                        allow       {analysis_ip};
-                        deny        all;
-                    }}
-                    #location /message-broker/(analyses/{analysis_env['ANALYSIS_ID']}/participats(|/self)|healthz|analyses/{analysis_env['ANALYSIS_ID']}/messages(|/subscriptions)) {{
                     
                     # message-broker/pod-orchestration to analysis deployment
                     location /analysis {{
