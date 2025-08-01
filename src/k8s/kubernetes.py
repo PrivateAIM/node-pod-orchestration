@@ -377,21 +377,35 @@ def _create_nginx_config_map(analysis_name: str,
                         deny        all;
                     }}
                     
-                    location /hub-adapter {{
+                    location /hub-adapter/kong/datastore/{analysis_env['PROJECT_ID']} {{
                         rewrite     ^/hub-adapter(/.*) $1 break;
                         proxy_pass http://{hub_adapter_service_name}:5000;
                         allow       {analysis_ip};
                         deny        all;
                     }}
                     
-                    # analysis deployment to message broker
-                    location /message-broker {{
+                    # analysis deployment to message broker: participants
+                    location ~ ^/message-broker/analyses/{analysis_env['ANALYSIS_ID']}/participants(|/self) {{
                         rewrite     ^/message-broker(/.*) $1 break;
                         proxy_pass  http://{message_broker_service_name};
                         allow       {analysis_ip};
                         deny        all;
                     }}
                     
+                     # analysis deployment to message broker: analysis message
+                    location ~ ^/message-broker/analyses/{analysis_env['ANALYSIS_ID']}/messages(|/subscriptions) {{
+                        rewrite     ^/message-broker(/.*) $1 break;
+                        proxy_pass  http://{message_broker_service_name};
+                        allow       {analysis_ip};
+                        deny        all;
+                    }}
+                    # analysis deployment to message broker: healthz
+                    location /message-broker/healthz {{
+                        rewrite     ^/message-broker(/.*) $1 break;
+                        proxy_pass  http://{message_broker_service_name};
+                        allow       {analysis_ip};
+                        deny        all;
+                    }}
                     # message-broker/pod-orchestration to analysis deployment
                     location /analysis {{
                         rewrite     ^/analysis(/.*) $1 break;
