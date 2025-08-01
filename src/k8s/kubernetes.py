@@ -370,7 +370,7 @@ def _create_nginx_config_map(analysis_name: str,
                         deny        all;
                     }}
                     
-                    location /storage/(final|global|local)/ {{
+                    location /storage/(final|local|intermediate)/ {{
                         rewrite     ^/storage(/.*) $1 break;
                         proxy_pass http://{result_service_name}:8080;
                         allow       {analysis_ip};
