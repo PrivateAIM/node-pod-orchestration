@@ -1,7 +1,10 @@
 import ast
 
+from flame_hub import CoreClient
+
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
+from src.resources.log.entity import CreateLogEntity
 from src.status.constants import AnalysisStatus
 from src.k8s.kubernetes import (create_harbor_secret,
                                 get_analysis_logs,
@@ -177,3 +180,14 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
                 result_str += f"Deleted {len(zombie_resources)} zombie " + \
                               f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
     return result_str
+
+
+def stream_logs(log_entity: CreateLogEntity, database: Database, hub_core_client: CoreClient) -> None:
+    database.update_analysis_log(log_entity.analysis_id, str(log_entity.to_log_entity()))
+
+    # log to hub
+    hub_core_client.create_analysis_node_log(analysis_id=log_entity.analysis_id,
+                                             node_id=log_entity.node_id,
+                                             status=log_entity.status,
+                                             level=log_entity.log_type,
+                                             message=log_entity.log)

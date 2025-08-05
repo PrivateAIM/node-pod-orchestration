@@ -273,7 +273,7 @@ def _create_nginx_config_map(analysis_name: str,
                              namespace: str = 'default') -> str:
     core_client = client.CoreV1Api()
 
-    # get the service ip and name of the message broker
+    # get the service name of the message broker
     message_broker_service_name = get_k8s_resource_names('service',
                                                          'label',
                                                          'component=flame-message-broker',
@@ -295,7 +295,13 @@ def _create_nginx_config_map(analysis_name: str,
             message_broker_ip = message_broker_pod.status.pod_ip
         time.sleep(1)
 
-    # await and get the pod ip and name of the pod orchestration
+    # get the service name of the pod orchestrator
+    po_service_name = get_k8s_resource_names('service',
+                                             'label',
+                                             'component=flame-po',
+                                             namespace=namespace)
+
+    # await and get the pod ip and name of the pod orchestrator
     pod_orchestration_name = get_k8s_resource_names('pod',
                                                    'label',
                                                    'component=flame-po',
@@ -406,6 +412,15 @@ def _create_nginx_config_map(analysis_name: str,
                         allow       {analysis_ip};
                         deny        all;
                     }}
+                    
+                    # analysis deployment to po log stream
+                    location /po/stream_logs {{
+                        rewrite     ^/po(/.*) $1 break;
+                        proxy_pass  http://{po_service_name};
+                        allow       {analysis_ip};
+                        deny        all;
+                    }}
+                    
                     # message-broker/pod-orchestration to analysis deployment
                     location /analysis {{
                         rewrite     ^/analysis(/.*) $1 break;

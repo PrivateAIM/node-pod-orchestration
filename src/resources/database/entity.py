@@ -104,6 +104,17 @@ class Database:
     def get_analysis_pod_ids(self, analysis_id: str) -> list[str]:
         return [deployment.pod_ids for deployment in self.get_deployments(analysis_id) if deployment is not None]
 
+    def get_analysis_log(self, analysis_id: str) -> str:
+        deployment = self.get_deployments(analysis_id)[0]
+
+        if deployment is not None:
+            return deployment.log
+        return ""
+
+    def update_analysis_log(self, analysis_id: str, log: str) -> None:
+        log = self.get_analysis_log(analysis_id) + "\n" + log
+        self.update_analysis(analysis_id, log=log)
+
     def update_analysis_status(self, analysis_id: str, status: AnalysisStatus) -> None:
         self.update_analysis(analysis_id, status=status)
 
