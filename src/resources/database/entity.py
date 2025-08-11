@@ -14,8 +14,10 @@ class Database:
         port = "5432"
         user = os.getenv("POSTGRES_USER")
         password = os.getenv("POSTGRES_PASSWORD")
-        print(f'postgresql+psycopg2://{user}:{password}@{host}:{port}')
-        self.engine = create_engine(f'postgresql+psycopg2://{user}:{password}@{host}:{port}',
+        database = os.getenv("POSTGRES_DB")
+        conn_uri = f'postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}'
+        print(conn_uri)
+        self.engine = create_engine(conn_uri,
                                     pool_pre_ping=True,
                                     pool_recycle=3600)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
