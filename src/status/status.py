@@ -199,7 +199,8 @@ def _fix_stuck_status(analysis_id: str,
     if analysis_restart_counter[analysis_id] < _MAX_RESTARTS:
         unstuck_analysis_deployments(analysis_id, database)
     else:
-        database.update_deployment_status(analysis_id, status=AnalysisStatus.FAILED.value)
+        database.update_deployment_status(database.get_deployments(analysis_id)[-1].deployment_name,
+                                          status=AnalysisStatus.FAILED.value)
     print(analysis_restart_counter)
     return analysis_restart_counter
 
