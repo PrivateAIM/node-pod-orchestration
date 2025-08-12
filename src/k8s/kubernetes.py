@@ -191,11 +191,9 @@ def delete_analysis_pods(deployment_name: str, namespace: str = 'default') -> No
           f"{time.strftime('%Y-%m-%d %H:%M:%S')}")
     core_client = client.CoreV1Api()
     # get pods in deployment
-    pod_names = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}')
-    print(f"Found pods: {pod_names}")
-    time.sleep(1)
-    for pod_name in pod_names:
-        delete_resource(pod_name, 'pod', namespace)
+    pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}').items
+    for pod in pods:
+        delete_resource(pod.metadata.name, 'pod', namespace)
 
 
 def _create_analysis_nginx_deployment(analysis_name: str,
