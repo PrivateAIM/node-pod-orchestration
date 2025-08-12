@@ -256,9 +256,11 @@ def _update_finished_status(analysis_id: str,
     """
     newly_ended_deployment_names = [deployment_name
                                     for deployment_name in database_status['status'].keys()
-                                    if (database_status['status'][deployment_name] in [AnalysisStatus.RUNNING.value])
+                                    if (database_status['status'][deployment_name] in [AnalysisStatus.RUNNING.value,
+                                                                                       AnalysisStatus.FAILED.value])
                                     and (internal_status['status'][deployment_name] in [AnalysisStatus.FINISHED.value,
-                                                                                        AnalysisStatus.FAILED.value])
+                                                                                        AnalysisStatus.FAILED.value,
+                                                                                        AnalysisStatus.STUCK.value])
                                    ]
     for deployment_name in newly_ended_deployment_names:
         del analysis_restart_counter[analysis_id]  # remove analysis from restart counter
