@@ -4,7 +4,7 @@ from fastapi import APIRouter, FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.api.hub import init_hub_client_with_robot
+from src.utils.hub_client import init_hub_client_with_robot
 from src.api.oauth import valid_access_token
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import CreateAnalysis
