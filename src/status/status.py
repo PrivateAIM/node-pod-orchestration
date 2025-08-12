@@ -79,11 +79,11 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         print(f"Internal status: {int_status}")
 
                         # fix for stuck analyzes
-                        analysis_restart_counter =_fix_stuck_status(analysis_id,
-                                                                    database,
-                                                                    analysis_restart_counter,
-                                                                    db_status,
-                                                                    int_status)
+                        db_status, analysis_restart_counter =_fix_stuck_status(analysis_id,
+                                                                               database,
+                                                                               analysis_restart_counter,
+                                                                               db_status,
+                                                                               int_status)
                         print(f"Unstuck analysis with internal stuck status: {int_status}")
 
                         # update created to running status if deployment responsive
@@ -181,7 +181,7 @@ def _fix_stuck_status(analysis_id: str,
                       database: Database,
                       analysis_restart_counter: dict[str, int],
                       db_status: dict[str, dict[str, str]],
-                      internal_status: dict[str, dict[str, Optional[str]]]) -> dict[str, int]:
+                      internal_status: dict[str, dict[str, Optional[str]]]) -> tuple[dict[str, dict[str, str]], dict[str, int]]:
     stuck_deployment_names = [deployment_name
                               for deployment_name in internal_status['status'].keys()
                               if internal_status['status'][deployment_name] in [AnalysisStatus.STUCK.value]]
@@ -201,8 +201,13 @@ def _fix_stuck_status(analysis_id: str,
     else:
         database.update_deployment_status(database.get_deployments(analysis_id)[-1].deployment_name,
                                           status=AnalysisStatus.FAILED.value)
-    print(analysis_restart_counter)
-    return analysis_restart_counter
+
+    # update database status
+    deployments = [read_db_analysis(deployment)
+                   for deployment in database.get_deployments(analysis_id)]
+    database_status = _get_status(deployments)
+
+    return database_status, analysis_restart_counter
 
 def _update_running_status(analysis_id: str,
                            database: Database,
