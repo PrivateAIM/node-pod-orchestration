@@ -192,6 +192,8 @@ def delete_analysis_pods(deployment_name: str, namespace: str = 'default') -> No
     core_client = client.CoreV1Api()
     # get pods in deployment
     pod_names = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}')
+    print(f"Found pods: {pod_names}")
+    time.sleep(1)
     for pod_name in pod_names:
         delete_resource(pod_name, 'pod', namespace)
 
