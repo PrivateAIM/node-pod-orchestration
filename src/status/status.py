@@ -128,7 +128,7 @@ def _get_internal_status(deployments: list[Analysis], analysis_id: str) \
                        for deployment in deployments}}
 
 
-async def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> str:
+async def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> Optional[str]:
     try:
         response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:80')
                           .get('/analysis/healthz', headers=[('Connection', 'close')]))
@@ -200,6 +200,7 @@ def _fix_stuck_status(analysis_id: str,
         unstuck_analysis_deployments(analysis_id, database)
     else:
         database.update_deployment_status(analysis_id, status=AnalysisStatus.FAILED.value)
+    print(analysis_restart_counter)
     return analysis_restart_counter
 
 def _update_running_status(analysis_id: str,
