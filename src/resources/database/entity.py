@@ -117,10 +117,10 @@ class Database:
         log = self.get_analysis_log(analysis_id) + "\n" + log
         self.update_analysis(analysis_id, log=log)
 
-    def update_analysis_status(self, analysis_id: str, status: AnalysisStatus) -> None:
+    def update_analysis_status(self, analysis_id: str, status: str) -> None:
         self.update_analysis(analysis_id, status=status)
 
-    def update_deployment_status(self, deployment_name: str, status: AnalysisStatus) -> None:
+    def update_deployment_status(self, deployment_name: str, status: str) -> None:
         print(f"Updating deployment {deployment_name} to status {status}")
         self.update_deployment(deployment_name, status=status)
 
