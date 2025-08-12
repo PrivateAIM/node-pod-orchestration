@@ -69,13 +69,13 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         deployments = [read_db_analysis(deployment)
                                        for deployment in database.get_deployments(analysis_id)]
 
-                        db_status, int_status = (_get_status(deployments),
-                                                 _get_internal_status(deployments, analysis_id))
+                        db_status = _get_status(deployments)
+                        int_status = _get_internal_status(deployments, analysis_id)
                         print(f"Database status: {db_status}")
                         print(f"Internal status: {int_status}")
 
                         # fix for stuck analyzes
-                        _fix_stuck_status(analysis_id, database, int_status)
+                        _fix_stuck_status(analysis_id, database, int_status,db_status)
                         print(f"Unstuck analysis with internal stuck status: {int_status}")
 
                         # update created to running status if deployment responsive
@@ -112,8 +112,7 @@ def _get_status(deployments: list[Analysis]) -> dict[Literal['status'], dict[str
 def _get_internal_status(deployments: list[Analysis], analysis_id: str) \
         -> dict[Literal['status'], dict[str, Optional[str]]]:
     return {"status": {deployment.deployment_name:
-                           asyncio.run(_get_internal_deployment_status(deployment.deployment_name,
-                                                                       analysis_id))
+                           asyncio.run(_get_internal_deployment_status(deployment.deployment_name, analysis_id))
                        for deployment in deployments}}
 
 
@@ -168,10 +167,16 @@ async def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_
 
 def _fix_stuck_status(analysis_id: str,
                       database: Database,
-                      internal_status: dict[str, dict[str, Optional[str]]]) -> None:
+                      internal_status: dict[str, dict[str, Optional[str]]],
+                      db_status: dict[str, dict[str, str]]) -> None:
     stuck_deployment_names = [deployment_name
                               for deployment_name in internal_status['status'].keys()
-                              if internal_status['status'][deployment_name] == AnalysisStatus.STUCK.value]
+                              if internal_status['status'][deployment_name] in [AnalysisStatus.STUCK.value]]
+    slow_deployment_names = [deployment_name
+                             for deployment_name in internal_status['status'].keys()
+                             if (internal_status['status'][deployment_name] in [AnalysisStatus.FAILED.value]) and
+                             (db_status['status'][deployment_name] in [AnalysisStatus.STARTED.value])]
+    stuck_deployment_names.extend(slow_deployment_names)
     for stuck_deployment_name in stuck_deployment_names:
         database.update_deployment_status(stuck_deployment_name, status=AnalysisStatus.STUCK.value)
 
@@ -192,8 +197,8 @@ def _update_running_status(analysis_id: str,
     """
     newly_running_deployment_names = [deployment_name
                                       for deployment_name in database_status['status'].keys()
-                                      if (database_status['status'][deployment_name] == AnalysisStatus.STARTED.value)
-                                      and (internal_status['status'][deployment_name] == AnalysisStatus.RUNNING.value)]
+                                      if (database_status['status'][deployment_name] in [AnalysisStatus.STARTED.value])
+                                      and (internal_status['status'][deployment_name] in [AnalysisStatus.RUNNING.value])]
 
     for deployment_name in newly_running_deployment_names:
         database.update_deployment_status(deployment_name, AnalysisStatus.RUNNING.value)
@@ -222,8 +227,7 @@ def _update_finished_status(analysis_id: str,
     """
     newly_ended_deployment_names = [deployment_name
                                     for deployment_name in database_status['status'].keys()
-                                    if (database_status['status'][deployment_name] in [AnalysisStatus.STARTED.value,
-                                                                                       AnalysisStatus.RUNNING.value])
+                                    if (database_status['status'][deployment_name] in [AnalysisStatus.RUNNING.value])
                                     and (internal_status['status'][deployment_name] in [AnalysisStatus.FINISHED.value,
                                                                                         AnalysisStatus.FAILED.value])
                                    ]
