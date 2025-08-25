@@ -195,14 +195,17 @@ def delete_analysis_pods(deployment_name: str, project_id: str, namespace: str =
     delete_resource(f'nginx-{deployment_name}', 'deployment', namespace)
     delete_resource(f'nginx-{deployment_name}', 'service', namespace)
     delete_resource(f'nginx-{deployment_name}-config', 'configmap', namespace)
-    #delete_resource(f'nginx-to-{deployment_name}-policy', 'networkpolicy', namespace)
+
 
     # get pods in deployment
     pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}').items
     for pod in pods:
         delete_resource(pod.metadata.name, 'pod', namespace)
 
-    # create new nginx deployment
+    # delete network policy
+    delete_resource(f'nginx-to-{deployment_name}-policy', 'networkpolicy', namespace)
+
+    # create new nginx deployment and policy
     _create_analysis_nginx_deployment(analysis_name=deployment_name,
                                       analysis_service_name=get_k8s_resource_names('service',
                                                                                    'label',
