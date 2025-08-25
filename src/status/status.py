@@ -154,10 +154,10 @@ async def _get_internal_deployment_status(deployment_name: str, analysis_id: str
         return health_status
 
     except ConnectError  as e:
-        print(f"Connection to http://nginx-{deployment_name}:{PORTS["nginx"][0]} yielded an error: {e}")
+        print(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {e}")
         return None
     except ConnectTimeout as e:
-        print(f"Connection to http://nginx-{deployment_name}:{PORTS["nginx"][0]} timed out: {e}")
+        print(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {e}")
         return None
 
 
