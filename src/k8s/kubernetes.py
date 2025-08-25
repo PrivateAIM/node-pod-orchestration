@@ -212,8 +212,8 @@ def delete_analysis_pods(deployment_name: str, project_id: str, namespace: str =
     # get pods in nginx deployment
     nginx_pods = core_client.list_namespaced_pod(namespace=namespace,
                                                  label_selector=f'app=nginx-{deployment_name}').items
-    for pod in pods:
-        delete_resource(nginx_pods.metadata.name, 'pod', namespace)
+    for nginx_pod in nginx_pods:
+        delete_resource(nginx_pod.metadata.name, 'pod', namespace)
 
 
 def _create_analysis_nginx_deployment(analysis_name: str,
