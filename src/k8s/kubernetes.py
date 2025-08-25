@@ -186,7 +186,7 @@ def get_analysis_logs(deployment_names: list[str],
             }
 
 
-def delete_analysis_pods(deployment_name: str, namespace: str = 'default') -> None:
+def delete_analysis_pods(deployment_name: str, project_id: str, namespace: str = 'default') -> None:
     print(f"Deleting pods of deployment {deployment_name} in namespace {namespace} at "
           f"{time.strftime('%Y-%m-%d %H:%M:%S')}")
     core_client = client.CoreV1Api()
@@ -194,6 +194,26 @@ def delete_analysis_pods(deployment_name: str, namespace: str = 'default') -> No
     pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}').items
     for pod in pods:
         delete_resource(pod.metadata.name, 'pod', namespace)
+
+    # delete old nginx config map
+    delete_resource(f"nginx-{deployment_name}-config", 'configmap', namespace)
+
+    # create new config map
+    _create_nginx_config_map(analysis_name=deployment_name,
+                             analysis_service_name=get_k8s_resource_names('service',
+                                                                          'label',
+                                                                          f'app={deployment_name}',
+                                                                          namespace=namespace),
+                             nginx_name=f"nginx-{deployment_name}",
+                             analysis_env={'PROJECT_ID': project_id,
+                                           'ANALYSIS_ID': deployment_name.split('analysis-')[-1].rsplit('-', 1)[0]},
+                             namespace=namespace)
+
+    # get pods in nginx deployment
+    nginx_pods = core_client.list_namespaced_pod(namespace=namespace,
+                                                 label_selector=f'app=nginx-{deployment_name}').items
+    for pod in pods:
+        delete_resource(nginx_pods.metadata.name, 'pod', namespace)
 
 
 def _create_analysis_nginx_deployment(analysis_name: str,
@@ -205,12 +225,11 @@ def _create_analysis_nginx_deployment(analysis_name: str,
     containers = []
     nginx_name = f"nginx-{analysis_name}"
 
-    config_map_name = _create_nginx_config_map(analysis_name,
-                                               analysis_service_name,
-                                               nginx_name,
-                                               analysis_service_ports,
-                                               analysis_env,
-                                               namespace)
+    config_map_name = _create_nginx_config_map(analysis_name=analysis_name,
+                                               analysis_service_name=analysis_service_name,
+                                               nginx_name=nginx_name,
+                                               analysis_env=analysis_env,
+                                               namespace=namespace)
 
     liveness_probe = client.V1Probe(http_get=client.V1HTTPGetAction(path="/healthz", port=80),
                                     initial_delay_seconds=15,
@@ -268,7 +287,6 @@ def _create_analysis_nginx_deployment(analysis_name: str,
 def _create_nginx_config_map(analysis_name: str,
                              analysis_service_name: str,
                              nginx_name: str,
-                             analysis_ports: list[int],
                              analysis_env: dict[str, str] = {},
                              namespace: str = 'default') -> str:
     core_client = client.CoreV1Api()

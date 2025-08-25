@@ -119,7 +119,7 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
 
     for deployment in deployments:
         if deployment.status == AnalysisStatus.STUCK.value:
-            delete_analysis_pods(deployment.deployment_name, get_current_namespace())
+            delete_analysis_pods(deployment.deployment_name, deployment.project_id, get_current_namespace())
             database.update_deployment_status(deployment.deployment_name, AnalysisStatus.STARTED.value)
 
 
