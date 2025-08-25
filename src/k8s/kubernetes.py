@@ -193,6 +193,7 @@ def delete_analysis_pods(deployment_name: str, project_id: str, namespace: str =
     core_client = client.CoreV1Api()
     # delete nginx deployment
     delete_resource(f'nginx-{deployment_name}', 'deployment', namespace)
+    delete_resource(f'nginx-{deployment_name}', 'service', namespace)
     delete_resource(f'nginx-{deployment_name}-config', 'configmap', namespace)
     #delete_resource(f'nginx-to-{deployment_name}-policy', 'networkpolicy', namespace)
 
