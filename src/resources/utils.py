@@ -25,7 +25,6 @@ def create_analysis(body: CreateAnalysis, database: Database) -> dict[str, str]:
         analysis_id=body.analysis_id,
         project_id=body.project_id,
         image_registry_address=body.image_url,
-        ports=[8000],
         namespace=namespace,
     )
     analysis.start(database=database, kong_token=body.kong_token, namespace=namespace)

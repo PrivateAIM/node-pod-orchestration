@@ -10,6 +10,11 @@ from src.resources.database.entity import Database
 from src.k8s.utils import get_k8s_resource_names
 
 
+PORTS = {'nginx': [80],
+         'analysis': [8000],
+         'service': [80]}
+
+
 def load_cluster_config():
     config.load_incluster_config()
 
@@ -48,19 +53,18 @@ def create_harbor_secret(host_address: str,
 
 def create_analysis_deployment(name: str,
                                image: str,
-                               ports: list[int],
                                env: dict[str, str] = {},
                                namespace: str = 'default') -> list[str]:
     app_client = client.AppsV1Api()
     containers = []
 
-    liveness_probe = client.V1Probe(http_get=client.V1HTTPGetAction(path="/healthz", port=8000),
+    liveness_probe = client.V1Probe(http_get=client.V1HTTPGetAction(path="/healthz", port=PORTS['analysis'][0]),
                                     initial_delay_seconds=15,
                                     period_seconds=20,
                                     failure_threshold=1,
                                     timeout_seconds=5)
     container1 = client.V1Container(name=name, image=image, image_pull_policy="IfNotPresent",
-                                    ports=[client.V1ContainerPort(port) for port in ports],
+                                    ports=[client.V1ContainerPort(PORTS['analysis'][0])],
                                     env=[client.V1EnvVar(name=key, value=val) for key, val in env.items()],
                                     #liveness_probe=liveness_probe,
                                     )
@@ -81,16 +85,13 @@ def create_analysis_deployment(name: str,
     app_client.create_namespaced_deployment(async_req=False, namespace=namespace, body=depl_body)
     time.sleep(.1)
 
-    service_ports = [80]
     analysis_service_name = _create_service(name,
-                                            ports=service_ports,
-                                            target_ports=ports,
+                                            ports=PORTS['service'],
+                                            target_ports=PORTS['analysis'],
                                             meta_data_labels=labels,
                                             namespace=namespace)
 
-    nginx_name, _ = _create_analysis_nginx_deployment(name, analysis_service_name, service_ports, env, namespace)
-    time.sleep(.1)
-    _create_analysis_network_policy(name, nginx_name, namespace)  # TODO: tie analysis deployment together with nginx deployment
+    nginx_name, _ = _create_analysis_nginx_deployment(name, analysis_service_name, env, namespace)
 
     return _get_pods(name)
 
@@ -190,35 +191,29 @@ def delete_analysis_pods(deployment_name: str, project_id: str, namespace: str =
     print(f"Deleting pods of deployment {deployment_name} in namespace {namespace} at "
           f"{time.strftime('%Y-%m-%d %H:%M:%S')}")
     core_client = client.CoreV1Api()
+    # delete nginx deployment
+    delete_resource(f'nginx-{deployment_name}', 'deployment', namespace)
+    delete_resource(f'nginx-{deployment_name}-config', 'configmap', namespace)
+    #delete_resource(f'nginx-to-{deployment_name}-policy', 'networkpolicy', namespace)
+
     # get pods in deployment
     pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}').items
     for pod in pods:
         delete_resource(pod.metadata.name, 'pod', namespace)
 
-    # delete old nginx config map
-    delete_resource(f"nginx-{deployment_name}-config", 'configmap', namespace)
-
-    # create new config map
-    _create_nginx_config_map(analysis_name=deployment_name,
-                             analysis_service_name=get_k8s_resource_names('service',
-                                                                          'label',
-                                                                          f'app={deployment_name}',
-                                                                          namespace=namespace),
-                             nginx_name=f"nginx-{deployment_name}",
-                             analysis_env={'PROJECT_ID': project_id,
-                                           'ANALYSIS_ID': deployment_name.split('analysis-')[-1].rsplit('-', 1)[0]},
-                             namespace=namespace)
-
-    # get pods in nginx deployment
-    nginx_pods = core_client.list_namespaced_pod(namespace=namespace,
-                                                 label_selector=f'app=nginx-{deployment_name}').items
-    for nginx_pod in nginx_pods:
-        delete_resource(nginx_pod.metadata.name, 'pod', namespace)
+    # create new nginx deployment
+    _create_analysis_nginx_deployment(analysis_name=deployment_name,
+                                      analysis_service_name=get_k8s_resource_names('service',
+                                                                                   'label',
+                                                                                   f'app={deployment_name}',
+                                                                                   namespace=namespace),
+                                      analysis_env={'PROJECT_ID': project_id,
+                                                    'ANALYSIS_ID': deployment_name.split('analysis-')[-1].rsplit('-', 1)[0]},
+                                      namespace=namespace)
 
 
 def _create_analysis_nginx_deployment(analysis_name: str,
                                       analysis_service_name: str,
-                                      analysis_service_ports: list[int],
                                       analysis_env: dict[str, str] = {},
                                       namespace: str = 'default') -> tuple[str, str]:
     app_client = client.AppsV1Api()
@@ -231,7 +226,7 @@ def _create_analysis_nginx_deployment(analysis_name: str,
                                                analysis_env=analysis_env,
                                                namespace=namespace)
 
-    liveness_probe = client.V1Probe(http_get=client.V1HTTPGetAction(path="/healthz", port=80),
+    liveness_probe = client.V1Probe(http_get=client.V1HTTPGetAction(path="/healthz", port=PORTS['nginx'][0]),
                                     initial_delay_seconds=15,
                                     period_seconds=20,
                                     failure_threshold=1,
@@ -255,7 +250,7 @@ def _create_analysis_nginx_deployment(analysis_name: str,
     )
 
     container1 = client.V1Container(name=nginx_name, image="nginx:latest", image_pull_policy="Always",
-                                    ports=[client.V1ContainerPort(port) for port in analysis_service_ports],
+                                    ports=[client.V1ContainerPort(PORTS['nginx'][0])],
                                     liveness_probe=liveness_probe,
                                     volume_mounts=[vol_mount])
     containers.append(container1)
@@ -276,10 +271,12 @@ def _create_analysis_nginx_deployment(analysis_name: str,
     app_client.create_namespaced_deployment(async_req=False, namespace=namespace, body=depl_body)
 
     nginx_service_name = _create_service(nginx_name,
-                                         ports=analysis_service_ports,
-                                         target_ports=analysis_service_ports,
+                                         ports=PORTS['service'],
+                                         target_ports=PORTS['service'],
                                          meta_data_labels=labels,
                                          namespace=namespace)
+    time.sleep(.1)
+    _create_analysis_network_policy(analysis_name, nginx_name, namespace)
 
     return nginx_name, nginx_service_name
 
@@ -371,7 +368,7 @@ def _create_nginx_config_map(analysis_name: str,
                 sendfile on;
                 
                  server {{
-                    listen 80;
+                    listen {PORTS['nginx'][0]};
                     
                     client_max_body_size 0;
                     chunked_transfer_encoding on;

@@ -15,7 +15,6 @@ class Analysis(BaseModel):
     deployment_name: str = ''
     project_id: str
     image_registry_address: str
-    ports: list[int]
     tokens: Optional[dict[str, str]] = None
     analysis_config: Optional[dict[str, str]] = None
     status: str = AnalysisStatus.STARTING.value
@@ -34,7 +33,6 @@ class Analysis(BaseModel):
         self.namespace = namespace
         self.pod_ids = create_analysis_deployment(name=self.deployment_name,
                                                   image=self.image_registry_address,
-                                                  ports=self.ports,
                                                   env=self.analysis_config,
                                                   namespace=namespace)
 
@@ -43,7 +41,6 @@ class Analysis(BaseModel):
                                  project_id=self.project_id,
                                  pod_ids=self.pod_ids,
                                  status=self.status,
-                                 ports=self.ports,
                                  image_registry_address=self.image_registry_address,
                                  namespace=self.namespace)
 
@@ -66,7 +63,6 @@ def read_db_analysis(analysis: AnalysisDB) -> Analysis:
                     deployment_name=analysis.deployment_name,
                     project_id=analysis.project_id,
                     image_registry_address=analysis.image_registry_address,
-                    ports=json.loads(analysis.ports),
                     status=analysis.status,
                     pod_ids=json.loads(analysis.pod_ids),
                     log=analysis.log,

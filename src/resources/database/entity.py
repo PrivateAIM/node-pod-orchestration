@@ -42,7 +42,6 @@ class Database:
                         project_id: str,
                         pod_ids: list[str],
                         status: str,
-                        ports: list[int],
                         image_registry_address: str,
                         namespace: str = 'default') -> AnalysisDB:
         analysis = AnalysisDB(analysis_id=analysis_id,
@@ -50,7 +49,6 @@ class Database:
                               project_id=project_id,
                               pod_ids=json.dumps(pod_ids),
                               status=status,
-                              ports=json.dumps(ports),
                               image_registry_address=image_registry_address,
                               namespace=namespace)
         with self.SessionLocal() as session:

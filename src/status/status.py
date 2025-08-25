@@ -3,6 +3,7 @@ import os
 import asyncio
 from typing import Literal, Optional
 from httpx import AsyncClient, HTTPStatusError, ConnectError, ConnectTimeout
+from src.k8s.kubernetes import PORTS
 
 import flame_hub
 
@@ -130,7 +131,7 @@ def _get_internal_status(deployments: list[Analysis], analysis_id: str) \
 
 async def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> Optional[str]:
     try:
-        response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:80')
+        response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:{PORTS['nginx'][0]}')
                           .get('/analysis/healthz', headers=[('Connection', 'close')]))
         try:
             response.raise_for_status()
@@ -153,10 +154,10 @@ async def _get_internal_deployment_status(deployment_name: str, analysis_id: str
         return health_status
 
     except ConnectError  as e:
-        print(f"Connection to http://nginx-{deployment_name}:80 yielded an error: {e}")
+        print(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {e}")
         return None
     except ConnectTimeout as e:
-        print(f"Connection to http://nginx-{deployment_name}:80 timed out: {e}")
+        print(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {e}")
         return None
 
 
@@ -168,7 +169,7 @@ async def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_
     if token_remaining_time < (int(os.getenv('STATUS_LOOP_INTERVAL')) * 2 + 1):
         keycloak_token = get_keycloak_token(analysis_id)
         try:
-            response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:80')
+            response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:{PORTS['nginx'][0]}')
                               .post('/analysis/token_refresh',
                                     json={"token": keycloak_token},
                                     headers=[('Connection', 'close')]))
