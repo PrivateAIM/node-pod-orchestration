@@ -17,7 +17,8 @@ from src.resources.utils import (create_analysis,
                                  get_pods,
                                  stop_analysis,
                                  delete_analysis,
-                                 cleanup)
+                                 cleanup,
+                                 stream_logs)
 
 
 class PodOrchestrationAPI:
