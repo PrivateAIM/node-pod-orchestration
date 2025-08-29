@@ -97,7 +97,7 @@ class PodOrchestrationAPI:
                              response_class=JSONResponse)
         router.add_api_route("/stream_logs",
                                 self.stream_logs_call,
-                                dependencies=[Depends(valid_access_token)],
+                                #dependencies=[Depends(valid_access_token)],
                                 methods=["PUT"],
                                 response_class=JSONResponse)
         router.add_api_route("/healthz",
