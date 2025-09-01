@@ -1,5 +1,5 @@
 from typing import Any
-from sqlalchemy import JSON, Column, DateTime, Integer, String
+from sqlalchemy import JSON, Column, Integer, String, Float
 from sqlalchemy.ext.declarative import as_declarative, declared_attr
 
 
@@ -20,14 +20,17 @@ class AnalysisDB(Base):
     deployment_name = Column(String, unique=True, index=True)
     analysis_id = Column(String, unique=False, index=True)
     project_id = Column(String, unique=False, index=True)
-    image_registry_address = Column(String, nullable=True)
-    ports = Column(JSON, nullable=True)
+    registry_url = Column(String, nullable=True)
+    image_url = Column(String, nullable=True)
+    registry_user = Column(String, nullable=True)
+    registry_password = Column(String, nullable=True)
     status = Column(String, nullable=True)
     log = Column(String, nullable=True)
     pod_ids = Column(JSON, nullable=True)
     namespace = Column(String, nullable=True)
-    time_created = Column(DateTime, nullable=True)
-    time_updated = Column(DateTime, nullable=True)
+    kong_token = Column(String, nullable=True)
+    time_created = Column(Float, nullable=True)
+    time_updated = Column(Float, nullable=True)
 
 
 class ArchiveDB(Base):
@@ -36,12 +39,15 @@ class ArchiveDB(Base):
     deployment_name = Column(String, unique=True, index=True)
     analysis_id = Column(String, unique=False, index=True)
     project_id = Column(String, unique=False, index=True)
-    image_registry_address = Column(String, nullable=True)
-    ports = Column(JSON, nullable=True)
+    registry_url = Column(String, nullable=True)
+    image_url = Column(String, nullable=True)
+    registry_user = Column(String, nullable=True)
+    registry_password = Column(String, nullable=True)
     status = Column(String, nullable=True)
     log = Column(String, nullable=True)
     pod_ids = Column(JSON, nullable=True)
     namespace = Column(String, nullable=True)
-    time_created = Column(DateTime, nullable=True)
-    time_updated = Column(DateTime, nullable=True)
+    kong_token = Column(String, nullable=True)
+    time_created = Column(Float, nullable=True)
+    time_updated = Column(Float, nullable=True)
 

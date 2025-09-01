@@ -1,4 +1,6 @@
 import ast
+import time
+from typing import Union
 
 from flame_hub import CoreClient
 
@@ -17,17 +19,27 @@ from src.utils.hub_client import init_hub_client_and_update_hub_status_with_robo
 from src.utils.other import resource_name_to_analysis
 
 
-def create_analysis(body: CreateAnalysis, database: Database) -> dict[str, str]:
+def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dict[str, str]:
     namespace = get_current_namespace()
+
+    if type(body) == str:
+        body = database.extract_analysis_body(body)
+        if not body:
+            return {"status": "Analysis ID not found in database."}
+
     create_harbor_secret(body.registry_url, body.registry_user, body.registry_password, namespace=namespace)
 
     analysis = Analysis(
         analysis_id=body.analysis_id,
         project_id=body.project_id,
-        image_registry_address=body.image_url,
+        registry_url=body.registry_url,
+        image_url=body.image_url,
+        registry_user=body.registry_user,
+        registry_password=body.registry_password,
         namespace=namespace,
+        kong_token=body.kong_token
     )
-    analysis.start(database=database, kong_token=body.kong_token, namespace=namespace)
+    analysis.start(database=database, namespace=namespace)
 
     # update hub status
     init_hub_client_and_update_hub_status_with_robot(body.analysis_id, AnalysisStatus.STARTED.value)
@@ -125,6 +137,8 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
 def cleanup(cleanup_type: str,
             database: Database,
             namespace: str = "default") -> dict[str, str]:
+    #TODO: Clean keycloak clients
+
     cleanup_types = set(cleanup_type.split(',')) if ',' in cleanup_type else [cleanup_type]
 
     response_content = {}
