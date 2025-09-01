@@ -23,6 +23,7 @@ from src.utils.other import split_logs
 from src.utils.token import get_keycloak_token
 
 
+_INTERNAL_STATUS_TIMEOUT = 10  # Time in seconds to wait for internal status response
 _MAX_RESTARTS = 10  # Maximum number of restarts for a stuck analysis
 
 
@@ -130,35 +131,38 @@ def _get_internal_status(deployments: list[Analysis], analysis_id: str) \
 
 
 async def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> Optional[str]:
-    try:
-        response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:{PORTS["nginx"][0]}')
-                          .get('/analysis/healthz', headers=[('Connection', 'close')]))
+    start_time = time.time()
+    while True:
         try:
+            response = await (AsyncClient(base_url=f'http://nginx-{deployment_name}:{PORTS["nginx"][0]}')
+                              .get('/analysis/healthz', headers=[('Connection', 'close')]))
             response.raise_for_status()
+            break
         except HTTPStatusError as e:
             print(f"Error getting internal deployment status: {e}")
+        except ConnectError as e:
+            print(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {e}")
+        except ConnectTimeout as e:
+            print(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {e}")
+        elapsed_time = time.time() - start_time
+        time.sleep(1)
+        if elapsed_time > _INTERNAL_STATUS_TIMEOUT:
+            print(f"Timeout getting internal deployment status after {elapsed_time} seconds")
             return AnalysisStatus.FAILED.value
 
-        analysis_health_status, analysis_token_remaining_time = (response.json()['status'],
-                                                                 response.json()['token_remaining_time'])
-        await _refresh_keycloak_token(deployment_name=deployment_name,
-                                      analysis_id=analysis_id,
-                                      token_remaining_time=analysis_token_remaining_time)
+    analysis_health_status, analysis_token_remaining_time = (response.json()['status'],
+                                                             response.json()['token_remaining_time'])
+    await _refresh_keycloak_token(deployment_name=deployment_name,
+                                  analysis_id=analysis_id,
+                                  token_remaining_time=analysis_token_remaining_time)
 
-        if analysis_health_status == AnalysisStatus.FINISHED.value:
-            health_status = AnalysisStatus.FINISHED.value
-        elif analysis_health_status == AnalysisStatus.RUNNING.value:
-            health_status = AnalysisStatus.RUNNING.value
-        else:
-            health_status = AnalysisStatus.FAILED.value
-        return health_status
-
-    except ConnectError  as e:
-        print(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {e}")
-        return None
-    except ConnectTimeout as e:
-        print(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {e}")
-        return None
+    if analysis_health_status == AnalysisStatus.FINISHED.value:
+        health_status = AnalysisStatus.FINISHED.value
+    elif analysis_health_status == AnalysisStatus.RUNNING.value:
+        health_status = AnalysisStatus.RUNNING.value
+    else:
+        health_status = AnalysisStatus.FAILED.value
+    return health_status
 
 
 async def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_remaining_time: int) -> None:
@@ -196,9 +200,9 @@ def _fix_stuck_status(analysis_id: str,
 
     if analysis_id not in analysis_restart_counter.keys():
         analysis_restart_counter[analysis_id] = 0
-    analysis_restart_counter[analysis_id] += 1
     if analysis_restart_counter[analysis_id] < _MAX_RESTARTS:
-        unstuck_analysis_deployments(analysis_id, database)
+        was_unstuck = unstuck_analysis_deployments(analysis_id, database)
+        analysis_restart_counter[analysis_id] += was_unstuck
     else:
         database.update_deployment_status(database.get_deployments(analysis_id)[-1].deployment_name,
                                           status=AnalysisStatus.FAILED.value)

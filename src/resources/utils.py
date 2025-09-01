@@ -115,23 +115,30 @@ def stop_analysis(analysis_id: str, database: Database) -> dict[str, dict[str, s
 
 def delete_analysis(analysis_id: str, database: Database) -> dict[str, dict[str, str]]:
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
-
     for deployment in deployments:
         if deployment.status != AnalysisStatus.STOPPED.value:
             deployment.stop(database, log='')
             deployment.status = AnalysisStatus.STOPPED.value
+
     delete_keycloak_client(analysis_id)
     database.delete_analysis(analysis_id)
+
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
-def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
+def unstuck_analysis_deployments(analysis_id: str, database: Database) -> bool:
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
 
     for deployment in deployments:
         if deployment.status == AnalysisStatus.STUCK.value:
-            delete_analysis_pods(deployment.deployment_name, deployment.project_id, get_current_namespace())
+            #delete_analysis_pods(deployment.deployment_name, deployment.project_id, get_current_namespace())
+            stop_analysis(analysis_id, database)
+            time.sleep(10)  # wait for k8s to update status
+            create_analysis(analysis_id, database)
+            database.delete_old_deployments_db(analysis_id)
             database.update_deployment_status(deployment.deployment_name, AnalysisStatus.STARTED.value)
+            return True
+    return False
 
 
 def cleanup(cleanup_type: str,
