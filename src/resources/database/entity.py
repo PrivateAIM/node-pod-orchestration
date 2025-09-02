@@ -98,8 +98,10 @@ class Database:
 
     def delete_deployment(self, deployment_name: str) -> None:
         with self.SessionLocal() as session:
-            session.delete(deployment_name)
-            session.commit()
+            deployment = session.query(AnalysisDB).filter_by(deployment_name=deployment_name).first()
+            if deployment:
+                session.delete(deployment)
+                session.commit()
 
     def close(self) -> None:
         with self.SessionLocal() as session:
