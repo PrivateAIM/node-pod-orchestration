@@ -137,7 +137,10 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
             time.sleep(10)  # wait for k8s to update status
             create_analysis(analysis_id, database)
             database.delete_old_deployments_db(analysis_id)
+
+            deployment = database.get_deployments(analysis_id)[0]
             database.update_deployment_status(deployment.deployment_name, AnalysisStatus.STARTED.value)
+            break
 
 
 def cleanup(cleanup_type: str,
