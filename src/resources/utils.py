@@ -22,11 +22,12 @@ from src.utils.other import resource_name_to_analysis
 def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dict[str, str]:
     namespace = get_current_namespace()
 
+    print(f"analysis_body (before): {body} ({type(body)})")
     if type(body) == str:
         body = database.extract_analysis_body(body)
         if not body:
             return {"status": "Analysis ID not found in database."}
-
+    print(f"analysis_body (after): {body} ({type(body)})")
     create_harbor_secret(body.registry_url, body.registry_user, body.registry_password, namespace=namespace)
 
     analysis = Analysis(
