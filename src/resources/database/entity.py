@@ -7,7 +7,6 @@ from sqlalchemy.orm import sessionmaker
 
 from src.status.constants import AnalysisStatus
 from .db_models import Base, AnalysisDB
-from ..analysis.entity import CreateAnalysis
 
 
 class Database:
