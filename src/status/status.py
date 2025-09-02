@@ -43,7 +43,6 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                                                                os.getenv('HUB_URL_AUTH'),
                                                                                os.getenv('PO_HTTP_PROXY'),
                                                                                os.getenv('PO_HTTPS_PROXY'))
-    analysis_restart_counter = {}
     # Enter lifecycle loop
     while True:
         if hub_client is None:
@@ -81,11 +80,10 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         print(f"Internal status: {int_status}")
 
                         # fix for stuck analyzes
-                        db_status, analysis_restart_counter =_fix_stuck_status(analysis_id,
-                                                                               database,
-                                                                               analysis_restart_counter,
-                                                                               db_status,
-                                                                               int_status)
+                        db_status =_fix_stuck_status(analysis_id,
+                                                     database,
+                                                     db_status,
+                                                     int_status)
                         print(f"Unstuck analysis with internal stuck status: {int_status}")
 
                         # update created to running status if deployment responsive
@@ -93,11 +91,10 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         print(f"Update created to running database status: {db_status}")
 
                         # update running to finished status if analysis finished
-                        db_status, analysis_restart_counter = _update_finished_status(analysis_id,
-                                                                                      database,
-                                                                                      analysis_restart_counter,
-                                                                                      db_status,
-                                                                                      int_status)
+                        db_status = _update_finished_status(analysis_id,
+                                                            database,
+                                                            db_status,
+                                                            int_status)
                         print(f"Update running to finished database status: {db_status}")
 
                         # update hub analysis status
@@ -184,9 +181,8 @@ async def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_
 
 def _fix_stuck_status(analysis_id: str,
                       database: Database,
-                      analysis_restart_counter: dict[str, int],
                       db_status: dict[str, dict[str, str]],
-                      internal_status: dict[str, dict[str, Optional[str]]]) -> tuple[dict[str, dict[str, str]], dict[str, int]]:
+                      internal_status: dict[str, dict[str, Optional[str]]]) -> dict[str, dict[str, str]]:
     stuck_deployment_names = [deployment_name
                               for deployment_name in internal_status['status'].keys()
                               if internal_status['status'][deployment_name] in [AnalysisStatus.STUCK.value]]
@@ -198,11 +194,8 @@ def _fix_stuck_status(analysis_id: str,
     for stuck_deployment_name in stuck_deployment_names:
         database.update_deployment_status(stuck_deployment_name, status=AnalysisStatus.STUCK.value)
 
-    if analysis_id not in analysis_restart_counter.keys():
-        analysis_restart_counter[analysis_id] = 0
-    if analysis_restart_counter[analysis_id] < _MAX_RESTARTS:
-        was_unstuck = unstuck_analysis_deployments(analysis_id, database)
-        analysis_restart_counter[analysis_id] += was_unstuck
+    if database.get_deployments(analysis_id)[0].restart_counter < _MAX_RESTARTS:
+        unstuck_analysis_deployments(analysis_id, database)
     else:
         database.update_deployment_status(database.get_deployments(analysis_id)[-1].deployment_name,
                                           status=AnalysisStatus.FAILED.value)
@@ -212,7 +205,7 @@ def _fix_stuck_status(analysis_id: str,
                    for deployment in database.get_deployments(analysis_id)]
     database_status = _get_status(deployments)
 
-    return database_status, analysis_restart_counter
+    return database_status
 
 def _update_running_status(analysis_id: str,
                            database: Database,
@@ -244,17 +237,14 @@ def _update_running_status(analysis_id: str,
 
 def _update_finished_status(analysis_id: str,
                             database: Database,
-                            analysis_restart_counter: dict[str, int],
                             database_status: dict[str, dict[str, str]],
-                            internal_status: dict[str, dict[str, Optional[str]]]) \
-        -> tuple[dict[str, dict[str, str]], dict[str, int]]:
+                            internal_status: dict[str, dict[str, Optional[str]]]) -> dict[str, dict[str, str]]:
     """
     update status of analysis in database from running to finished if deployment is finished
     and delete analysis
     #
     :param analysis_id:
     :param database:
-    :param analysis_restart_counter:
     :param database_status:
     :param internal_status:
     :return:
@@ -268,7 +258,6 @@ def _update_finished_status(analysis_id: str,
                                                                                         AnalysisStatus.STUCK.value])
                                    ]
     for deployment_name in newly_ended_deployment_names:
-        del analysis_restart_counter[analysis_id]  # remove analysis from restart counter
         intn_dpl_status = internal_status['status'][deployment_name]
         print(f"Attempt to update status to {intn_dpl_status}")
         database.update_deployment_status(deployment_name,
@@ -289,7 +278,7 @@ def _update_finished_status(analysis_id: str,
                        for deployment in database.get_deployments(analysis_id)]
         database_status = _get_status(deployments)
 
-    return database_status, analysis_restart_counter
+    return database_status
 
 
 def _set_analysis_hub_status(hub_client: flame_hub.CoreClient,

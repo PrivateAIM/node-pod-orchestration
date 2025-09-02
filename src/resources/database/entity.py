@@ -48,6 +48,7 @@ class Database:
                         registry_user: str,
                         registry_password: str,
                         kong_token: str,
+                        restart_counter: int ,
                         namespace: str = 'default') -> AnalysisDB:
         analysis = AnalysisDB(analysis_id=analysis_id,
                               deployment_name=deployment_name,
@@ -60,6 +61,7 @@ class Database:
                               registry_password=registry_password,
                               namespace=namespace,
                               kong_token=kong_token,
+                              restart_counter=restart_counter,
                               time_created=time.time())
         with self.SessionLocal() as session:
             session.add(analysis)
@@ -153,7 +155,8 @@ class Database:
                     "registry_user": analysis.registry_user,
                     "registry_password": analysis.registry_password,
                     "namespace": analysis.namespace,
-                    "kong_token": analysis.kong_token}
+                    "kong_token": analysis.kong_token,
+                    "restart_counter": analysis.restart_counter}
         return None
 
     def delete_old_deployments_db(self, analysis_id: str) -> None:

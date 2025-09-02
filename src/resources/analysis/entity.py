@@ -20,6 +20,7 @@ class Analysis(BaseModel):
     namespace: str = 'default'
     kong_token: str
 
+    restart_counter: int = 0
     deployment_name: str = ''
     tokens: Optional[dict[str, str]] = None
     analysis_config: Optional[dict[str, str]] = None
@@ -29,7 +30,7 @@ class Analysis(BaseModel):
 
     def start(self, database: Database, namespace: str = 'default') -> None:
         self.status = AnalysisStatus.STARTED.value
-        self.deployment_name = "analysis-" + self.analysis_id + "-" + str(len(database.get_deployments(self.analysis_id)) + 1)
+        self.deployment_name = "analysis-" + self.analysis_id + "-" + str(self.restart_counter)
         self.tokens = create_analysis_tokens(kong_token=self.kong_token, analysis_id=self.analysis_id)
         self.analysis_config = self.tokens
         self.analysis_config['ANALYSIS_ID'] = self.analysis_id
@@ -51,7 +52,8 @@ class Analysis(BaseModel):
                                  registry_user=self.registry_user,
                                  registry_password=self.registry_user,
                                  namespace=self.namespace,
-                                 kong_token=self.kong_token)
+                                 kong_token=self.kong_token,
+                                 restart_counter=self.restart_counter)
 
     def stop(self,
              database: Database,
@@ -79,7 +81,8 @@ def read_db_analysis(analysis: AnalysisDB) -> Analysis:
                     pod_ids=json.loads(analysis.pod_ids),
                     log=analysis.log,
                     namespace=analysis.namespace,
-                    kong_token=analysis.kong_token)
+                    kong_token=analysis.kong_token,
+                    restart_counter=analysis.restart_counter)
 
 
 class CreateAnalysis(BaseModel):
@@ -90,3 +93,4 @@ class CreateAnalysis(BaseModel):
     registry_user: str = 'robot_user'
     registry_password: str = 'default_pw'
     kong_token: str = 'default_kong_token'
+    restart_counter: int = 0

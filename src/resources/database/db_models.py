@@ -29,6 +29,7 @@ class AnalysisDB(Base):
     pod_ids = Column(JSON, nullable=True)
     namespace = Column(String, nullable=True)
     kong_token = Column(String, nullable=True)
+    restart_counter = Column(Integer, nullable=True, default=0)
     time_created = Column(Float, nullable=True)
     time_updated = Column(Float, nullable=True)
 
@@ -48,6 +49,7 @@ class ArchiveDB(Base):
     pod_ids = Column(JSON, nullable=True)
     namespace = Column(String, nullable=True)
     kong_token = Column(String, nullable=True)
+    restart_counter = Column(Integer, nullable=True, default=0)
     time_created = Column(Float, nullable=True)
     time_updated = Column(Float, nullable=True)
 

@@ -1,6 +1,6 @@
 import ast
 import time
-from typing import Union
+from typing import Union, Optional
 
 from flame_hub import CoreClient
 
@@ -28,7 +28,6 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dic
             return {"status": "Analysis ID not found in database."}
         else:
             body = CreateAnalysis(**body)
-    create_harbor_secret(body.registry_url, body.registry_user, body.registry_password, namespace=namespace)
 
     analysis = Analysis(
         analysis_id=body.analysis_id,
@@ -38,7 +37,8 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dic
         registry_user=body.registry_user,
         registry_password=body.registry_password,
         namespace=namespace,
-        kong_token=body.kong_token
+        kong_token=body.kong_token,
+        restart_counter=body.restart_counter + 1
     )
     analysis.start(database=database, namespace=namespace)
 
@@ -127,7 +127,7 @@ def delete_analysis(analysis_id: str, database: Database) -> dict[str, dict[str,
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
-def unstuck_analysis_deployments(analysis_id: str, database: Database) -> bool:
+def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
 
     for deployment in deployments:
@@ -138,8 +138,6 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> bool:
             create_analysis(analysis_id, database)
             database.delete_old_deployments_db(analysis_id)
             database.update_deployment_status(deployment.deployment_name, AnalysisStatus.STARTED.value)
-            return True
-    return False
 
 
 def cleanup(cleanup_type: str,
