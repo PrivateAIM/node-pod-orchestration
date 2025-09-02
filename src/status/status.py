@@ -1,7 +1,7 @@
 import time
 import os
 import asyncio
-from typing import Literal, Optional
+from typing import Literal, Optional, Tuple
 from httpx import AsyncClient, HTTPStatusError, ConnectError, ConnectTimeout
 from src.k8s.kubernetes import PORTS
 
@@ -80,10 +80,10 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         print(f"Internal status: {int_status}")
 
                         # fix for stuck analyzes
-                        db_status =_fix_stuck_status(analysis_id,
-                                                     database,
-                                                     db_status,
-                                                     int_status)
+                        db_status, int_status, deployments = _fix_stuck_status(analysis_id,
+                                                                               database,
+                                                                               db_status,
+                                                                               int_status)
                         print(f"Unstuck analysis with internal stuck status: {int_status}")
 
                         # update created to running status if deployment responsive
@@ -182,7 +182,8 @@ async def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_
 def _fix_stuck_status(analysis_id: str,
                       database: Database,
                       db_status: dict[str, dict[str, str]],
-                      internal_status: dict[str, dict[str, Optional[str]]]) -> dict[str, dict[str, str]]:
+                      internal_status: dict[str, dict[str, Optional[str]]]) \
+        -> Tuple[dict[str, dict[str, str]], dict[str, dict[str, str]], list[Analysis]]:
     stuck_deployment_names = [deployment_name
                               for deployment_name in internal_status['status'].keys()
                               if internal_status['status'][deployment_name] in [AnalysisStatus.STUCK.value]]
@@ -204,8 +205,9 @@ def _fix_stuck_status(analysis_id: str,
     deployments = [read_db_analysis(deployment)
                    for deployment in database.get_deployments(analysis_id)]
     database_status = _get_status(deployments)
+    internal_status = _get_internal_status(deployments, analysis_id)
 
-    return database_status
+    return database_status, internal_status, deployments
 
 def _update_running_status(analysis_id: str,
                            database: Database,
