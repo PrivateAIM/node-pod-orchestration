@@ -24,8 +24,10 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dic
 
     if type(body) == str:
         body = database.extract_analysis_body(body)
-        if not hasattr(body, 'registry_url'):
+        if body is None:
             return {"status": "Analysis ID not found in database."}
+        else:
+            body = CreateAnalysis(**body)
     create_harbor_secret(body.registry_url, body.registry_user, body.registry_password, namespace=namespace)
 
     analysis = Analysis(

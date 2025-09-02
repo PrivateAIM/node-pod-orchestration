@@ -141,19 +141,18 @@ class Database:
     def stop_analysis(self, analysis_id: str) -> None:
         self.update_analysis_status(analysis_id, status=AnalysisStatus.STOPPED.value)
 
-    def extract_analysis_body(self, analysis_id: str) -> Optional[CreateAnalysis]:
+    def extract_analysis_body(self, analysis_id: str) -> Optional[dict]:
         analysis = self.get_deployments(analysis_id)
         if analysis:
             analysis = analysis[0]
-            return CreateAnalysis(**{"analysis_id": analysis.analysis_id,
-                                     "project_id": analysis.project_id,
-                                     "registry_url": analysis.registry_url,
-                                     "image_url": analysis.image_url,
-                                     "registry_user": analysis.registry_user,
-                                     "registry_password": analysis.registry_password,
-                                     "namespace": analysis.namespace,
-                                     "kong_token": analysis.kong_token
-                                     })
+            return {"analysis_id": analysis.analysis_id,
+                    "project_id": analysis.project_id,
+                    "registry_url": analysis.registry_url,
+                    "image_url": analysis.image_url,
+                    "registry_user": analysis.registry_user,
+                    "registry_password": analysis.registry_password,
+                    "namespace": analysis.namespace,
+                    "kong_token": analysis.kong_token}
         return None
 
     def delete_old_deployments_db(self, analysis_id: str) -> None:
