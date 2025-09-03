@@ -50,7 +50,7 @@ class Analysis(BaseModel):
                                  registry_url=self.registry_url,
                                  image_url=self.image_url,
                                  registry_user=self.registry_user,
-                                 registry_password=self.registry_user,
+                                 registry_password=self.registry_password,
                                  namespace=self.namespace,
                                  kong_token=self.kong_token,
                                  restart_counter=self.restart_counter)
