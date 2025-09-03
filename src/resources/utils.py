@@ -29,6 +29,8 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dic
         else:
             body = CreateAnalysis(**body)
 
+    create_harbor_secret(body.registry_url, body.registry_user, body.registry_password, namespace=namespace)
+
     analysis = Analysis(
         analysis_id=body.analysis_id,
         project_id=body.project_id,
