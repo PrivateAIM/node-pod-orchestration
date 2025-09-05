@@ -29,7 +29,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
     :return:
     """
     hub_client = None
-    node_id_object_id = None
+    node_id = None
     node_analysis_ids = {}
 
     robot_id, robot_secret, hub_url_core, hub_auth, http_proxy, https_proxy = (os.getenv('HUB_ROBOT_USER'),
@@ -47,9 +47,9 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                                     hub_auth,
                                                     http_proxy,
                                                     https_proxy)
-            node_id_object_id, _ = get_node_id_by_robot(hub_client, robot_id)
+            node_id = get_node_id_by_robot(hub_client, robot_id)
             # Catch unresponsive hub client
-            if node_id_object_id is None:
+            if node_id is None:
                 print("Resetting hub client...")
                 hub_client = None
                 continue
@@ -60,7 +60,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                 for analysis_id in set(database.get_analysis_ids()):
                     # Get node analysis id
                     if analysis_id not in node_analysis_ids.keys():
-                        node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id_object_id)
+                        node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
                         if node_analysis_id is not None:
                             node_analysis_ids[analysis_id] = node_analysis_id
                     else:
