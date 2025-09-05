@@ -1,6 +1,6 @@
 import os
 from json import JSONDecodeError
-from typing import Optional
+from typing import Optional, Tuple
 from httpx import (Client,
                    HTTPTransport,
                    HTTPStatusError,
@@ -39,20 +39,20 @@ def init_hub_client_with_robot(robot_id: str,
     return hub_client
 
 
-def get_node_id_by_robot(hub_client: flame_hub.CoreClient, robot_id: str) -> Optional[str]:
+def get_node_id_by_robot(hub_client: flame_hub.CoreClient, robot_id: str) -> Tuple[Optional[str], Optional[str]]:
     try:
-        node_id = str(hub_client.find_nodes(filter={"robot_id": robot_id})[0].id)
-        print(f"Found node id: {node_id}")
+        node_id_object = hub_client.find_nodes(filter={"robot_id": robot_id})[0]
+        print(f"Found node id object: {node_id_object}")
     except (HTTPStatusError, JSONDecodeError, ConnectTimeout) as e:
-        print(f"Error in hub python client whilst retrieving node id!\n{e}")
-        node_id = None
-    return node_id
+        print(f"Error in hub python client whilst retrieving node id object!\n{e}")
+        node_id_object = None
+    return (str(node_id_object.id), str(node_id_object.node_id)) if node_id_object is not None else (None, None)
 
 
-def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, node_id: str) -> Optional[str]:
+def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, node_id_object_id: str) -> Optional[str]:
     try:
         node_analyzes = hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id,
-                                                               "node_id": node_id})
+                                                               "node_id": node_id_object_id})
         print(f"Found node analyzes: {node_analyzes}")
     except HTTPStatusError as e:
         print(f"Error in hub python client whilst retrieving node analyzes!\n{e}")
@@ -110,18 +110,3 @@ class HUB_LOG_LITERALS(Enum):
     debug_log = 'debug'
     warning_log = 'warning'
     error_code = 'error'
-
-
-def send_log_line_to_hub(hub_client: flame_hub.CoreClient,
-                         analysis_id: str,
-                         node_id: str,
-                         status: str,
-                         log_type: str,
-                         log_line: str) -> None:
-    if '\n' in log_line:
-        raise ValueError('Cannot create log for more than one line.')
-    _ = hub_client.create_analysis_node_log(analysis_id=analysis_id,
-                                            node_id=node_id,
-                                            status=status,
-                                            message=log_line,
-                                            level=log_type).id

@@ -33,6 +33,13 @@ class Database:
         with self.SessionLocal() as session:
             return session.query(AnalysisDB).filter_by(**{"deployment_name": deployment_name}).first()
 
+    def get_latest_deployment(self, analysis_id: str) -> Optional[AnalysisDB]:
+        with self.SessionLocal() as session:
+            deployments = session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
+            if deployments:
+                return deployments[-1]
+            return None
+
     def get_deployments(self, analysis_id: str) -> list[AnalysisDB]:
         with self.SessionLocal() as session:
             return session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
