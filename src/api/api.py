@@ -92,7 +92,7 @@ class PodOrchestrationAPI:
                              response_class=JSONResponse)
         router.add_api_route("/cleanup/{type}",
                              self.cleanup_call,
-                             dependencies=[Depends(valid_access_token)],
+                             #dependencies=[Depends(valid_access_token)],
                              methods=["DELETE"],
                              response_class=JSONResponse)
         router.add_api_route("/stream_logs",
