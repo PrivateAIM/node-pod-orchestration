@@ -216,7 +216,10 @@ def _update_finished_status(database: Database, analysis_status: dict[str, str])
 def _set_analysis_hub_status(hub_client: flame_hub.CoreClient,
                              node_analysis_id: str,
                              analysis_status: dict[str, str]) -> str:
-    if analysis_status['int_status'] in [AnalysisStatus.FAILED.value,
+    if analysis_status['db_status'] in [AnalysisStatus.FAILED.value,
+                                         AnalysisStatus.FINISHED.value]:
+        analysis_hub_status = AnalysisStatus.FINISHED.value
+    elif analysis_status['int_status'] in [AnalysisStatus.FAILED.value,
                                          AnalysisStatus.FINISHED.value,
                                          AnalysisStatus.RUNNING.value]:
         analysis_hub_status = analysis_status['int_status']
