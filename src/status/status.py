@@ -105,7 +105,7 @@ def _get_analysis_status(analysis_id: str, database: Database) -> dict[str, str]
     # because the analysis will already be deleted
     if db_status == AnalysisStatus.FINISHED.value:
         int_status = AnalysisStatus.FINISHED.value
-    elif db_status == AnalysisStatus.FAILED.value:
+    else:
         int_status = asyncio.run(_get_internal_deployment_status(analysis.deployment_name, analysis_id))
     return {"analysis_id": analysis_id,
             "db_status": analysis.status,
