@@ -155,7 +155,7 @@ def cleanup(cleanup_type: str,
 
     response_content = {}
     for cleanup_type in cleanup_types:
-        if cleanup_type in ['all', 'analyzes', 'services', 'mb', 'rs']:
+        if cleanup_type in ['all', 'analyzes', 'services', 'mb', 'rs', 'keycloak']:
             # Analysis cleanup
             if cleanup_type in ['all', 'analyzes']:
                 # cleanup all analysis deployments, associated services, policies and configmaps
