@@ -76,17 +76,26 @@ def _keycloak_client_exists(analysis_id: str, admin_token: str) -> bool:
 def _create_keycloak_client(admin_token: str, analysis_id: str) -> None:
     url_create_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients"
     headers = {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
-    client_data = {"clientId": analysis_id, "serviceAccountsEnabled": "true"}
+    client_data = {"clientId": f"flame-{analysis_id}", "serviceAccountsEnabled": "true"}
 
     response = requests.post(url_create_client, headers=headers, json=client_data)
     response.raise_for_status()
 
+def _get_all_keycloak_clients() -> list[dict]:
+    admin_token = _get_keycloak_admin_token()
+    url_get_clients = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients"
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    response = requests.get(url_get_clients, headers=headers)
+    response.raise_for_status()
+
+    return response.json()
 
 def delete_keycloak_client(analysis_id: str) -> None:
     admin_token = _get_keycloak_admin_token()
 
     # get client uuid
-    url_get_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients?clientId={analysis_id}"
+    url_get_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients?clientId=flame-{analysis_id}"
     headers = {"Authorization": f"Bearer {admin_token}"}
 
     response = requests.get(url_get_client, headers=headers)

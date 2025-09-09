@@ -13,7 +13,8 @@ from src.k8s.kubernetes import (create_harbor_secret,
                                 delete_deployment,
                                 delete_analysis_pods,
                                 delete_resource)
-from src.k8s.utils import get_current_namespace, get_all_analysis_deployment_names, get_k8s_resource_names
+from src.k8s.utils import get_current_namespace, get_all_analysis_deployment_names, get_k8s_resource_names, _get_keycloak_admin_token
+from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
 from src.utils.hub_client import init_hub_client_and_update_hub_status_with_robot
 from src.utils.other import resource_name_to_analysis
@@ -178,6 +179,10 @@ def cleanup(cleanup_type: str,
                                                              namespace=namespace)
                 delete_resource(result_service_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset result service"
+            if cleanup_type in ['all', 'keycloak']:
+                for client in _get_all_keycloak_clients():
+                    print(client)
+
         else:
             response_content[cleanup_type] = f"Unknown cleanup type: {cleanup_type} (known types: 'all', " + \
                                              "'analyzes', 'services', 'mb', and 'rs')"
