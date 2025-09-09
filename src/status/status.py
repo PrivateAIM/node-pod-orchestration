@@ -100,9 +100,16 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
 
 def _get_analysis_status(analysis_id: str, database: Database) -> dict[str, str]:
     analysis = database.get_latest_deployment(analysis_id)
+    db_status = analysis.status
+    # Make the Finished status final, the internal status is not checked anymore,
+    # because the analysis will already be deleted
+    if db_status == AnalysisStatus.FINISHED.value:
+        int_status = AnalysisStatus.FINISHED.value
+    elif db_status == AnalysisStatus.FAILED.value:
+        int_status = asyncio.run(_get_internal_deployment_status(analysis.deployment_name, analysis_id))
     return {"analysis_id": analysis_id,
             "db_status": analysis.status,
-            "int_status": asyncio.run(_get_internal_deployment_status(analysis.deployment_name, analysis_id))}
+            "int_status": int_status}
 
 
 async def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> str:
