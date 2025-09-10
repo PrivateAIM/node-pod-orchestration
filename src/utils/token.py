@@ -37,7 +37,7 @@ def _get_keycloak_client_secret(analysis_id: str) -> str:
         _create_keycloak_client(admin_token, analysis_id)
 
     # get client secret
-    url_get_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients?clientId={analysis_id}"
+    url_get_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients?clientId=flame-{analysis_id}"
     headers = {"Authorization": f"Bearer {admin_token}"}
 
     response = requests.get(url_get_client, headers=headers)
@@ -64,7 +64,7 @@ def _get_keycloak_admin_token() -> str:
 
 
 def _keycloak_client_exists(analysis_id: str, admin_token: str) -> bool:
-    url_get_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients?clientId={analysis_id}"
+    url_get_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients?clientId=flame-{analysis_id}"
     headers = {"Authorization": f"Bearer {admin_token}"}
 
     response = requests.get(url_get_client, headers=headers)
