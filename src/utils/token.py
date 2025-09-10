@@ -75,7 +75,9 @@ def _keycloak_client_exists(analysis_id: str, admin_token: str) -> bool:
 
 def _create_keycloak_client(admin_token: str, analysis_id: str) -> None:
     url_create_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients"
-    headers = {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
+    headers = {"Authorization": f"Bearer {admin_token}",
+                "name": f"flame-{analysis_id}",
+                "Content-Type": "application/json"}
     client_data = {"clientId": f"{analysis_id}", "serviceAccountsEnabled": "true"}
 
     response = requests.post(url_create_client, headers=headers, json=client_data)
