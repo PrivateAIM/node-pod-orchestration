@@ -180,12 +180,17 @@ def cleanup(cleanup_type: str,
                 delete_resource(result_service_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset result service"
             if cleanup_type in ['all', 'keycloak']:
+                # cleanup keycloak clients without corresponding analysis
+                # if all is all flame clients are deleted because ther are no analyzes in the db
+                analysis_ids = database.get_analysis_ids()
                 for client in _get_all_keycloak_clients():
+                    if client['clientId'] not in analysis_ids and client['name'].startswith('flame-'):
+                        delete_keycloak_client(client['clientId'])
                     print(client)
 
         else:
             response_content[cleanup_type] = f"Unknown cleanup type: {cleanup_type} (known types: 'all', " + \
-                                             "'analyzes', 'services', 'mb', and 'rs')"
+                                             "'analyzes','keycloak' ,  'services', 'mb', and 'rs')"
     response_content['zombies'] = clean_up_the_rest(database, namespace)
     return response_content
 
