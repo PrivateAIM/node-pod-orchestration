@@ -18,7 +18,7 @@ sqlalchemy = "^2.0.26"
 PyJWT = "^2.10.1"
 python-dotenv = "^0.21.0"
 kong-admin-client = {git = "https://github.com/PrivateAIM/kong-admin-python-client.git"}
-flame-hub-client = "^0.2.3"
+flame-hub-client = "^0.2.7"
 cryptography="^44.0.3"
 
 [tool.poetry.group.dev.dependencies]
