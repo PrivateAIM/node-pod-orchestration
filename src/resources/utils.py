@@ -217,15 +217,15 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
     return result_str
 
 
-def stream_logs(log_entity: CreateLogEntity, database: Database, hub_core_client: CoreClient) -> None:
+def stream_logs(log_entity: CreateLogEntity,node_id: str, database: Database, hub_core_client: CoreClient) -> None:
     database.update_analysis_log(log_entity.analysis_id, str(log_entity.to_log_entity()))
     print(f"sending logs to hub client")
     # log to hub
-    print(f"analysis_id: {log_entity.analysis_id}, node_id: {log_entity.node_id}, ")
+    print(f"analysis_id: {log_entity.analysis_id}, node_id: {node_id}, ")
     print(f"status: {log_entity.status}, level: {log_entity.log_type}, message: {log_entity.log}")
 
     hub_core_client.create_analysis_node_log(analysis_id=log_entity.analysis_id,
-                                             node_id=log_entity.node_id,
+                                             node_id=node_id,
                                              status=log_entity.status,
                                              level=log_entity.log_type,
                                              message=log_entity.log)

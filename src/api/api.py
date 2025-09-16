@@ -5,7 +5,7 @@ from fastapi import APIRouter, FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.utils.hub_client import init_hub_client_with_robot
+from src.utils.hub_client import init_hub_client_with_robot, get_node_id_by_robot
 from src.api.oauth import valid_access_token
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import CreateAnalysis
@@ -37,6 +37,7 @@ class PodOrchestrationAPI:
                                                           hub_auth,
                                                           http_proxy,
                                                           https_proxy)
+        self.node_id = get_node_id_by_robot(self.hub_core_client, robot_id) if self.hub_core_client else None
         self.namespace = namespace
         app = FastAPI(title="FLAME PO",
                       docs_url="/api/docs",
@@ -148,7 +149,7 @@ class PodOrchestrationAPI:
             print(body.json())
         except Exception as e:
             print(f"Error printing body as json: {e}")
-        return stream_logs(body, self.database, self.hub_core_client)
+        return stream_logs(body,self.node_id, self.database, self.hub_core_client)
 
     def health_call(self):
         main_alive = threading.main_thread().is_alive()

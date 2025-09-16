@@ -21,7 +21,6 @@ class CreateLogEntity(BaseModel):
     log_type: Literal["emerg", "alert", "crit", "error", "warn", "notice", "info", "debug"]
 
     analysis_id: str
-    node_id: str
     status: str
 
     def to_log_entity(self) -> LogEntity:
