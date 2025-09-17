@@ -1,4 +1,8 @@
 import os
+import ssl
+
+from pathlib import Path
+from functools import lru_cache
 from json import JSONDecodeError
 from typing import Optional, Tuple
 from httpx import (Client,
@@ -6,6 +10,7 @@ from httpx import (Client,
                    HTTPStatusError,
                    ConnectError,
                    ConnectTimeout)
+import truststore
 from enum import Enum
 
 import flame_hub
@@ -25,12 +30,13 @@ def init_hub_client_with_robot(robot_id: str,
             "https://":  HTTPTransport(proxy=https_proxy)
         }
     try:
-        robot_client = Client(base_url=hub_auth, mounts=proxies)
+        ssl_ctx = get_ssl_context()
+        robot_client = Client(base_url=hub_auth, mounts=proxies, verify=ssl_ctx)
         hub_robot = flame_hub.auth.RobotAuth(robot_id=robot_id,
                                              robot_secret=robot_secret,
                                              client=robot_client)
 
-        client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_robot)
+        client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_robot, verify=ssl_ctx)
         hub_client = flame_hub.CoreClient(client=client)
         print("Hub client init successful")
     except Exception as e:
@@ -38,6 +44,14 @@ def init_hub_client_with_robot(robot_id: str,
         print(f"Failed to authenticate with hub python client library.\n{e}")
     return hub_client
 
+@lru_cache
+def get_ssl_context() -> ssl.SSLContext:
+    """Check if there are additional certificates present and if so, load them."""
+    cert_path = os.getenv('EXTRA_CA_CERTS')
+    ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    if cert_path and Path(cert_path).exists():
+        ctx.load_verify_locations(cafile=cert_path)
+    return ctx
 
 def get_node_id_by_robot(hub_client: flame_hub.CoreClient, robot_id: str) -> Optional[str]:
     try:
