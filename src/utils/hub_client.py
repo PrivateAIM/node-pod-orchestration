@@ -4,9 +4,8 @@ import ssl
 from pathlib import Path
 from functools import lru_cache
 from json import JSONDecodeError
-from typing import Optional, Tuple
+from typing import Optional
 from httpx import (Client,
-                   HTTPTransport,
                    HTTPStatusError,
                    ConnectError,
                    ConnectTimeout)
@@ -19,24 +18,16 @@ import flame_hub
 def init_hub_client_with_robot(robot_id: str,
                                robot_secret: str,
                                hub_url_core: str,
-                               hub_auth: str,
-                               http_proxy: str,
-                               https_proxy: str) -> Optional[flame_hub.CoreClient]:
+                               hub_auth: str) -> Optional[flame_hub.CoreClient]:
     # Attempt to init hub client
-    proxies = None
-    if http_proxy and https_proxy:
-        proxies = {
-            "http://": HTTPTransport(proxy=http_proxy),
-            "https://":  HTTPTransport(proxy=https_proxy)
-        }
     try:
         ssl_ctx = get_ssl_context()
-        robot_client = Client(base_url=hub_auth, mounts=proxies, verify=ssl_ctx)
+        robot_client = Client(base_url=hub_auth, verify=ssl_ctx)
         hub_robot = flame_hub.auth.RobotAuth(robot_id=robot_id,
                                              robot_secret=robot_secret,
                                              client=robot_client)
 
-        client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_robot, verify=ssl_ctx)
+        client = Client(base_url=hub_url_core, auth=hub_robot, verify=ssl_ctx)
         hub_client = flame_hub.CoreClient(client=client)
         print("Hub client init successful")
     except Exception as e:
@@ -95,13 +86,11 @@ def init_hub_client_and_update_hub_status_with_robot(analysis_id: str, status: s
     """
     Create a hub client for the analysis and update the current status.
     """
-    robot_id, robot_secret, hub_url_core, hub_auth, http_proxy, https_proxy = (os.getenv('HUB_ROBOT_USER'),
-                                                                               os.getenv('HUB_ROBOT_SECRET'),
-                                                                               os.getenv('HUB_URL_CORE'),
-                                                                               os.getenv('HUB_URL_AUTH'),
-                                                                               os.getenv('PO_HTTP_PROXY'),
-                                                                               os.getenv('PO_HTTPS_PROXY'))
-    hub_client = init_hub_client_with_robot(robot_id, robot_secret, hub_url_core, hub_auth, http_proxy, https_proxy)
+    robot_id, robot_secret, hub_url_core, hub_auth = (os.getenv('HUB_ROBOT_USER'),
+                                                      os.getenv('HUB_ROBOT_SECRET'),
+                                                      os.getenv('HUB_URL_CORE'),
+                                                      os.getenv('HUB_URL_AUTH'))
+    hub_client = init_hub_client_with_robot(robot_id, robot_secret, hub_url_core, hub_auth)
     if hub_client is None:
         print("Failed to initialize hub client. Cannot update status.")
     node_id = get_node_id_by_robot(hub_client, robot_id)
