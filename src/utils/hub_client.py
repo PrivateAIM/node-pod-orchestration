@@ -24,13 +24,14 @@ def init_hub_client_with_robot(robot_id: str,
                                https_proxy: str) -> Optional[flame_hub.CoreClient]:
     # Attempt to init hub client
     proxies = None
+    ssl_ctx = get_ssl_context()
     if http_proxy and https_proxy:
         proxies = {
             "http://": HTTPTransport(proxy=http_proxy),
-            "https://":  HTTPTransport(proxy=https_proxy)
+            "https://":  HTTPTransport(proxy=https_proxy, verify=ssl_ctx)
         }
     try:
-        ssl_ctx = get_ssl_context()
+
         robot_client = Client(base_url=hub_auth, mounts=proxies, verify=ssl_ctx)
         hub_robot = flame_hub.auth.RobotAuth(robot_id=robot_id,
                                              robot_secret=robot_secret,
