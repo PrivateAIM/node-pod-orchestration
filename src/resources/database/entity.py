@@ -138,7 +138,7 @@ class Database:
         return ""
 
     def update_analysis_log(self, analysis_id: str, log: str) -> None:
-        log = self.get_analysis_log(analysis_id) + "\n" + log
+        log = str(self.get_analysis_log(analysis_id)) + "\n" + log
         self.update_analysis(analysis_id, log=log)
 
     def update_analysis_status(self, analysis_id: str, status: str) -> None:
