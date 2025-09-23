@@ -132,7 +132,6 @@ class Database:
 
     def get_analysis_log(self, analysis_id: str) -> str:
         deployment = self.get_deployments(analysis_id)[0]
-
         if deployment is not None:
             log = deployment.log
             if log is not None:

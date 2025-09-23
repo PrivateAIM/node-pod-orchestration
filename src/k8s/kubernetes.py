@@ -438,6 +438,10 @@ def _create_nginx_config_map(analysis_name: str,
                         proxy_pass  http://{po_service_name};
                         allow       {analysis_ip};
                         deny        all;
+                        proxy_connect_timeout 10s;
+                        proxy_send_timeout    120s;
+                        proxy_read_timeout    120s;
+                        send_timeout          120s;
                     }}
                     
                     # message-broker/pod-orchestration to analysis deployment
