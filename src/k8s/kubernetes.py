@@ -434,7 +434,7 @@ def _create_nginx_config_map(analysis_name: str,
                     
                     # analysis deployment to po log stream
                     location /po/stream_logs {{
-                        rewrite     ^/po(/.*) $1 break;
+                        #rewrite     ^/po(/.*) $1 break;
                         proxy_pass  http://{po_service_name};
                         allow       {analysis_ip};
                         deny        all;
