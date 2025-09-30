@@ -1,11 +1,16 @@
 import os
+import ssl
+
+from pathlib import Path
+from functools import lru_cache
 from json import JSONDecodeError
-from typing import Optional
+from typing import Optional, Tuple
 from httpx import (Client,
                    HTTPTransport,
                    HTTPStatusError,
                    ConnectError,
                    ConnectTimeout)
+import truststore
 from enum import Enum
 
 import flame_hub
@@ -19,18 +24,20 @@ def init_hub_client_with_robot(robot_id: str,
                                https_proxy: str) -> Optional[flame_hub.CoreClient]:
     # Attempt to init hub client
     proxies = None
+    ssl_ctx = get_ssl_context()
     if http_proxy and https_proxy:
         proxies = {
             "http://": HTTPTransport(proxy=http_proxy),
-            "https://":  HTTPTransport(proxy=https_proxy)
+            "https://":  HTTPTransport(proxy=https_proxy, verify=ssl_ctx)
         }
     try:
-        robot_client = Client(base_url=hub_auth, mounts=proxies)
+
+        robot_client = Client(base_url=hub_auth, mounts=proxies, verify=ssl_ctx)
         hub_robot = flame_hub.auth.RobotAuth(robot_id=robot_id,
                                              robot_secret=robot_secret,
                                              client=robot_client)
 
-        client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_robot)
+        client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_robot, verify=ssl_ctx)
         hub_client = flame_hub.CoreClient(client=client)
         print("Hub client init successful")
     except Exception as e:
@@ -38,21 +45,29 @@ def init_hub_client_with_robot(robot_id: str,
         print(f"Failed to authenticate with hub python client library.\n{e}")
     return hub_client
 
+@lru_cache
+def get_ssl_context() -> ssl.SSLContext:
+    """Check if there are additional certificates present and if so, load them."""
+    cert_path = os.getenv('EXTRA_CA_CERTS')
+    ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    if cert_path and Path(cert_path).exists():
+        ctx.load_verify_locations(cafile=cert_path)
+    return ctx
 
 def get_node_id_by_robot(hub_client: flame_hub.CoreClient, robot_id: str) -> Optional[str]:
     try:
-        node_id = str(hub_client.find_nodes(filter={"robot_id": robot_id})[0].id)
-        print(f"Found node id: {node_id}")
+        node_id_object = hub_client.find_nodes(filter={"robot_id": robot_id})[0]
+        print(f"Found node id object: {node_id_object}")
     except (HTTPStatusError, JSONDecodeError, ConnectTimeout) as e:
-        print(f"Error in hub python client whilst retrieving node id!\n{e}")
-        node_id = None
-    return node_id
+        print(f"Error in hub python client whilst retrieving node id object!\n{e}")
+        node_id_object = None
+    return str(node_id_object.id) if node_id_object is not None else None
 
 
-def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, node_id: str) -> Optional[str]:
+def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, node_id_object_id: str) -> Optional[str]:
     try:
         node_analyzes = hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id,
-                                                               "node_id": node_id})
+                                                               "node_id": node_id_object_id})
         print(f"Found node analyzes: {node_analyzes}")
     except HTTPStatusError as e:
         print(f"Error in hub python client whilst retrieving node analyzes!\n{e}")
@@ -90,17 +105,13 @@ def init_hub_client_and_update_hub_status_with_robot(analysis_id: str, status: s
     hub_client = init_hub_client_with_robot(robot_id, robot_secret, hub_url_core, hub_auth, http_proxy, https_proxy)
     if hub_client is None:
         print("Failed to initialize hub client. Cannot update status.")
-        return
     node_id = get_node_id_by_robot(hub_client, robot_id)
     if node_id is None:
         print("Failed to retrieve node_id from hub client. Cannot update status.")
-        return
     node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
     if node_id is None:
         print("Failed to retrieve node_analysis_id from hub client. Cannot update status.")
-        return
     update_hub_status(hub_client, node_analysis_id, run_status=status)
-    return
 
 
 # TODO: Import this from flame sdk? (from flamesdk import HUB_LOG_LITERALS)
@@ -110,18 +121,3 @@ class HUB_LOG_LITERALS(Enum):
     debug_log = 'debug'
     warning_log = 'warning'
     error_code = 'error'
-
-
-def send_log_line_to_hub(hub_client: flame_hub.CoreClient,
-                         analysis_id: str,
-                         node_id: str,
-                         status: str,
-                         log_type: str,
-                         log_line: str) -> None:
-    if '\n' in log_line:
-        raise ValueError('Cannot create log for more than one line.')
-    _ = hub_client.create_analysis_node_log(analysis_id=analysis_id,
-                                            node_id=node_id,
-                                            status=status,
-                                            message=log_line,
-                                            level=log_type).id

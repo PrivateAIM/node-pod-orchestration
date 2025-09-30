@@ -1,12 +1,15 @@
 import uvicorn
+import os
 import threading
 from fastapi import APIRouter, FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.utils.hub_client import init_hub_client_with_robot, get_node_id_by_robot
 from src.api.oauth import valid_access_token
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import CreateAnalysis
+from src.resources.log.entity import CreateLogEntity
 from src.resources.utils import (create_analysis,
                                  retrieve_history,
                                  retrieve_logs,
@@ -14,12 +17,27 @@ from src.resources.utils import (create_analysis,
                                  get_pods,
                                  stop_analysis,
                                  delete_analysis,
-                                 cleanup)
+                                 cleanup,
+                                 stream_logs)
 
 
 class PodOrchestrationAPI:
     def __init__(self, database: Database, namespace: str = 'default'):
         self.database = database
+        robot_id, robot_secret, hub_url_core, hub_auth, http_proxy, https_proxy = (os.getenv('HUB_ROBOT_USER'),
+                                                                                   os.getenv('HUB_ROBOT_SECRET'),
+                                                                                   os.getenv('HUB_URL_CORE'),
+                                                                                   os.getenv('HUB_URL_AUTH'),
+                                                                                   os.getenv('PO_HTTP_PROXY'),
+                                                                                   os.getenv('PO_HTTPS_PROXY'))
+
+        self.hub_core_client = init_hub_client_with_robot(robot_id,
+                                                          robot_secret,
+                                                          hub_url_core,
+                                                          hub_auth,
+                                                          http_proxy,
+                                                          https_proxy)
+        self.node_id = get_node_id_by_robot(self.hub_core_client, robot_id) if self.hub_core_client else None
         self.namespace = namespace
         app = FastAPI(title="FLAME PO",
                       docs_url="/api/docs",
@@ -73,11 +91,16 @@ class PodOrchestrationAPI:
                              dependencies=[Depends(valid_access_token)],
                              methods=["DELETE"],
                              response_class=JSONResponse)
-        router.add_api_route("/cleanup/{cleanup_type}",
+        router.add_api_route("/cleanup/{type}",
                              self.cleanup_call,
-                             dependencies=[Depends(valid_access_token)],
+                             #dependencies=[Depends(valid_access_token)],
                              methods=["DELETE"],
                              response_class=JSONResponse)
+        router.add_api_route("/stream_logs",
+                                self.stream_logs_call,
+                                #dependencies=[Depends(valid_access_token)],
+                                methods=["POST"],
+                                response_class=JSONResponse)
         router.add_api_route("/healthz",
                              self.health_call,
                              methods=["GET"],
@@ -116,6 +139,17 @@ class PodOrchestrationAPI:
 
     def get_service_status_call(self):
         pass
+
+    def stream_logs_call(self, body: CreateLogEntity):
+        try:
+            print(body)
+        except Exception as e:
+            print(f"Error printing body: {e}")
+        try:
+            print(body.json())
+        except Exception as e:
+            print(f"Error printing body as json: {e}")
+        return stream_logs(body,self.node_id, self.database, self.hub_core_client)
 
     def health_call(self):
         main_alive = threading.main_thread().is_alive()

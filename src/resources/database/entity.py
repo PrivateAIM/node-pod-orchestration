@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from typing import Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -32,6 +33,13 @@ class Database:
         with self.SessionLocal() as session:
             return session.query(AnalysisDB).filter_by(**{"deployment_name": deployment_name}).first()
 
+    def get_latest_deployment(self, analysis_id: str) -> Optional[AnalysisDB]:
+        with self.SessionLocal() as session:
+            deployments = session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
+            if deployments:
+                return deployments[-1]
+            return None
+
     def get_deployments(self, analysis_id: str) -> list[AnalysisDB]:
         with self.SessionLocal() as session:
             return session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
@@ -42,17 +50,26 @@ class Database:
                         project_id: str,
                         pod_ids: list[str],
                         status: str,
-                        ports: list[int],
-                        image_registry_address: str,
+                        registry_url: str,
+                        image_url: str,
+                        registry_user: str,
+                        registry_password: str,
+                        kong_token: str,
+                        restart_counter: int ,
                         namespace: str = 'default') -> AnalysisDB:
         analysis = AnalysisDB(analysis_id=analysis_id,
                               deployment_name=deployment_name,
                               project_id=project_id,
                               pod_ids=json.dumps(pod_ids),
                               status=status,
-                              ports=json.dumps(ports),
-                              image_registry_address=image_registry_address,
-                              namespace=namespace)
+                              registry_url=registry_url,
+                              image_url=image_url,
+                              registry_user=registry_user,
+                              registry_password=registry_password,
+                              namespace=namespace,
+                              kong_token=kong_token,
+                              restart_counter=restart_counter,
+                              time_created=time.time())
         with self.SessionLocal() as session:
             session.add(analysis)
             session.commit()
@@ -88,6 +105,13 @@ class Database:
                     session.delete(deployment)
                     session.commit()
 
+    def delete_deployment(self, deployment_name: str) -> None:
+        with self.SessionLocal() as session:
+            deployment = session.query(AnalysisDB).filter_by(deployment_name=deployment_name).first()
+            if deployment:
+                session.delete(deployment)
+                session.commit()
+
     def close(self) -> None:
         with self.SessionLocal() as session:
             session.close()
@@ -106,12 +130,47 @@ class Database:
     def get_analysis_pod_ids(self, analysis_id: str) -> list[str]:
         return [deployment.pod_ids for deployment in self.get_deployments(analysis_id) if deployment is not None]
 
-    def update_analysis_status(self, analysis_id: str, status: AnalysisStatus) -> None:
+    def get_analysis_log(self, analysis_id: str) -> str:
+        deployment = self.get_deployments(analysis_id)[0]
+        if deployment is not None:
+            log = deployment.log
+            if log is not None:
+                return log
+        return ""
+
+    def update_analysis_log(self, analysis_id: str, log: str) -> None:
+        latest = self.get_analysis_log(analysis_id)
+        if latest:
+            log = latest + "\n" + log
+        self.update_analysis(analysis_id, log=log)
+
+    def update_analysis_status(self, analysis_id: str, status: str) -> None:
         self.update_analysis(analysis_id, status=status)
 
-    def update_deployment_status(self, deployment_name: str, status: AnalysisStatus) -> None:
+    def update_deployment_status(self, deployment_name: str, status: str) -> None:
         print(f"Updating deployment {deployment_name} to status {status}")
         self.update_deployment(deployment_name, status=status)
 
     def stop_analysis(self, analysis_id: str) -> None:
         self.update_analysis_status(analysis_id, status=AnalysisStatus.STOPPED.value)
+
+    def extract_analysis_body(self, analysis_id: str) -> Optional[dict]:
+        analysis = self.get_deployments(analysis_id)
+        if analysis:
+            analysis = analysis[0]
+            return {"analysis_id": analysis.analysis_id,
+                    "project_id": analysis.project_id,
+                    "registry_url": analysis.registry_url,
+                    "image_url": analysis.image_url,
+                    "registry_user": analysis.registry_user,
+                    "registry_password": analysis.registry_password,
+                    "namespace": analysis.namespace,
+                    "kong_token": analysis.kong_token,
+                    "restart_counter": analysis.restart_counter}
+        return None
+
+    def delete_old_deployments_db(self, analysis_id: str) -> None:
+        deployments = self.get_deployments(analysis_id)
+        deployments = sorted(deployments, key=lambda x: x.time_created, reverse=True)
+        for deployment in deployments[1:]:
+            self.delete_deployment(deployment.deployment_name)

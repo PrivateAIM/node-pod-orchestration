@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "Node-Pod-Orchestration"
-version = "0.2.0"
+version = "0.1.0"
 description = ""
 authors = ["Alexander Röhl <alexander.roehl@uni-tuebingen.de>","David Hieber <david.hieber@uni-tuebingen.de>", "Maximilian Jugl <Maximilian.Jugl@medizin.uni-leipzig.de>"]
 license = "Apache 2.0"
@@ -18,8 +18,9 @@ sqlalchemy = "^2.0.26"
 PyJWT = "^2.10.1"
 python-dotenv = "^0.21.0"
 kong-admin-client = {git = "https://github.com/PrivateAIM/kong-admin-python-client.git"}
-flame-hub-client = "^0.2.3"
+flame-hub-client = "^0.2.7"
 cryptography="^44.0.3"
+truststore = "^0.10.4"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"

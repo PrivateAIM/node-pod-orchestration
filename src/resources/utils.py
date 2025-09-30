@@ -1,7 +1,12 @@
 import ast
+import time
+from typing import Union, Optional
+
+from flame_hub import CoreClient
 
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
+from src.resources.log.entity import CreateLogEntity
 from src.status.constants import AnalysisStatus
 from src.k8s.kubernetes import (create_harbor_secret,
                                 get_analysis_logs,
@@ -9,23 +14,36 @@ from src.k8s.kubernetes import (create_harbor_secret,
                                 delete_analysis_pods,
                                 delete_resource)
 from src.k8s.utils import get_current_namespace, get_all_analysis_deployment_names, get_k8s_resource_names
+from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
 from src.utils.hub_client import init_hub_client_and_update_hub_status_with_robot
 from src.utils.other import resource_name_to_analysis
 
 
-def create_analysis(body: CreateAnalysis, database: Database) -> dict[str, str]:
+def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dict[str, str]:
     namespace = get_current_namespace()
+
+    if type(body) == str:
+        body = database.extract_analysis_body(body)
+        if body is None:
+            return {"status": "Analysis ID not found in database."}
+        else:
+            body = CreateAnalysis(**body)
+
     create_harbor_secret(body.registry_url, body.registry_user, body.registry_password, namespace=namespace)
 
     analysis = Analysis(
         analysis_id=body.analysis_id,
         project_id=body.project_id,
-        image_registry_address=body.image_url,
-        ports=[8000],
+        registry_url=body.registry_url,
+        image_url=body.image_url,
+        registry_user=body.registry_user,
+        registry_password=body.registry_password,
         namespace=namespace,
+        kong_token=body.kong_token,
+        restart_counter=body.restart_counter + 1
     )
-    analysis.start(database=database, kong_token=body.kong_token, namespace=namespace)
+    analysis.start(database=database, namespace=namespace)
 
     # update hub status
     init_hub_client_and_update_hub_status_with_robot(body.analysis_id, AnalysisStatus.STARTED.value)
@@ -101,13 +119,14 @@ def stop_analysis(analysis_id: str, database: Database) -> dict[str, dict[str, s
 
 def delete_analysis(analysis_id: str, database: Database) -> dict[str, dict[str, str]]:
     deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
-
     for deployment in deployments:
         if deployment.status != AnalysisStatus.STOPPED.value:
             deployment.stop(database, log='')
             deployment.status = AnalysisStatus.STOPPED.value
+
     delete_keycloak_client(analysis_id)
     database.delete_analysis(analysis_id)
+
     return {"status": {deployment.deployment_name: deployment.status for deployment in deployments}}
 
 
@@ -116,17 +135,27 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
 
     for deployment in deployments:
         if deployment.status == AnalysisStatus.STUCK.value:
-            delete_analysis_pods(deployment.deployment_name, get_current_namespace())
+            #delete_analysis_pods(deployment.deployment_name, deployment.project_id, get_current_namespace())
+            stop_analysis(analysis_id, database)
+            time.sleep(10)  # wait for k8s to update status
+            create_analysis(analysis_id, database)
+            database.delete_old_deployments_db(analysis_id)
+
+            deployment = database.get_deployments(analysis_id)[0]
+            database.update_deployment_status(deployment.deployment_name, AnalysisStatus.STARTED.value)
+            break
 
 
 def cleanup(cleanup_type: str,
             database: Database,
             namespace: str = "default") -> dict[str, str]:
+    #TODO: Clean keycloak clients
+
     cleanup_types = set(cleanup_type.split(',')) if ',' in cleanup_type else [cleanup_type]
 
     response_content = {}
     for cleanup_type in cleanup_types:
-        if cleanup_type in ['all', 'analyzes', 'services', 'mb', 'rs']:
+        if cleanup_type in ['all', 'analyzes', 'services', 'mb', 'rs', 'keycloak']:
             # Analysis cleanup
             if cleanup_type in ['all', 'analyzes']:
                 # cleanup all analysis deployments, associated services, policies and configmaps
@@ -150,9 +179,18 @@ def cleanup(cleanup_type: str,
                                                              namespace=namespace)
                 delete_resource(result_service_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset result service"
+            if cleanup_type in ['all', 'keycloak']:
+                # cleanup keycloak clients without corresponding analysis
+                # if all is all flame clients are deleted because ther are no analyzes in the db
+                analysis_ids = database.get_analysis_ids()
+                for client in _get_all_keycloak_clients():
+                    if client['clientId'] not in analysis_ids and client['name'].startswith('flame-'):
+                        delete_keycloak_client(client['clientId'])
+                    print(client)
+
         else:
             response_content[cleanup_type] = f"Unknown cleanup type: {cleanup_type} (known types: 'all', " + \
-                                             "'analyzes', 'services', 'mb', and 'rs')"
+                                             "'analyzes','keycloak' ,  'services', 'mb', and 'rs')"
     response_content['zombies'] = clean_up_the_rest(database, namespace)
     return response_content
 
@@ -177,3 +215,21 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
                 result_str += f"Deleted {len(zombie_resources)} zombie " + \
                               f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
     return result_str
+
+
+def stream_logs(log_entity: CreateLogEntity,node_id: str, database: Database, hub_core_client: CoreClient) -> None:
+    try:
+        database.update_analysis_log(log_entity.analysis_id, str(log_entity.to_log_entity()))
+    except IndexError as e:
+        print(f"Error updating analysis log in database: {e}")
+    print(f"sending logs to hub client")
+    # log to hub
+    print(f"analysis_id: {log_entity.analysis_id}, node_id: {node_id}, ")
+    print(f"status: {log_entity.status}, level: {log_entity.log_type}, message: {log_entity.log}")
+
+    hub_core_client.create_analysis_node_log(analysis_id=log_entity.analysis_id,
+                                             node_id=node_id,
+                                             status=log_entity.status,
+                                             level=log_entity.log_type,
+                                             message=log_entity.log)
+    print(f"sent logs to hub client")
