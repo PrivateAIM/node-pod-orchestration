@@ -167,7 +167,7 @@ def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
             print(f"Not Found {deployment_name}-config")
 
 
-def get_analysis_logs(deployment_names: list[str],
+def get_analysis_logs(deployment_names: dict[str, str],
                       database: Database,
                       namespace: str = 'default') -> dict[str, dict[str, list[str]]]:
     """
@@ -177,13 +177,13 @@ def get_analysis_logs(deployment_names: list[str],
     :param namespace:
     :return:
     """
-    return {"analysis": {deployment_name: _get_logs(name=deployment_name,
-                                                    pod_ids=database.get_deployment_pod_ids(deployment_name),
-                                                    namespace=namespace)
-                         for deployment_name in deployment_names},
-            "nginx": {f"nginx-{deployment_name}": _get_logs(name=f"nginx-{deployment_name}",
-                                                            namespace=namespace)
-                      for deployment_name in deployment_names}
+    return {"analysis": {analysis_id: _get_logs(name=deployment_name,
+                                                pod_ids=database.get_deployment_pod_ids(deployment_name),
+                                                namespace=namespace)
+                         for analysis_id, deployment_name in deployment_names},
+            "nginx": {analysis_id: _get_logs(name=f"nginx-{deployment_name}",
+                                             namespace=namespace)
+                      for analysis_id, deployment_name in deployment_names}
             }
 
 
