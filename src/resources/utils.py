@@ -88,7 +88,7 @@ def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[st
     else:
         analysis_ids = [analysis_id_str]
 
-    deployments = {}
+    deployment_names = {}
     for analysis_id in analysis_ids:
         deployment = database.get_latest_deployment(analysis_id)
         if deployment is not None:
