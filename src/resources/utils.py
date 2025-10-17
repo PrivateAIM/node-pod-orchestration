@@ -95,11 +95,10 @@ def get_status(analysis_id_str: str, database: Database) -> dict[str, dict[str, 
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
-    deployments = [read_db_analysis(deployment)
+    deployments = {analysis_id: read_db_analysis(deployment)
                    for analysis_id in analysis_ids
-                   for deployment in database.get_deployments(analysis_id)]
-    return {analysis_id: {deployment.deployment_name: deployment.status for deployment in deployments}
-            for analysis_id in analysis_ids}
+                   for deployment in database.get_deployments(analysis_id)}
+    return {analysis_id: deployment.status for analysis_id, deployment in deployments}
 
 
 def get_pods(analysis_id_str: str, database: Database) -> dict[str, list[str]]:
