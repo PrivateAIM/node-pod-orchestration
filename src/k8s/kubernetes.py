@@ -180,10 +180,10 @@ def get_analysis_logs(deployment_names: dict[str, str],
     return {"analysis": {analysis_id: _get_logs(name=deployment_name,
                                                 pod_ids=database.get_deployment_pod_ids(deployment_name),
                                                 namespace=namespace)
-                         for analysis_id, deployment_name in deployment_names},
+                         for analysis_id, deployment_name in deployment_names.items()},
             "nginx": {analysis_id: _get_logs(name=f"nginx-{deployment_name}",
                                              namespace=namespace)
-                      for analysis_id, deployment_name in deployment_names}
+                      for analysis_id, deployment_name in deployment_names.items()}
             }
 
 
