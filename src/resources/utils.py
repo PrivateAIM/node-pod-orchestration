@@ -93,7 +93,7 @@ def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[st
         deployment = database.get_latest_deployment(analysis_id)
         if deployment is not None:
             if deployment.status in [AnalysisStatus.RUNNING.value]:
-                deployments[analysis_id] = read_db_analysis(deployment).deployment_name
+                deployment_names[analysis_id] = read_db_analysis(deployment).deployment_name
 
     return get_analysis_logs(deployment_names, database=database)
 
