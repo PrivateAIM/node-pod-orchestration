@@ -62,12 +62,16 @@ def retrieve_history(analysis_id_str: str, database: Database) -> dict[str, dict
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
-    deployments = {analysis_id: read_db_analysis(deployment)
-                   for analysis_id in analysis_ids
-                   for deployment in database.get_deployments(analysis_id)
-                   if deployment.status in [AnalysisStatus.STOPPED.value,
-                                            AnalysisStatus.FINISHED.value,
-                                            AnalysisStatus.FAILED.value]}
+
+    deployments = {}
+    for analysis_id in analysis_ids:
+        deployment = database.get_latest_deployment(analysis_id)
+        if deployment is not None:
+            if deployment.status in [AnalysisStatus.STOPPED.value,
+                                     AnalysisStatus.FINISHED.value,
+                                     AnalysisStatus.FAILED.value]:
+                deployments[analysis_id] = read_db_analysis(deployment)
+
     analysis_logs, nginx_logs = ({}, {})
     for analysis_id, deployment in deployments:
         # interpret log string as a dictionary
@@ -83,10 +87,14 @@ def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[st
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
-    deployment_names = {analysis_id: read_db_analysis(deployment).deployment_name
-                        for analysis_id in analysis_ids
-                        for deployment in database.get_deployments(analysis_id)
-                        if deployment.status == AnalysisStatus.RUNNING.value}
+
+    deployments = {}
+    for analysis_id in analysis_ids:
+        deployment = database.get_latest_deployment(analysis_id)
+        if deployment is not None:
+            if deployment.status in [AnalysisStatus.RUNNING.value]:
+                deployments[analysis_id] = read_db_analysis(deployment).deployment_name
+
     return get_analysis_logs(deployment_names, database=database)
 
 
@@ -95,9 +103,13 @@ def get_status(analysis_id_str: str, database: Database) -> dict[str, dict[str, 
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
-    deployments = {analysis_id: read_db_analysis(deployment)
-                   for analysis_id in analysis_ids
-                   for deployment in database.get_deployments(analysis_id)}
+
+    deployments = {}
+    for analysis_id in analysis_ids:
+        deployment = database.get_latest_deployment(analysis_id)
+        if deployment is not None:
+            deployments[analysis_id] = read_db_analysis(deployment)
+
     return {analysis_id: deployment.status for analysis_id, deployment in deployments}
 
 
@@ -114,9 +126,13 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, dict[st
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
-    deployments = {analysis_id: read_db_analysis(deployment)
-                   for analysis_id in analysis_ids
-                   for deployment in database.get_deployments(analysis_id)}
+
+    deployments = {}
+    for analysis_id in analysis_ids:
+        deployment = database.get_latest_deployment(analysis_id)
+        if deployment is not None:
+            deployments[analysis_id] = read_db_analysis(deployment)
+
     final_status = None
 
     for analysis_id, deployment in deployments:
@@ -149,9 +165,13 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, dict[
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
-    deployments = {analysis_id: read_db_analysis(deployment)
-                   for analysis_id in analysis_ids
-                   for deployment in database.get_deployments(analysis_id)}
+
+    deployments = {}
+    for analysis_id in analysis_ids:
+        deployment = database.get_latest_deployment(analysis_id)
+        if deployment is not None:
+            deployments[analysis_id] = read_db_analysis(deployment)
+
     for analysis_id, deployment in deployments:
         if deployment.status != AnalysisStatus.STOPPED.value:
             deployment.stop(database, log='')
