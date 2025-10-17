@@ -73,7 +73,7 @@ def retrieve_history(analysis_id_str: str, database: Database) -> dict[str, dict
                 deployments[analysis_id] = read_db_analysis(deployment)
 
     analysis_logs, nginx_logs = ({}, {})
-    for analysis_id, deployment in deployments:
+    for analysis_id, deployment in deployments.items():
         # interpret log string as a dictionary
         log = ast.literal_eval(deployment.log)
         analysis_logs[analysis_id] = log["analysis"][deployment.deployment_name]
@@ -98,7 +98,7 @@ def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[st
     return get_analysis_logs(deployment_names, database=database)
 
 
-def get_status(analysis_id_str: str, database: Database) -> dict[str, dict[str, str]]:
+def get_status(analysis_id_str: str, database: Database) -> dict[str, str]:
     if analysis_id_str == "all":
         analysis_ids = database.get_analysis_ids()
     else:
@@ -110,7 +110,7 @@ def get_status(analysis_id_str: str, database: Database) -> dict[str, dict[str, 
         if deployment is not None:
             deployments[analysis_id] = read_db_analysis(deployment)
 
-    return {analysis_id: deployment.status for analysis_id, deployment in deployments}
+    return {analysis_id: deployment.status for analysis_id, deployment in deployments.items()}
 
 
 def get_pods(analysis_id_str: str, database: Database) -> dict[str, list[str]]:
@@ -121,7 +121,7 @@ def get_pods(analysis_id_str: str, database: Database) -> dict[str, list[str]]:
     return {analysis_id: database.get_analysis_pod_ids(analysis_id) for analysis_id in analysis_ids}
 
 
-def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, dict[str, str]]:
+def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
     if analysis_id_str == "all":
         analysis_ids = database.get_analysis_ids()
     else:
@@ -135,9 +135,9 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, dict[st
 
     final_status = None
 
-    for analysis_id, deployment in deployments:
+    for analysis_id, deployment in deployments.items():
         # save logs as string to database (will be read as dict in retrieve_history)
-        log = str(get_analysis_logs([deployment.deployment_name], database=database))
+        log = str(get_analysis_logs({analysis_id: deployment.deployment_name}, database=database))
         print(f"log to be saved in stop_analysis for {deployment.deployment_name}: {log[:10]}...")
         if deployment.status in [AnalysisStatus.FAILED.value, AnalysisStatus.FINISHED.value]:
             deployment.stop(database, log=log, status=deployment.status)
@@ -157,10 +157,10 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, dict[st
         # update hub status
         init_hub_client_and_update_hub_status_with_robot(analysis_id, final_status)
 
-    return {analysis_id: deployment.status for analysis_id, deployment in deployments}
+    return {analysis_id: deployment.status for analysis_id, deployment in deployments.items()}
 
 
-def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, dict[str, str]]:
+def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
     if analysis_id_str == "all":
         analysis_ids = database.get_analysis_ids()
     else:
@@ -172,7 +172,7 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, dict[
         if deployment is not None:
             deployments[analysis_id] = read_db_analysis(deployment)
 
-    for analysis_id, deployment in deployments:
+    for analysis_id, deployment in deployments.items():
         if deployment.status != AnalysisStatus.STOPPED.value:
             deployment.stop(database, log='')
             deployment.status = AnalysisStatus.STOPPED.value
@@ -180,7 +180,7 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, dict[
         delete_keycloak_client(analysis_id)
         database.delete_analysis(analysis_id)
 
-    return {analysis_id: deployment.status for analysis_id, deployment in deployments}
+    return {analysis_id: deployment.status for analysis_id, deployment in deployments.items()}
 
 
 def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
