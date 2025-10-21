@@ -217,7 +217,7 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
     return result_str
 
 
-def stream_logs(log_entity: CreateLogEntity,node_id: str, database: Database, hub_core_client: CoreClient) -> None:
+def stream_logs(log_entity: CreateLogEntity, node_id: str, database: Database, hub_core_client: CoreClient) -> None:
     try:
         database.update_analysis_log(log_entity.analysis_id, str(log_entity.to_log_entity()))
     except IndexError as e:

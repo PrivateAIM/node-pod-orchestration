@@ -149,7 +149,7 @@ class PodOrchestrationAPI:
             print(body.json())
         except Exception as e:
             print(f"Error printing body as json: {e}")
-        return stream_logs(body,self.node_id, self.database, self.hub_core_client)
+        return stream_logs(body, self.node_id, self.database, self.hub_core_client)
 
     def health_call(self):
         main_alive = threading.main_thread().is_alive()

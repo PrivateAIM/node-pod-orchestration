@@ -6,14 +6,17 @@ from src.k8s.kubernetes import PORTS
 
 import flame_hub
 
-from src.resources.database.entity import Database
+from src.resources.database.entity import Database, AnalysisDB
 from src.utils.hub_client import (init_hub_client_with_robot,
                                   get_node_id_by_robot,
                                   get_node_analysis_id,
                                   update_hub_status)
 from src.resources.utils import (unstuck_analysis_deployments,
                                  stop_analysis,
-                                 delete_analysis)
+                                 delete_analysis,
+                                 stream_logs)
+from src.resources.log.entity import CreateStartUpErrorLog
+from src.k8s.kubernetes import get_pod_status
 from src.status.constants import AnalysisStatus
 from src.utils.token import get_keycloak_token
 
@@ -74,7 +77,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         print(f"Internal status: {analysis_status['int_status']}")
 
                         # Fix for stuck analyzes
-                        _fix_stuck_status(database, analysis_status)
+                        _fix_stuck_status(database, analysis_status, node_id, hub_client)
                         analysis_status = _get_analysis_status(analysis_id, database)
                         print(f"Unstuck analysis with internal status: {analysis_status['int_status']}")
 
@@ -166,7 +169,10 @@ async def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_
             print(f"Failed to refresh keycloak token in deployment {deployment_name}.\n{e}")
 
 
-def _fix_stuck_status(database: Database, analysis_status: dict[str, str]) -> None:
+def _fix_stuck_status(database: Database,
+                      analysis_status: dict[str, str],
+                      node_id: str,
+                      hub_client: flame_hub.CoreClient) -> None:
     # Deployment selection
     is_stuck = analysis_status['int_status'] == AnalysisStatus.STUCK.value
     is_slow = ((analysis_status['int_status'] in [AnalysisStatus.FAILED.value]) and
@@ -181,8 +187,34 @@ def _fix_stuck_status(database: Database, analysis_status: dict[str, str]) -> No
             # Tracking restarts
             if analysis.restart_counter < _MAX_RESTARTS:
                 unstuck_analysis_deployments(analysis_status["analysis_id"], database)
+                _stream_stuck_logs(analysis, node_id, database, hub_client, is_slow)
             else:
                 database.update_deployment_status(analysis.deployment_name, status=AnalysisStatus.FAILED.value)
+
+
+def _stream_stuck_logs(analysis: AnalysisDB,
+                       node_id: str,
+                       database: Database,
+                       hub_client: flame_hub.CoreClient,
+                       is_slow: bool) -> None:
+    is_k8s_related = False
+    if is_slow:
+        deployment_name = analysis.deployment_name
+        pod_status_dict = get_pod_status(deployment_name)
+        if pod_status_dict is not None:
+            pod_name, pod_status_dict = list(pod_status_dict.items())[-1]
+            status, reason, message = pod_status_dict['status'], pod_status_dict['reason'], pod_status_dict['message']
+            if status == "Failed":
+                is_k8s_related = True
+
+    stream_logs(CreateStartUpErrorLog(analysis.restart_counter,
+                                      ("k8s" if is_k8s_related else "slow") if is_slow else "stuck",
+                                      analysis.analysis_id,
+                                      analysis.status,
+                                      k8s_error_msg=f"{status} (reason={reason}): {message}" if is_k8s_related else ''),
+                node_id,
+                database,
+                hub_client)
 
 
 def _update_running_status(database: Database, analysis_status: dict[str, str]) -> None:
