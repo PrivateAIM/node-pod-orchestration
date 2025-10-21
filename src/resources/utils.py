@@ -23,7 +23,7 @@ from src.utils.other import resource_name_to_analysis
 def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dict[str, str]:
     namespace = get_current_namespace()
 
-    if type(body) == str:
+    if isinstance(body, str):
         body = database.extract_analysis_body(body)
         if body is None:
             return {"status": "Analysis ID not found in database."}
@@ -48,7 +48,7 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dic
     # update hub status
     init_hub_client_and_update_hub_status_with_robot(body.analysis_id, AnalysisStatus.STARTED.value)
 
-    return {"status": analysis.status}
+    return {body.analysis_id: analysis.status}
 
 
 def retrieve_history(analysis_id_str: str, database: Database) -> dict[str, dict[str, list[str]]]:
