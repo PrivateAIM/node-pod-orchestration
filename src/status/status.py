@@ -1,6 +1,7 @@
 import time
 import os
 import asyncio
+from typing import Optional
 from httpx import AsyncClient, HTTPStatusError, ConnectError, ConnectTimeout
 from src.k8s.kubernetes import PORTS
 
@@ -70,22 +71,30 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                     print(f"Node analysis id: {node_analysis_id}")
                     if node_analysis_id:
                         analysis_status = _get_analysis_status(analysis_id, database)
+                        if analysis_status is None:
+                            continue
                         print(f"Database status: {analysis_status['db_status']}")
                         print(f"Internal status: {analysis_status['int_status']}")
 
                         # Fix for stuck analyzes
                         _fix_stuck_status(database, analysis_status)
                         analysis_status = _get_analysis_status(analysis_id, database)
+                        if analysis_status is None:
+                            continue
                         print(f"Unstuck analysis with internal status: {analysis_status['int_status']}")
 
                         # Update created to running status if deployment responsive
                         _update_running_status(database, analysis_status)
                         analysis_status = _get_analysis_status(analysis_id, database)
+                        if analysis_status is None:
+                            continue
                         print(f"Update created to running database status: {analysis_status['db_status']}")
 
                         # update running to finished status if analysis finished
                         _update_finished_status(database, analysis_status)
                         analysis_status = _get_analysis_status(analysis_id, database)
+                        if analysis_status is None:
+                            continue
                         print(f"Update running to finished database status: {analysis_status['db_status']}")
 
                         # update hub analysis status
@@ -98,18 +107,21 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
             time.sleep(status_loop_interval)
             print(f"Status loop iteration completed. Sleeping for {status_loop_interval} seconds.")
 
-def _get_analysis_status(analysis_id: str, database: Database) -> dict[str, str]:
+def _get_analysis_status(analysis_id: str, database: Database) -> Optional[dict[str, str]]:
     analysis = database.get_latest_deployment(analysis_id)
-    db_status = analysis.status
-    # Make the Finished status final, the internal status is not checked anymore,
-    # because the analysis will already be deleted
-    if db_status == AnalysisStatus.FINISHED.value:
-        int_status = AnalysisStatus.FINISHED.value
+    if analysis is not None:
+        db_status = analysis.status
+        # Make the Finished status final, the internal status is not checked anymore,
+        # because the analysis will already be deleted
+        if db_status == AnalysisStatus.FINISHED.value:
+            int_status = AnalysisStatus.FINISHED.value
+        else:
+            int_status = asyncio.run(_get_internal_deployment_status(analysis.deployment_name, analysis_id))
+        return {"analysis_id": analysis_id,
+                "db_status": analysis.status,
+                "int_status": int_status}
     else:
-        int_status = asyncio.run(_get_internal_deployment_status(analysis.deployment_name, analysis_id))
-    return {"analysis_id": analysis_id,
-            "db_status": analysis.status,
-            "int_status": int_status}
+        return None
 
 
 async def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> str:
