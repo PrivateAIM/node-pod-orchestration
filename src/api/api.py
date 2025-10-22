@@ -61,46 +61,76 @@ class PodOrchestrationAPI:
                              dependencies=[Depends(valid_access_token)],
                              methods=["POST"],
                              response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/history",
+        router.add_api_route("/history",
+                             self.retrieve_all_history_call,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/history/{analysis_id}",
                              self.retrieve_history_call,
                              dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/logs",
+        router.add_api_route("/logs",
+                             self.retrieve_all_logs_call,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/logs/{analysis_id}",
                              self.retrieve_logs_call,
                              dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/status",
+        router.add_api_route("/status",
+                             self.get_all_status_call,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/status/{analysis_id}",
                              self.get_status_call,
                              dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/pods",
+        router.add_api_route("/pods",
+                             self.get_all_pods_call,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["GET"],
+                             response_class=JSONResponse)
+        router.add_api_route("/pods/{analysis_id}",
                              self.get_pods_call,
                              dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/stop",
+        router.add_api_route("/stop",
+                             self.stop_all_analysis_call,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["PUT"],
+                             response_class=JSONResponse)
+        router.add_api_route("/stop/{analysis_id}",
                              self.stop_analysis_call,
                              dependencies=[Depends(valid_access_token)],
                              methods=["PUT"],
                              response_class=JSONResponse)
-        router.add_api_route("/{analysis_id}/delete",
+        router.add_api_route("/delete",
+                             self.delete_all_analysis_call,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["DELETE"],
+                             response_class=JSONResponse)
+        router.add_api_route("/delete/{analysis_id}",
                              self.delete_analysis_call,
                              dependencies=[Depends(valid_access_token)],
                              methods=["DELETE"],
                              response_class=JSONResponse)
-        router.add_api_route("/cleanup/{type}",
+        router.add_api_route("/cleanup/{cleanup_type}",
                              self.cleanup_call,
-                             #dependencies=[Depends(valid_access_token)],
+                             dependencies=[Depends(valid_access_token)],
                              methods=["DELETE"],
                              response_class=JSONResponse)
         router.add_api_route("/stream_logs",
-                                self.stream_logs_call,
-                                #dependencies=[Depends(valid_access_token)],
-                                methods=["POST"],
-                                response_class=JSONResponse)
+                             self.stream_logs_call,
+                             dependencies=[Depends(valid_access_token)],
+                             methods=["POST"],
+                             response_class=JSONResponse)
         router.add_api_route("/healthz",
                              self.health_call,
                              methods=["GET"],
@@ -116,20 +146,38 @@ class PodOrchestrationAPI:
     def create_analysis_call(self, body: CreateAnalysis):
         return create_analysis(body, self.database)
 
+    def retrieve_all_history_call(self):
+        return retrieve_history('all', self.database)
+
     def retrieve_history_call(self, analysis_id: str):
         return retrieve_history(analysis_id, self.database)
+
+    def retrieve_all_logs_call(self):
+        return retrieve_logs('all', self.database)
 
     def retrieve_logs_call(self, analysis_id: str):
         return retrieve_logs(analysis_id, self.database)
 
+    def get_all_status_call(self):
+        return get_status('all', self.database)
+
     def get_status_call(self, analysis_id: str):
         return get_status(analysis_id, self.database)
+
+    def get_all_pods_call(self):
+        return get_pods('all', self.database)
 
     def get_pods_call(self, analysis_id: str):
         return get_pods(analysis_id, self.database)
 
+    def stop_all_analysis_call(self):
+        return stop_analysis('all', self.database)
+
     def stop_analysis_call(self, analysis_id: str):
         return stop_analysis(analysis_id, self.database)
+
+    def delete_all_analysis_call(self):
+        return delete_analysis('all', self.database)
 
     def delete_analysis_call(self, analysis_id: str):
         return delete_analysis(analysis_id, self.database)
