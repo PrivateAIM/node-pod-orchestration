@@ -55,7 +55,8 @@ class Database:
                         registry_user: str,
                         registry_password: str,
                         kong_token: str,
-                        restart_counter: int ,
+                        restart_counter: int,
+                        progress: int,
                         namespace: str = 'default') -> AnalysisDB:
         analysis = AnalysisDB(analysis_id=analysis_id,
                               deployment_name=deployment_name,
@@ -69,6 +70,7 @@ class Database:
                               namespace=namespace,
                               kong_token=kong_token,
                               restart_counter=restart_counter,
+                              progress=progress,
                               time_created=time.time())
         with self.SessionLocal() as session:
             session.add(analysis)
@@ -131,18 +133,35 @@ class Database:
         return [deployment.pod_ids for deployment in self.get_deployments(analysis_id) if deployment is not None]
 
     def get_analysis_log(self, analysis_id: str) -> str:
-        deployment = self.get_deployments(analysis_id)[0]
+        deployment = self.get_latest_deployment(analysis_id)
         if deployment is not None:
             log = deployment.log
             if log is not None:
                 return log
         return ""
 
+    def get_analysis_progress(self, analysis_id: str) -> Optional[int]:
+        deployment = self.get_latest_deployment(analysis_id)
+        if deployment is not None:
+            progress = deployment.progress
+            if progress is not None:
+                return progress
+        return None
+
     def update_analysis_log(self, analysis_id: str, log: str) -> None:
         latest = self.get_analysis_log(analysis_id)
         if latest:
             log = latest + "\n" + log
         self.update_analysis(analysis_id, log=log)
+
+    def progress_valid(self, analysis_id: str, progress: int) -> bool:
+        latest = self.get_analysis_progress(analysis_id)
+        if (latest is not None) and (latest < progress <= 100):
+            return True
+        return False
+
+    def update_analysis_progress(self, analysis_id: str, progress: int) -> None:
+        self.update_analysis(analysis_id, progress=progress)
 
     def update_analysis_status(self, analysis_id: str, status: str) -> None:
         self.update_analysis(analysis_id, status=status)
@@ -166,7 +185,8 @@ class Database:
                     "registry_password": analysis.registry_password,
                     "namespace": analysis.namespace,
                     "kong_token": analysis.kong_token,
-                    "restart_counter": analysis.restart_counter}
+                    "restart_counter": analysis.restart_counter,
+                    "progress": 0}
         return None
 
     def delete_old_deployments_db(self, analysis_id: str) -> None:
