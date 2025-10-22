@@ -81,12 +81,18 @@ def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, nod
     return node_analysis_id
 
 
-def update_hub_status(hub_client: flame_hub.CoreClient, node_analysis_id: str, run_status: str) -> None:
+def update_hub_status(hub_client: flame_hub.CoreClient,
+                      node_analysis_id: str,
+                      run_status: str,
+                      run_progress: Optional[int] = None) -> None:
     """
     Update the status of the analysis in the hub.
     """
     try:
-        hub_client.update_analysis_node(node_analysis_id, run_status=run_status)
+        if run_progress is None:
+            hub_client.update_analysis_node(node_analysis_id, run_status=run_status)
+        else:
+            hub_client.update_analysis_node(node_analysis_id, run_status=run_status, run_progress=run_progress)
         print(f"Updated hub status to {run_status} for node_analysis_id {node_analysis_id}")
     except (HTTPStatusError, ConnectError) as e:
         print(f"Failed to update hub status for node_analysis_id {node_analysis_id}.\n{e}")

@@ -22,6 +22,7 @@ class CreateLogEntity(BaseModel):
 
     analysis_id: str
     status: str
+    progress: int
 
     def to_log_entity(self) -> LogEntity:
         return LogEntity(log=self.log,

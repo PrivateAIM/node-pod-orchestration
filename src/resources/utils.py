@@ -16,7 +16,9 @@ from src.k8s.kubernetes import (create_harbor_secret,
 from src.k8s.utils import get_current_namespace, get_all_analysis_deployment_names, get_k8s_resource_names
 from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
-from src.utils.hub_client import init_hub_client_and_update_hub_status_with_robot
+from src.utils.hub_client import (init_hub_client_and_update_hub_status_with_robot,
+                                  update_hub_status,
+                                  get_node_analysis_id)
 from src.utils.other import resource_name_to_analysis
 
 
@@ -41,7 +43,8 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dic
         registry_password=body.registry_password,
         namespace=namespace,
         kong_token=body.kong_token,
-        restart_counter=body.restart_counter + 1
+        restart_counter=body.restart_counter + 1,
+        progress=body.progress
     )
     analysis.start(database=database, namespace=namespace)
 
@@ -283,4 +286,15 @@ def stream_logs(log_entity: CreateLogEntity, node_id: str, database: Database, h
                                              status=log_entity.status,
                                              level=log_entity.log_type,
                                              message=log_entity.log)
+
+    if database.progress_valid(log_entity.analysis_id, log_entity.progress):
+        database.update_analysis_progress(log_entity.analysis_id, log_entity.progress)
+        update_hub_status(hub_core_client,
+                          get_node_analysis_id(hub_core_client, log_entity.analysis_id, node_id),
+                          run_status=log_entity.status,
+                          run_progress=log_entity.progress)
+    else:
+        update_hub_status(hub_core_client,
+                          get_node_analysis_id(hub_core_client, log_entity.analysis_id, node_id),
+                          run_status=log_entity.status)
     print(f"sent logs to hub client")
