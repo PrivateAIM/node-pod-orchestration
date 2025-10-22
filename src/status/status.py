@@ -3,10 +3,10 @@ import os
 import asyncio
 from typing import Optional
 from httpx import AsyncClient, HTTPStatusError, ConnectError, ConnectTimeout
-from src.k8s.kubernetes import PORTS
 
 import flame_hub
 
+from src.k8s.kubernetes import PORTS
 from src.resources.database.entity import Database
 from src.utils.hub_client import (init_hub_client_with_robot,
                                   get_node_id_by_robot,
@@ -144,20 +144,21 @@ async def _get_internal_deployment_status(deployment_name: str, analysis_id: str
             print(f"Timeout getting internal deployment status after {elapsed_time} seconds")
             return AnalysisStatus.FAILED.value
 
-    analysis_health_status, analysis_token_remaining_time = (response.json()['status'],
-                                                             response.json()['token_remaining_time'])
+    analysis_status, analysis_token_remaining_time = (response.json()['status'],
+                                                      response.json()['token_remaining_time'])
     await _refresh_keycloak_token(deployment_name=deployment_name,
                                   analysis_id=analysis_id,
                                   token_remaining_time=analysis_token_remaining_time)
 
-    if analysis_health_status == AnalysisStatus.FINISHED.value:
+    if analysis_status == AnalysisStatus.FINISHED.value:
         health_status = AnalysisStatus.FINISHED.value
-    elif analysis_health_status == AnalysisStatus.RUNNING.value:
+    elif analysis_status == AnalysisStatus.RUNNING.value:
         health_status = AnalysisStatus.RUNNING.value
-    elif analysis_health_status == AnalysisStatus.STUCK.value:
+    elif analysis_status == AnalysisStatus.STUCK.value:
         health_status = AnalysisStatus.STUCK.value
     else:
         health_status = AnalysisStatus.FAILED.value
+
     return health_status
 
 
