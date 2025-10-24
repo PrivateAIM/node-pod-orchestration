@@ -216,6 +216,33 @@ def delete_analysis_pods(deployment_name: str, project_id: str, namespace: str =
                                       namespace=namespace)
 
 
+def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional[dict[str, dict[str, str]]]:
+    core_client = client.CoreV1Api()
+
+    # get pods in deployment
+    pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}').items
+
+    if pods is not None:
+        pod_status = {}
+        for pod in pods:
+            if pod is not None:
+                name = pod.metadata.name
+                status = pod.status.phase
+
+                if status is not None:
+                    pod_status[name] = {}
+                    pod_status[name]['status'] = status
+                    if status == "Failed":
+                        pod_status[name]['reason'] = str(pod.status.reason)
+                        pod_status[name]['message'] = str(pod.status.message)
+        if pod_status:
+            return pod_status
+        else:
+            return None
+    else:
+        return None
+
+
 def _create_analysis_nginx_deployment(analysis_name: str,
                                       analysis_service_name: str,
                                       analysis_env: dict[str, str] = {},
