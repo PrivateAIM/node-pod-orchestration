@@ -38,21 +38,22 @@ class CreateStartUpErrorLog(CreateLogEntity):
                  analysis_id: str,
                  status: str,
                  k8s_error_msg: str = '') -> None:
+        term_msg = "" if restart_num < _MAX_RESTARTS else " -> Terminating analysis as failed."
         if error_type == "stuck":
             log = (f"[flame -- POAPI: ANALYSISSTARTUPERROR -- "
                    f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
                    f"Error: The analysis failed to connect to other node components "
-                   f"[restart {restart_num} of {_MAX_RESTARTS}].")
+                   f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}")
         elif error_type == "slow":
             log = (f"[flame -- POAPI: ANALYSISSTARTUPERROR -- "
                    f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
                    f"Error: The analysis took to long during startup and was restarted "
-                   f"[restart {restart_num} of {_MAX_RESTARTS}].")
+                   f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}")
         elif error_type == "k8s":
             log = (f"[flame -- POAPI: ANALYSISSTARTUPERROR -- "
                    f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
                    f"Error: The analysis failed to deploy in kubernetes "
-                   f"[restart {restart_num} of {_MAX_RESTARTS}].)")
+                   f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}")
             if k8s_error_msg:
                 log += f"\n\tKubernetesApiError: {k8s_error_msg}."
         else:

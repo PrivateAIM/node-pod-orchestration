@@ -201,6 +201,7 @@ def _fix_stuck_status(database: Database,
                 _stream_stuck_logs(analysis, node_id, database, hub_client, is_slow)
             else:
                 database.update_deployment_status(analysis.deployment_name, status=AnalysisStatus.FAILED.value)
+                _stream_stuck_logs(analysis, node_id, database, hub_client, is_slow)
 
 
 def _stream_stuck_logs(analysis: AnalysisDB,
@@ -260,11 +261,11 @@ def _set_analysis_hub_status(hub_client: flame_hub.CoreClient,
                              node_analysis_id: str,
                              analysis_status: dict[str, str]) -> str:
     if analysis_status['db_status'] in [AnalysisStatus.FAILED.value,
-                                         AnalysisStatus.FINISHED.value]:
-        analysis_hub_status = AnalysisStatus.FINISHED.value
+                                        AnalysisStatus.FINISHED.value]:
+        analysis_hub_status = analysis_status['db_status']
     elif analysis_status['int_status'] in [AnalysisStatus.FAILED.value,
-                                         AnalysisStatus.FINISHED.value,
-                                         AnalysisStatus.RUNNING.value]:
+                                           AnalysisStatus.FINISHED.value,
+                                           AnalysisStatus.RUNNING.value]:
         analysis_hub_status = analysis_status['int_status']
     else:
         analysis_hub_status = analysis_status['db_status']
