@@ -235,6 +235,9 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
                     if status == "Failed":
                         pod_status[name]['reason'] = str(pod.status.reason)
                         pod_status[name]['message'] = str(pod.status.message)
+                    else:
+                        pod_status[name]['reason'] = ''
+                        pod_status[name]['message'] = ''
         if pod_status:
             return pod_status
         else:
