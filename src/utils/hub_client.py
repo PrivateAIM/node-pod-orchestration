@@ -103,15 +103,18 @@ def init_hub_client_and_update_hub_status_with_robot(analysis_id: str, status: s
                                                                                os.getenv('PO_HTTP_PROXY'),
                                                                                os.getenv('PO_HTTPS_PROXY'))
     hub_client = init_hub_client_with_robot(robot_id, robot_secret, hub_url_core, hub_auth, http_proxy, https_proxy)
-    if hub_client is None:
+    if hub_client is not None:
+        node_id = get_node_id_by_robot(hub_client, robot_id)
+        if node_id is not None:
+            node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
+            if node_analysis_id is not None:
+                update_hub_status(hub_client, node_analysis_id, run_status=status)
+            else:
+                print("Failed to retrieve node_analysis_id from hub client. Cannot update status.")
+        else:
+            print("Failed to retrieve node_id from hub client. Cannot update status.")
+    else:
         print("Failed to initialize hub client. Cannot update status.")
-    node_id = get_node_id_by_robot(hub_client, robot_id)
-    if node_id is None:
-        print("Failed to retrieve node_id from hub client. Cannot update status.")
-    node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
-    if node_id is None:
-        print("Failed to retrieve node_analysis_id from hub client. Cannot update status.")
-    update_hub_status(hub_client, node_analysis_id, run_status=status)
 
 
 # TODO: Import this from flame sdk? (from flamesdk import HUB_LOG_LITERALS)
