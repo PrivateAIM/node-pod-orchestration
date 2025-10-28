@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from src.status.status import _MAX_RESTARTS
+from src.status.constants import _MAX_RESTARTS
 
 
 class LogEntity(BaseModel):

@@ -21,9 +21,7 @@ from src.k8s.kubernetes import get_pod_status
 from src.status.constants import AnalysisStatus
 from src.utils.token import get_keycloak_token
 
-
-_INTERNAL_STATUS_TIMEOUT = 10  # Time in seconds to wait for internal status response
-_MAX_RESTARTS = 10  # Maximum number of restarts for a stuck analysis
+from src.status.constants import _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
 
 
 def status_loop(database: Database, status_loop_interval: int) -> None:
