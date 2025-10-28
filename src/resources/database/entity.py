@@ -40,6 +40,14 @@ class Database:
                 return deployments[-1]
             return None
 
+    def analysis_is_running(self, analysis_id: str) -> bool:
+        latest_deployment = self.get_latest_deployment(analysis_id)
+        if latest_deployment is not None:
+            return latest_deployment.status not in [AnalysisStatus.FINISHED.value,
+                                                    AnalysisStatus.STOPPED.value,
+                                                    AnalysisStatus.FAILED.value]
+        return False
+
     def get_deployments(self, analysis_id: str) -> list[AnalysisDB]:
         with self.SessionLocal() as session:
             return session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
