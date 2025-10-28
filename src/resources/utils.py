@@ -271,6 +271,7 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
 def stream_logs(log_entity: CreateLogEntity, node_id: str, database: Database, hub_core_client: CoreClient) -> None:
     try:
         database.update_analysis_log(log_entity.analysis_id, str(log_entity.to_log_entity()))
+        database.update_analysis_status(log_entity.analysis_id, log_entity.status)
     except IndexError as e:
         print(f"Error updating analysis log in database: {e}")
     print(f"sending logs to hub client")

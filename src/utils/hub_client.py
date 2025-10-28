@@ -15,6 +15,8 @@ from enum import Enum
 
 import flame_hub
 
+from src.status.constants import AnalysisStatus
+
 
 def init_hub_client_with_robot(robot_id: str,
                                robot_secret: str,
@@ -108,6 +110,8 @@ def init_hub_client_and_update_hub_status_with_robot(analysis_id: str, status: s
         if node_id is not None:
             node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
             if node_analysis_id is not None:
+                if status == AnalysisStatus.STUCK.value:
+                    status = AnalysisStatus.FAILED.value
                 update_hub_status(hub_client, node_analysis_id, run_status=status)
             else:
                 print("Failed to retrieve node_analysis_id from hub client. Cannot update status.")
