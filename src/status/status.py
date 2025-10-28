@@ -243,7 +243,9 @@ def _update_finished_status(database: Database, analysis_status: dict[str, str])
                                                      AnalysisStatus.FAILED.value])
                    and (analysis_status['int_status'] in [AnalysisStatus.FINISHED.value,
                                                           AnalysisStatus.FAILED.value]))
-    if newly_ended:
+    firmly_stuck = ((analysis_status['db_status'] in [AnalysisStatus.FAILED.value])
+                    and (analysis_status['int_status'] in [AnalysisStatus.STUCK.value]))
+    if newly_ended or firmly_stuck:
         analysis = database.get_latest_deployment(analysis_status["analysis_id"])
         if analysis is not None:
             database.update_deployment_status(analysis.deployment_name, analysis_status['int_status'])
