@@ -387,7 +387,9 @@ def _create_nginx_config_map(analysis_name: str,
                     location /healthz {{
                         return 200 'healthy';
                     }}
-                    # analysis deployment to kong
+                    
+                    
+                    # egress: analysis deployment to kong
                     location /kong {{
                         rewrite     ^/kong(/.*) $1 break;
                         proxy_pass  http://{kong_proxy_name};
@@ -395,6 +397,8 @@ def _create_nginx_config_map(analysis_name: str,
                         deny        all;
                     }}
                     
+                    
+                    # egress: analysis deployment to result-service
                     location ~ ^/storage/(final|local|intermediate)/ {{
                         rewrite     ^/storage(/.*) $1 break;
                         proxy_pass http://{result_service_name}:8080;
@@ -402,6 +406,8 @@ def _create_nginx_config_map(analysis_name: str,
                         deny        all;
                     }}
                     
+                    
+                    # egress: analysis deployment to hub-adapter
                     location /hub-adapter/kong/datastore/{analysis_env['PROJECT_ID']} {{
                         rewrite     ^/hub-adapter(/.*) $1 break;
                         proxy_pass http://{hub_adapter_service_name}:5000;
@@ -409,22 +415,22 @@ def _create_nginx_config_map(analysis_name: str,
                         deny        all;
                     }}
                     
-                    # analysis deployment to message broker: participants
+                    
+                    # egress: analysis deployment to message broker: participants
                     location ~ ^/message-broker/analyses/{analysis_env['ANALYSIS_ID']}/participants(|/self) {{
                         rewrite     ^/message-broker(/.*) $1 break;
                         proxy_pass  http://{message_broker_service_name};
                         allow       {analysis_ip};
                         deny        all;
                     }}
-                    
-                     # analysis deployment to message broker: analysis message
+                    # egress: analysis deployment to message broker: analysis message
                     location ~ ^/message-broker/analyses/{analysis_env['ANALYSIS_ID']}/messages(|/subscriptions) {{
                         rewrite     ^/message-broker(/.*) $1 break;
                         proxy_pass  http://{message_broker_service_name};
                         allow       {analysis_ip};
                         deny        all;
                     }}
-                    # analysis deployment to message broker: healthz
+                    # egress: analysis deployment to message broker: healthz
                     location /message-broker/healthz {{
                         rewrite     ^/message-broker(/.*) $1 break;
                         proxy_pass  http://{message_broker_service_name};
@@ -432,7 +438,8 @@ def _create_nginx_config_map(analysis_name: str,
                         deny        all;
                     }}
                     
-                    # analysis deployment to po log stream
+                    
+                    # egress: analysis deployment to po: stream logs
                     location /po/stream_logs {{
                         #rewrite     ^/po(/.*) $1 break;
                         proxy_pass  http://{po_service_name}:8000;
@@ -444,7 +451,8 @@ def _create_nginx_config_map(analysis_name: str,
                         send_timeout          120s;
                     }}
                     
-                    # message-broker/pod-orchestration to analysis deployment
+                    
+                    # ingress: message-broker/pod-orchestration to analysis deployment
                     location /analysis {{
                         rewrite     ^/analysis(/.*) $1 break;
                         proxy_pass  http://{analysis_service_name};
