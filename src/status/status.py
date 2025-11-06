@@ -217,16 +217,16 @@ def _stream_stuck_logs(analysis: AnalysisDB,
         pod_status_dict = get_pod_status(deployment_name)
         print(pod_status_dict)
         if pod_status_dict is not None:
-            pod_name, pod_status_dict = list(pod_status_dict.items())[-1]
-            status, reason, message = pod_status_dict['status'], pod_status_dict['reason'], pod_status_dict['message']
-            if status == "Failed":
+            _, pod_status_dict = list(pod_status_dict.items())[-1]
+            ready, reason, message = pod_status_dict['ready'], pod_status_dict['reason'], pod_status_dict['message']
+            if not ready:
                 is_k8s_related = True
 
     stream_logs(CreateStartUpErrorLog(analysis.restart_counter,
                                       ("k8s" if is_k8s_related else "slow") if is_slow else "stuck",
                                       analysis.analysis_id,
                                       analysis.status,
-                                      k8s_error_msg=f"{status} (reason={reason}): {message}" if is_k8s_related else ''),
+                                      k8s_error_msg=f"{ready} (reason={reason}): {message}" if is_k8s_related else ''),
                 node_id,
                 database,
                 hub_client)

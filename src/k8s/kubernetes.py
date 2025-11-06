@@ -227,14 +227,14 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
         for pod in pods:
             if pod is not None:
                 name = pod.metadata.name
-                status = pod.status.phase
+                status = pod.status.container_statuses[0]
 
                 if status is not None:
                     pod_status[name] = {}
-                    pod_status[name]['status'] = status
-                    if status == "Failed":
-                        pod_status[name]['reason'] = str(pod.status.reason)
-                        pod_status[name]['message'] = str(pod.status.message)
+                    pod_status[name]['ready'] = status.ready
+                    if not status.ready:
+                        pod_status[name]['reason'] = str(status.state.waiting.reason)
+                        pod_status[name]['message'] = str(status.state.waiting.message)
                     else:
                         pod_status[name]['reason'] = ''
                         pod_status[name]['message'] = ''
