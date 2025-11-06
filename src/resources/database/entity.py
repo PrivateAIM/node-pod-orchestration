@@ -175,7 +175,7 @@ class Database:
                     "restart_counter": analysis.restart_counter}
         return None
 
-    def delete_old_deployments_db(self, analysis_id: str) -> None:
+    def delete_old_deployments_from_db(self, analysis_id: str) -> None:
         deployments = self.get_deployments(analysis_id)
         deployments = sorted(deployments, key=lambda x: x.time_created, reverse=True)
         for deployment in deployments[1:]:

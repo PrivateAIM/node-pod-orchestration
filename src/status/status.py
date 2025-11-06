@@ -196,14 +196,13 @@ def _fix_stuck_status(database: Database,
     if is_stuck or is_slow:
         analysis = database.get_latest_deployment(analysis_status["analysis_id"])
         if analysis is not None:
-            database.update_deployment_status(analysis.deployment_name, status=AnalysisStatus.STUCK.value)
+            database.update_deployment_status(analysis.deployment_name, status=AnalysisStatus.FAILED.value)
 
             # Tracking restarts
             if analysis.restart_counter < _MAX_RESTARTS:
-                unstuck_analysis_deployments(analysis_status["analysis_id"], database)
                 _stream_stuck_logs(analysis, node_id, database, hub_client, is_slow)
+                unstuck_analysis_deployments(analysis_status["analysis_id"], database)
             else:
-                database.update_deployment_status(analysis.deployment_name, status=AnalysisStatus.FAILED.value)
                 _stream_stuck_logs(analysis, node_id, database, hub_client, is_slow)
 
 
@@ -216,6 +215,7 @@ def _stream_stuck_logs(analysis: AnalysisDB,
     if is_slow:
         deployment_name = analysis.deployment_name
         pod_status_dict = get_pod_status(deployment_name)
+        print(pod_status_dict)
         if pod_status_dict is not None:
             pod_name, pod_status_dict = list(pod_status_dict.items())[-1]
             status, reason, message = pod_status_dict['status'], pod_status_dict['reason'], pod_status_dict['message']

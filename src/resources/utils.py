@@ -181,18 +181,11 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
 
 
 def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
-    deployments = [read_db_analysis(deployment) for deployment in database.get_deployments(analysis_id)]
-
-    for deployment in deployments:
-        if deployment.status == AnalysisStatus.STUCK.value:
-            stop_analysis(analysis_id, database)
-            time.sleep(10)  # wait for k8s to update status
-            create_analysis(analysis_id, database)
-            database.delete_old_deployments_db(analysis_id)
-
-            deployment = database.get_deployments(analysis_id)[0]
-            database.update_deployment_status(deployment.deployment_name, AnalysisStatus.STARTED.value)
-            break
+    if database.get_latest_deployment(analysis_id) is not None:
+        stop_analysis(analysis_id, database)
+        time.sleep(10)  # wait for k8s to update status
+        create_analysis(analysis_id, database)
+        database.delete_old_deployments_from_db(analysis_id)
 
 
 def cleanup(cleanup_type: str,
