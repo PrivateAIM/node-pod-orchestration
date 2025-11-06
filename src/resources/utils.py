@@ -1,6 +1,6 @@
 import ast
 import time
-from typing import Union, Optional
+from typing import Union
 
 from flame_hub import CoreClient
 
@@ -10,10 +10,8 @@ from src.resources.log.entity import CreateLogEntity
 from src.status.constants import AnalysisStatus
 from src.k8s.kubernetes import (create_harbor_secret,
                                 get_analysis_logs,
-                                delete_deployment,
-                                delete_analysis_pods,
                                 delete_resource)
-from src.k8s.utils import get_current_namespace, get_all_analysis_deployment_names, get_k8s_resource_names
+from src.k8s.utils import get_current_namespace, get_k8s_resource_names
 from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
 from src.utils.hub_client import init_hub_client_and_update_hub_status_with_robot
