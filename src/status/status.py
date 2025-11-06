@@ -189,8 +189,8 @@ def _fix_stuck_status(database: Database,
                       hub_client: flame_hub.CoreClient) -> None:
     # Deployment selection
     is_stuck = analysis_status['int_status'] == AnalysisStatus.STUCK.value
-    is_slow = ((analysis_status['int_status'] in [AnalysisStatus.FAILED.value]) and
-               (analysis_status['db_status'] in [AnalysisStatus.STARTED.value]))
+    is_slow = ((analysis_status['db_status'] in [AnalysisStatus.STARTED.value]) and
+               (analysis_status['int_status'] in [AnalysisStatus.FAILED.value]))
 
     # Update Status
     if is_stuck or is_slow:
@@ -242,13 +242,15 @@ def _update_running_status(database: Database, analysis_status: dict[str, str]) 
 
 
 def _update_finished_status(database: Database, analysis_status: dict[str, str]) -> None:
+    speedy_finished = ((analysis_status['db_status'] in [AnalysisStatus.STARTED.value]) and
+                       (analysis_status['int_status'] in [AnalysisStatus.FINISHED.value]))
     newly_ended = ((analysis_status['db_status'] in [AnalysisStatus.RUNNING.value,
                                                      AnalysisStatus.FAILED.value])
                    and (analysis_status['int_status'] in [AnalysisStatus.FINISHED.value,
                                                           AnalysisStatus.FAILED.value]))
     firmly_stuck = ((analysis_status['db_status'] in [AnalysisStatus.FAILED.value])
                     and (analysis_status['int_status'] in [AnalysisStatus.STUCK.value]))
-    if newly_ended or firmly_stuck:
+    if speedy_finished or newly_ended or firmly_stuck:
         analysis = database.get_latest_deployment(analysis_status["analysis_id"])
         if analysis is not None:
             database.update_deployment_status(analysis.deployment_name, analysis_status['int_status'])
