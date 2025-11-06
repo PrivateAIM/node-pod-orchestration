@@ -185,7 +185,6 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
 
     for deployment in deployments:
         if deployment.status == AnalysisStatus.STUCK.value:
-            #delete_analysis_pods(deployment.deployment_name, deployment.project_id, get_current_namespace())
             stop_analysis(analysis_id, database)
             time.sleep(10)  # wait for k8s to update status
             create_analysis(analysis_id, database)
@@ -203,7 +202,7 @@ def cleanup(cleanup_type: str,
 
     response_content = {}
     for cleanup_type in cleanup_types:
-        if cleanup_type in ['all', 'analyzes', 'services', 'mb', 'rs', 'keycloak']:
+        if cleanup_type in ['zombies', 'all', 'analyzes', 'services', 'mb', 'rs', 'keycloak']:
             # Analysis cleanup
             if cleanup_type in ['all', 'analyzes']:
                 # cleanup all analysis deployments, associated services, policies and configmaps
@@ -236,8 +235,8 @@ def cleanup(cleanup_type: str,
                         delete_keycloak_client(client['clientId'])
 
         else:
-            response_content[cleanup_type] = f"Unknown cleanup type: {cleanup_type} (known types: 'all', " + \
-                                             "'analyzes','keycloak' ,  'services', 'mb', and 'rs')"
+            response_content[cleanup_type] = f"Unknown cleanup type: {cleanup_type} (known types: 'zombies', 'all', " +\
+                                             "'analyzes', 'keycloak', 'services', 'mb', and 'rs')"
     response_content['zombies'] = clean_up_the_rest(database, namespace)
     return response_content
 
@@ -267,7 +266,7 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
 def stream_logs(log_entity: CreateLogEntity, node_id: str, database: Database, hub_core_client: CoreClient) -> None:
     try:
         database.update_analysis_log(log_entity.analysis_id, str(log_entity.to_log_entity()))
-        #database.update_analysis_status(log_entity.analysis_id, log_entity.status)
+        #database.update_analysis_status(log_entity.analysis_id, log_entity.status) #TODO: Implement this?
     except IndexError as e:
         print(f"Error updating analysis log in database: {e}")
 

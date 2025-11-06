@@ -61,7 +61,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                 if database.analysis_is_running(analysis_id)]
             print(f"Checking for running analyzes...{running_analyzes}")
             if running_analyzes:
-                for analysis_id in set(database.get_analysis_ids()):
+                for analysis_id in running_analyzes:
                     print(f"Current analysis id: {analysis_id}")
                     # Get node analysis id
                     if analysis_id not in node_analysis_ids.keys():
