@@ -375,7 +375,6 @@ def _create_nginx_config_map(analysis_name: str,
 
         if len(pod_list_object.items) > 0:
             analysis_ip = pod_list_object.items[0].status.pod_ip
-            print(analysis_ip)
         time.sleep(1)
 
     # get the name of the hub adapter, kong proxy, and result service

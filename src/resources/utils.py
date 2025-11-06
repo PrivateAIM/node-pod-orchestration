@@ -138,7 +138,6 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
     for analysis_id, deployment in deployments.items():
         # save logs as string to database (will be read as dict in retrieve_history)
         log = str(get_analysis_logs({analysis_id: deployment.deployment_name}, database=database))
-        print(f"log to be saved in stop_analysis for {deployment.deployment_name}: {log[:10]}...")
         if deployment.status in [AnalysisStatus.FAILED.value, AnalysisStatus.FINISHED.value]:
             deployment.stop(database, log=log, status=deployment.status)
 
@@ -237,7 +236,6 @@ def cleanup(cleanup_type: str,
                 for client in _get_all_keycloak_clients():
                     if client['clientId'] not in analysis_ids and client['name'].startswith('flame-'):
                         delete_keycloak_client(client['clientId'])
-                    print(client)
 
         else:
             response_content[cleanup_type] = f"Unknown cleanup type: {cleanup_type} (known types: 'all', " + \
@@ -274,14 +272,10 @@ def stream_logs(log_entity: CreateLogEntity, node_id: str, database: Database, h
         #database.update_analysis_status(log_entity.analysis_id, log_entity.status)
     except IndexError as e:
         print(f"Error updating analysis log in database: {e}")
-    print(f"sending logs to hub client")
-    # log to hub
-    print(f"analysis_id: {log_entity.analysis_id}, node_id: {node_id}, ")
-    print(f"status: {log_entity.status}, level: {log_entity.log_type}, message: {log_entity.log}")
 
+    # log to hub
     hub_core_client.create_analysis_node_log(analysis_id=log_entity.analysis_id,
                                              node_id=node_id,
                                              status=log_entity.status,
                                              level=log_entity.log_type,
                                              message=log_entity.log)
-    print(f"sent logs to hub client")

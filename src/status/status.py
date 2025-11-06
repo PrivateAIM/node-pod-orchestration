@@ -62,6 +62,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
             print(f"Checking for running analyzes...{running_analyzes}")
             if running_analyzes:
                 for analysis_id in set(database.get_analysis_ids()):
+                    print(f"Current analysis id: {analysis_id}")
                     # Get node analysis id
                     if analysis_id not in node_analysis_ids.keys():
                         node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
@@ -71,38 +72,38 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         node_analysis_id = node_analysis_ids[analysis_id]
 
                     # If node analysis id found
-                    print(f"Node analysis id: {node_analysis_id}")
+                    print(f"\tNode analysis id: {node_analysis_id}")
                     if node_analysis_id:
                         analysis_status = _get_analysis_status(analysis_id, database)
                         if analysis_status is None:
                             continue
-                        print(f"Database status: {analysis_status['db_status']}")
-                        print(f"Internal status: {analysis_status['int_status']}")
+                        print(f"\tDatabase status: {analysis_status['db_status']}")
+                        print(f"\tInternal status: {analysis_status['int_status']}")
 
                         # Fix for stuck analyzes
                         _fix_stuck_status(database, analysis_status, node_id, hub_client)
                         analysis_status = _get_analysis_status(analysis_id, database)
                         if analysis_status is None:
                             continue
-                        print(f"Unstuck analysis with internal status: {analysis_status['int_status']}")
+                        print(f"\tUnstuck analysis with internal status: {analysis_status['int_status']}")
 
                         # Update created to running status if deployment responsive
                         _update_running_status(database, analysis_status)
                         analysis_status = _get_analysis_status(analysis_id, database)
                         if analysis_status is None:
                             continue
-                        print(f"Update created to running database status: {analysis_status['db_status']}")
+                        print(f"\tUpdate created to running database status: {analysis_status['db_status']}")
 
                         # update running to finished status if analysis finished
                         _update_finished_status(database, analysis_status)
                         analysis_status = _get_analysis_status(analysis_id, database)
                         if analysis_status is None:
                             continue
-                        print(f"Update running to finished database status: {analysis_status['db_status']}")
+                        print(f"\tUpdate running to finished database status: {analysis_status['db_status']}")
 
                         # update hub analysis status
                         analysis_hub_status = _set_analysis_hub_status(hub_client, node_analysis_id, analysis_status)
-                        print(f"Set Hub analysis status with node_analysis={node_analysis_id}, "
+                        print(f"\tSet Hub analysis status with node_analysis={node_analysis_id}, "
                               f"db_status={analysis_status['db_status']}, "
                               f"internal_status={analysis_status['int_status']} "
                               f"to {analysis_hub_status}")
@@ -136,15 +137,15 @@ async def _get_internal_deployment_status(deployment_name: str, analysis_id: str
             response.raise_for_status()
             break
         except HTTPStatusError as e:
-            print(f"Error getting internal deployment status: {e}")
+            print(f"\tError getting internal deployment status: {e}")
         except ConnectError as e:
-            print(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {e}")
+            print(f"\tConnection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {e}")
         except ConnectTimeout as e:
-            print(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {e}")
+            print(f"\tConnection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {e}")
         elapsed_time = time.time() - start_time
         time.sleep(1)
         if elapsed_time > _INTERNAL_STATUS_TIMEOUT:
-            print(f"Timeout getting internal deployment status after {elapsed_time} seconds")
+            print(f"\tTimeout getting internal deployment status after {elapsed_time} seconds")
             return AnalysisStatus.FAILED.value
 
     analysis_status, analysis_token_remaining_time = (response.json()['status'],
@@ -252,12 +253,12 @@ def _update_finished_status(database: Database, analysis_status: dict[str, str])
         if analysis is not None:
             database.update_deployment_status(analysis.deployment_name, analysis_status['int_status'])
             if analysis_status['int_status'] == AnalysisStatus.FINISHED.value:
-                print("Delete deployment")
+                print("\tDelete deployment")
                 # TODO: final local log save (minio?)  # archive logs
                 # delete_analysis(analysis_status['analysis_id'], database)  # delete analysis from database
                 stop_analysis(analysis_status['analysis_id'], database)  # stop analysis TODO: Change to delete in the future (when archive logs implemented)
             else:
-                print("Stop deployment")
+                print("\tStop deployment")
                 stop_analysis(analysis_status['analysis_id'], database)  # stop analysis
 
 

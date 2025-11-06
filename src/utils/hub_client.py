@@ -59,7 +59,6 @@ def get_ssl_context() -> ssl.SSLContext:
 def get_node_id_by_robot(hub_client: flame_hub.CoreClient, robot_id: str) -> Optional[str]:
     try:
         node_id_object = hub_client.find_nodes(filter={"robot_id": robot_id})[0]
-        print(f"Found node id object: {node_id_object}")
     except (HTTPStatusError, JSONDecodeError, ConnectTimeout) as e:
         print(f"Error in hub python client whilst retrieving node id object!\n{e}")
         node_id_object = None
@@ -70,7 +69,6 @@ def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, nod
     try:
         node_analyzes = hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id,
                                                                "node_id": node_id_object_id})
-        print(f"Found node analyzes: {node_analyzes}")
     except HTTPStatusError as e:
         print(f"Error in hub python client whilst retrieving node analyzes!\n{e}")
         node_analyzes = None
@@ -91,7 +89,6 @@ def update_hub_status(hub_client: flame_hub.CoreClient, node_analysis_id: str, r
         if run_status == AnalysisStatus.STUCK.value:
             run_status = AnalysisStatus.FAILED.value
         hub_client.update_analysis_node(node_analysis_id, run_status=run_status)
-        print(f"Updated hub status to {run_status} for node_analysis_id {node_analysis_id}")
     except (HTTPStatusError, ConnectError) as e:
         print(f"Failed to update hub status for node_analysis_id {node_analysis_id}.\n{e}")
 
