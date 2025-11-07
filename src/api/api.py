@@ -63,22 +63,22 @@ class PodOrchestrationAPI:
                              response_class=JSONResponse)
         router.add_api_route("/history",
                              self.retrieve_all_history_call,
-                             dependencies=[Depends(valid_access_token)],
+                             #dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
         router.add_api_route("/history/{analysis_id}",
                              self.retrieve_history_call,
-                             dependencies=[Depends(valid_access_token)],
+                             #dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
         router.add_api_route("/logs",
                              self.retrieve_all_logs_call,
-                             dependencies=[Depends(valid_access_token)],
+                             #dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
         router.add_api_route("/logs/{analysis_id}",
                              self.retrieve_logs_call,
-                             dependencies=[Depends(valid_access_token)],
+                             #dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
         router.add_api_route("/status",
