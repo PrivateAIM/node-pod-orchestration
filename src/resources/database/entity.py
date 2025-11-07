@@ -40,6 +40,14 @@ class Database:
                 return deployments[-1]
             return None
 
+    def analysis_is_running(self, analysis_id: str) -> bool:
+        latest_deployment = self.get_latest_deployment(analysis_id)
+        if latest_deployment is not None:
+            return latest_deployment.status not in [AnalysisStatus.FINISHED.value,
+                                                    AnalysisStatus.STOPPED.value,
+                                                    AnalysisStatus.FAILED.value]
+        return False
+
     def get_deployments(self, analysis_id: str) -> list[AnalysisDB]:
         with self.SessionLocal() as session:
             return session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
@@ -82,7 +90,6 @@ class Database:
             for deployment in analysis:
                 if deployment:
                     for key, value in kwargs.items():
-                        print(f"in update analysis Setting {key} to {value}")
                         setattr(deployment, key, value)
 
                     session.commit()
@@ -91,7 +98,6 @@ class Database:
     def update_deployment(self, deployment_name: str, **kwargs) -> AnalysisDB:
         with self.SessionLocal() as session:
             deployment = session.query(AnalysisDB).filter_by(**{"deployment_name": deployment_name}).first()
-            print(kwargs.items())
             for key, value in kwargs.items():
                 setattr(deployment, key, value)
             session.commit()
@@ -169,7 +175,7 @@ class Database:
                     "restart_counter": analysis.restart_counter}
         return None
 
-    def delete_old_deployments_db(self, analysis_id: str) -> None:
+    def delete_old_deployments_from_db(self, analysis_id: str) -> None:
         deployments = self.get_deployments(analysis_id)
         deployments = sorted(deployments, key=lambda x: x.time_created, reverse=True)
         for deployment in deployments[1:]:

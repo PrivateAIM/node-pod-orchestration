@@ -15,6 +15,8 @@ from enum import Enum
 
 import flame_hub
 
+from src.status.constants import AnalysisStatus
+
 
 def init_hub_client_with_robot(robot_id: str,
                                robot_secret: str,
@@ -45,6 +47,7 @@ def init_hub_client_with_robot(robot_id: str,
         print(f"Failed to authenticate with hub python client library.\n{e}")
     return hub_client
 
+
 @lru_cache
 def get_ssl_context() -> ssl.SSLContext:
     """Check if there are additional certificates present and if so, load them."""
@@ -54,11 +57,11 @@ def get_ssl_context() -> ssl.SSLContext:
         ctx.load_verify_locations(cafile=cert_path)
     return ctx
 
+
 def get_node_id_by_robot(hub_client: flame_hub.CoreClient, robot_id: str) -> Optional[str]:
     try:
         node_id_object = hub_client.find_nodes(filter={"robot_id": robot_id})[0]
-        print(f"Found node id object: {node_id_object}")
-    except (HTTPStatusError, JSONDecodeError, ConnectTimeout) as e:
+    except (HTTPStatusError, JSONDecodeError, ConnectTimeout, flame_hub._exceptions.HubAPIError) as e:
         print(f"Error in hub python client whilst retrieving node id object!\n{e}")
         node_id_object = None
     return str(node_id_object.id) if node_id_object is not None else None
@@ -68,8 +71,7 @@ def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, nod
     try:
         node_analyzes = hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id,
                                                                "node_id": node_id_object_id})
-        print(f"Found node analyzes: {node_analyzes}")
-    except HTTPStatusError as e:
+    except (HTTPStatusError, flame_hub._exceptions.HubAPIError) as e:
         print(f"Error in hub python client whilst retrieving node analyzes!\n{e}")
         node_analyzes = None
 
@@ -86,9 +88,10 @@ def update_hub_status(hub_client: flame_hub.CoreClient, node_analysis_id: str, r
     Update the status of the analysis in the hub.
     """
     try:
+        if run_status == AnalysisStatus.STUCK.value:
+            run_status = AnalysisStatus.FAILED.value
         hub_client.update_analysis_node(node_analysis_id, run_status=run_status)
-        print(f"Updated hub status to {run_status} for node_analysis_id {node_analysis_id}")
-    except (HTTPStatusError, ConnectError) as e:
+    except (HTTPStatusError, ConnectError, flame_hub._exceptions.HubAPIError) as e:
         print(f"Failed to update hub status for node_analysis_id {node_analysis_id}.\n{e}")
 
 
@@ -103,15 +106,18 @@ def init_hub_client_and_update_hub_status_with_robot(analysis_id: str, status: s
                                                                                os.getenv('PO_HTTP_PROXY'),
                                                                                os.getenv('PO_HTTPS_PROXY'))
     hub_client = init_hub_client_with_robot(robot_id, robot_secret, hub_url_core, hub_auth, http_proxy, https_proxy)
-    if hub_client is None:
+    if hub_client is not None:
+        node_id = get_node_id_by_robot(hub_client, robot_id)
+        if node_id is not None:
+            node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
+            if node_analysis_id is not None:
+                update_hub_status(hub_client, node_analysis_id, run_status=status)
+            else:
+                print("Failed to retrieve node_analysis_id from hub client. Cannot update status.")
+        else:
+            print("Failed to retrieve node_id from hub client. Cannot update status.")
+    else:
         print("Failed to initialize hub client. Cannot update status.")
-    node_id = get_node_id_by_robot(hub_client, robot_id)
-    if node_id is None:
-        print("Failed to retrieve node_id from hub client. Cannot update status.")
-    node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
-    if node_id is None:
-        print("Failed to retrieve node_analysis_id from hub client. Cannot update status.")
-    update_hub_status(hub_client, node_analysis_id, run_status=status)
 
 
 # TODO: Import this from flame sdk? (from flamesdk import HUB_LOG_LITERALS)
