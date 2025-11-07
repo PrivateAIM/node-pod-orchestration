@@ -68,12 +68,14 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
                         if node_analysis_id is not None:
                             node_analysis_ids[analysis_id] = node_analysis_id
+                        else:
+                            hub_client = None
                     else:
                         node_analysis_id = node_analysis_ids[analysis_id]
 
                     # If node analysis id found
                     print(f"\tNode analysis id: {node_analysis_id}")
-                    if node_analysis_id:
+                    if node_analysis_id is not None:
                         analysis_status = _get_analysis_status(analysis_id, database)
                         if analysis_status is None:
                             continue
