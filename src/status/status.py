@@ -82,26 +82,32 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         print(f"\tDatabase status: {analysis_status['db_status']}")
                         print(f"\tInternal status: {analysis_status['int_status']}")
 
-                        _fix_stuck_status(database, analysis_status, node_id, hub_client)
-                        analysis_status = _get_analysis_status(analysis_id, database)
-                        if analysis_status is None:
-                            continue
-                        print(f"\tUnstuck analysis with internal status: {analysis_status['int_status']}")
                         # Fix stuck analyzes
+                        if analysis_status['status_action'] == 'unstuck':
+                            print(f"\tUnstuck analysis with internal status: {analysis_status['int_status']}")
+                            _fix_stuck_status(database, analysis_status, node_id, hub_client)
+                            # Update analysis status (skip iteration if analysis is not deployed)
+                            analysis_status = _get_analysis_status(analysis_id, database)
+                            if analysis_status is None:
+                                continue
 
-                        _update_running_status(database, analysis_status)
-                        analysis_status = _get_analysis_status(analysis_id, database)
-                        if analysis_status is None:
-                            continue
-                        print(f"\tUpdate created to running database status: {analysis_status['db_status']}")
                         # Update created to running status
+                        if analysis_status['status_action'] == 'running':
+                            print(f"\tUpdate created-to-running database status: {analysis_status['db_status']}")
+                            _update_running_status(database, analysis_status)
+                            # Update analysis status (skip iteration if analysis is not deployed)
+                            analysis_status = _get_analysis_status(analysis_id, database)
+                            if analysis_status is None:
+                                continue
 
-                        _update_finished_status(database, analysis_status)
-                        analysis_status = _get_analysis_status(analysis_id, database)
-                        if analysis_status is None:
-                            continue
-                        print(f"\tUpdate running to finished database status: {analysis_status['db_status']}")
                         # Update running to finished status
+                        if analysis_status['status_action'] == 'finishing':
+                            print(f"\tUpdate running-to-finished database status: {analysis_status['db_status']}")
+                            _update_finished_status(database, analysis_status)
+                            # Update analysis status (skip iteration if analysis is not deployed)
+                            analysis_status = _get_analysis_status(analysis_id, database)
+                            if analysis_status is None:
+                                continue
 
                         # Submit analysis_status to hub
                         analysis_hub_status = _set_analysis_hub_status(hub_client, node_analysis_id, analysis_status)
@@ -123,9 +129,28 @@ def _get_analysis_status(analysis_id: str, database: Database) -> Optional[dict[
             int_status = AnalysisStatus.FINISHED.value
         else:
             int_status = asyncio.run(_get_internal_deployment_status(analysis.deployment_name, analysis_id))
-        return {"analysis_id": analysis_id,
-                "db_status": analysis.status,
-                "int_status": int_status}
+        return {'analysis_id': analysis_id,
+                'db_status': analysis.status,
+                'int_status': int_status,
+                'status_action': _decide_status_action(analysis.status, int_status)}
+    else:
+        return None
+
+
+def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
+    is_stuck = int_status == AnalysisStatus.STUCK.value
+    is_slow = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.FAILED.value]))
+    newly_running = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.RUNNING.value]))
+    speedy_finished = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.FINISHED.value]))
+    newly_ended = ((db_status in [AnalysisStatus.RUNNING.value, AnalysisStatus.FAILED.value])
+                   and (int_status in [AnalysisStatus.FINISHED.value, AnalysisStatus.FAILED.value]))
+    firmly_stuck = ((db_status in [AnalysisStatus.FAILED.value]) and (int_status in [AnalysisStatus.STUCK.value]))
+    if is_stuck or is_slow:
+        return 'unstuck'
+    elif newly_running:
+        return 'running'
+    elif speedy_finished or newly_ended or firmly_stuck:
+        return 'finishing'
     else:
         return None
 
@@ -192,23 +217,18 @@ def _fix_stuck_status(database: Database,
                       analysis_status: dict[str, str],
                       node_id: str,
                       hub_client: flame_hub.CoreClient) -> None:
-    # Deployment selection
-    is_stuck = analysis_status['int_status'] == AnalysisStatus.STUCK.value
-    is_slow = ((analysis_status['db_status'] in [AnalysisStatus.STARTED.value]) and
-               (analysis_status['int_status'] in [AnalysisStatus.FAILED.value]))
+    analysis = database.get_latest_deployment(analysis_status['analysis_id'])
+    if analysis is not None:
+        database.update_deployment_status(analysis.deployment_name, status=AnalysisStatus.FAILED.value)
+        is_slow = ((analysis_status['db_status'] in [AnalysisStatus.STARTED.value]) and
+                   (analysis_status['int_status'] in [AnalysisStatus.FAILED.value]))
 
-    # Update Status
-    if is_stuck or is_slow:
-        analysis = database.get_latest_deployment(analysis_status["analysis_id"])
-        if analysis is not None:
-            database.update_deployment_status(analysis.deployment_name, status=AnalysisStatus.FAILED.value)
-
-            # Tracking restarts
-            if analysis.restart_counter < _MAX_RESTARTS:
-                _stream_stuck_logs(analysis, node_id, database, hub_client, is_slow)
-                unstuck_analysis_deployments(analysis_status["analysis_id"], database)
-            else:
-                _stream_stuck_logs(analysis, node_id, database, hub_client, is_slow)
+        # Tracking restarts
+        if analysis.restart_counter < _MAX_RESTARTS:
+            _stream_stuck_logs(analysis, node_id, database, hub_client, is_slow)
+            unstuck_analysis_deployments(analysis_status['analysis_id'], database)
+        else:
+            _stream_stuck_logs(analysis, node_id, database, hub_client, is_slow)
 
 
 def _stream_stuck_logs(analysis: AnalysisDB,
@@ -243,35 +263,23 @@ def _stream_stuck_logs(analysis: AnalysisDB,
 
 
 def _update_running_status(database: Database, analysis_status: dict[str, str]) -> None:
-    newly_running = ((analysis_status['db_status'] in [AnalysisStatus.STARTED.value]) and
-                     (analysis_status['int_status'] in [AnalysisStatus.RUNNING.value]))
-    if newly_running:
-        analysis = database.get_latest_deployment(analysis_status["analysis_id"])
-        if analysis is not None:
-            database.update_deployment_status(analysis.deployment_name, AnalysisStatus.RUNNING.value)
+    analysis = database.get_latest_deployment(analysis_status['analysis_id'])
+    if analysis is not None:
+        database.update_deployment_status(analysis.deployment_name, AnalysisStatus.RUNNING.value)
 
 
 def _update_finished_status(database: Database, analysis_status: dict[str, str]) -> None:
-    speedy_finished = ((analysis_status['db_status'] in [AnalysisStatus.STARTED.value]) and
-                       (analysis_status['int_status'] in [AnalysisStatus.FINISHED.value]))
-    newly_ended = ((analysis_status['db_status'] in [AnalysisStatus.RUNNING.value,
-                                                     AnalysisStatus.FAILED.value])
-                   and (analysis_status['int_status'] in [AnalysisStatus.FINISHED.value,
-                                                          AnalysisStatus.FAILED.value]))
-    firmly_stuck = ((analysis_status['db_status'] in [AnalysisStatus.FAILED.value])
-                    and (analysis_status['int_status'] in [AnalysisStatus.STUCK.value]))
-    if speedy_finished or newly_ended or firmly_stuck:
-        analysis = database.get_latest_deployment(analysis_status["analysis_id"])
-        if analysis is not None:
-            database.update_deployment_status(analysis.deployment_name, analysis_status['int_status'])
-            if analysis_status['int_status'] == AnalysisStatus.FINISHED.value:
-                print("\tDelete deployment")
-                # TODO: final local log save (minio?)  # archive logs
-                # delete_analysis(analysis_status['analysis_id'], database)  # delete analysis from database
-                stop_analysis(analysis_status['analysis_id'], database)  # stop analysis TODO: Change to delete in the future (when archive logs implemented)
-            else:
-                print("\tStop deployment")
-                stop_analysis(analysis_status['analysis_id'], database)  # stop analysis
+    analysis = database.get_latest_deployment(analysis_status['analysis_id'])
+    if analysis is not None:
+        database.update_deployment_status(analysis.deployment_name, analysis_status['int_status'])
+        if analysis_status['int_status'] == AnalysisStatus.FINISHED.value:
+            print("\tDelete deployment")
+            # TODO: final local log save (minio?)  # archive logs
+            # delete_analysis(analysis_status['analysis_id'], database)  # delete analysis from database
+            stop_analysis(analysis_status['analysis_id'], database)  # stop analysis TODO: Change to delete in the future (when archive logs implemented)
+        else:
+            print("\tStop deployment")
+            stop_analysis(analysis_status['analysis_id'], database)  # stop analysis
 
 
 def _set_analysis_hub_status(hub_client: flame_hub.CoreClient,
