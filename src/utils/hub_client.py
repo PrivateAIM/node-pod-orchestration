@@ -4,7 +4,7 @@ import ssl
 from pathlib import Path
 from functools import lru_cache
 from json import JSONDecodeError
-from typing import Optional, Tuple
+from typing import Optional
 from httpx import (Client,
                    HTTPTransport,
                    HTTPStatusError,
@@ -41,10 +41,10 @@ def init_hub_client_with_robot(robot_id: str,
 
         client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_robot, verify=ssl_ctx)
         hub_client = flame_hub.CoreClient(client=client)
-        print("Hub client init successful")
+        print("PO ACTION - Hub client init successful")
     except Exception as e:
         hub_client = None
-        print(f"Failed to authenticate with hub python client library.\n{e}")
+        print(f"Error: Failed to authenticate with hub python client library.\n{e}")
     return hub_client
 
 
@@ -60,19 +60,19 @@ def get_ssl_context() -> ssl.SSLContext:
 
 def get_node_id_by_robot(hub_client: flame_hub.CoreClient, robot_id: str) -> Optional[str]:
     try:
-        node_id_object = hub_client.find_nodes(filter={"robot_id": robot_id})[0]
+        node_id_object = hub_client.find_nodes(filter={'robot_id': robot_id})[0]
     except (HTTPStatusError, JSONDecodeError, ConnectTimeout, flame_hub._exceptions.HubAPIError) as e:
-        print(f"Error in hub python client whilst retrieving node id object!\n{e}")
+        print(f"Error: Failed to retrieve node id object from hub python client\n{e}")
         node_id_object = None
     return str(node_id_object.id) if node_id_object is not None else None
 
 
 def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, node_id_object_id: str) -> Optional[str]:
     try:
-        node_analyzes = hub_client.find_analysis_nodes(filter={"analysis_id": analysis_id,
-                                                               "node_id": node_id_object_id})
+        node_analyzes = hub_client.find_analysis_nodes(filter={'analysis_id': analysis_id,
+                                                               'node_id': node_id_object_id})
     except (HTTPStatusError, flame_hub._exceptions.HubAPIError) as e:
-        print(f"Error in hub python client whilst retrieving node analyzes!\n{e}")
+        print(f"Error: Failed to retrieve node analyzes from hub python client\n{e}")
         node_analyzes = None
 
     if node_analyzes:
@@ -92,7 +92,7 @@ def update_hub_status(hub_client: flame_hub.CoreClient, node_analysis_id: str, r
             run_status = AnalysisStatus.FAILED.value
         hub_client.update_analysis_node(node_analysis_id, run_status=run_status)
     except (HTTPStatusError, ConnectError, flame_hub._exceptions.HubAPIError) as e:
-        print(f"Failed to update hub status for node_analysis_id {node_analysis_id}.\n{e}")
+        print(f"Error: Failed to update hub status for node_analysis_id {node_analysis_id}\n{e}")
 
 
 def init_hub_client_and_update_hub_status_with_robot(analysis_id: str, status: str) -> None:
@@ -113,11 +113,11 @@ def init_hub_client_and_update_hub_status_with_robot(analysis_id: str, status: s
             if node_analysis_id is not None:
                 update_hub_status(hub_client, node_analysis_id, run_status=status)
             else:
-                print("Failed to retrieve node_analysis_id from hub client. Cannot update status.")
+                print("Error: Failed to retrieve node_analysis_id from hub client. Cannot update status.")
         else:
-            print("Failed to retrieve node_id from hub client. Cannot update status.")
+            print("Error: Failed to retrieve node_id from hub client. Cannot update status.")
     else:
-        print("Failed to initialize hub client. Cannot update status.")
+        print("Error: Failed to initialize hub client. Cannot update status.")
 
 
 # TODO: Import this from flame sdk? (from flamesdk import HUB_LOG_LITERALS)

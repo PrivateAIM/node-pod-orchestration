@@ -24,7 +24,7 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dic
     if isinstance(body, str):
         body = database.extract_analysis_body(body)
         if body is None:
-            return {"status": "Analysis ID not found in database."}
+            return {'status': "Analysis ID not found in database."}
         else:
             body = CreateAnalysis(**body)
 
@@ -56,7 +56,7 @@ def retrieve_history(analysis_id_str: str, database: Database) -> dict[str, dict
     :param database:
     :return:
     """
-    if analysis_id_str == "all":
+    if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
@@ -74,14 +74,14 @@ def retrieve_history(analysis_id_str: str, database: Database) -> dict[str, dict
     for analysis_id, deployment in deployments.items():
         # interpret log string as a dictionary
         log = ast.literal_eval(deployment.log)
-        analysis_logs[analysis_id] = log["analysis"][analysis_id]
-        nginx_logs[analysis_id] = log["nginx"][analysis_id]
+        analysis_logs[analysis_id] = log['analysis'][analysis_id]
+        nginx_logs[analysis_id] = log['nginx'][analysis_id]
 
-    return {"analysis": analysis_logs, "nginx": nginx_logs}
+    return {'analysis': analysis_logs, 'nginx': nginx_logs}
 
 
 def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[str, list[str]]]:
-    if analysis_id_str == "all":
+    if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
@@ -97,7 +97,7 @@ def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[st
 
 
 def get_status(analysis_id_str: str, database: Database) -> dict[str, str]:
-    if analysis_id_str == "all":
+    if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
@@ -112,7 +112,7 @@ def get_status(analysis_id_str: str, database: Database) -> dict[str, str]:
 
 
 def get_pods(analysis_id_str: str, database: Database) -> dict[str, list[str]]:
-    if analysis_id_str == "all":
+    if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
@@ -120,7 +120,7 @@ def get_pods(analysis_id_str: str, database: Database) -> dict[str, list[str]]:
 
 
 def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
-    if analysis_id_str == "all":
+    if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
@@ -158,7 +158,7 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
 
 
 def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
-    if analysis_id_str == "all":
+    if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
@@ -190,7 +190,7 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
 
 def cleanup(cleanup_type: str,
             database: Database,
-            namespace: str = "default") -> dict[str, str]:
+            namespace: str = 'default') -> dict[str, str]:
     cleanup_types = set(cleanup_type.split(',')) if ',' in cleanup_type else [cleanup_type]
 
     response_content = {}
@@ -207,7 +207,7 @@ def cleanup(cleanup_type: str,
                 # reinitialize message-broker pod
                 message_broker_pod_name = get_k8s_resource_names('pod',
                                                                  'label',
-                                                                 'component=flame-message-broker',
+                                                                 "component=flame-message-broker",
                                                                  namespace=namespace)
                 delete_resource(message_broker_pod_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset message broker"
@@ -215,7 +215,7 @@ def cleanup(cleanup_type: str,
                 # reinitialize result-service pod
                 result_service_name = get_k8s_resource_names('pod',
                                                              'label',
-                                                             'component=flame-result-service',
+                                                             "component=flame-result-service",
                                                              namespace=namespace)
                 delete_resource(result_service_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset result service"
@@ -238,11 +238,11 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
     known_analysis_ids = database.get_analysis_ids()
 
     result_str = ""
-    for res, (selector_args, max_r_split) in {'deployment': (['component=flame-analysis', 'component=flame-analysis-nginx'], 1),
-                                              'pod': (['component=flame-analysis', 'component=flame-analysis-nginx'], 2),
-                                              'service': (['component=flame-analysis', 'component=flame-analysis-nginx'], 1),
-                                              'networkpolicy': (['component=flame-nginx-to-analysis-policy'], 2),
-                                              'configmap': (['component=flame-nginx-analysis-config-map'], 2)}.items():
+    for res, (selector_args, max_r_split) in {'deployment': (["component=flame-analysis", "component=flame-analysis-nginx"], 1),
+                                              'pod': (["component=flame-analysis", "component=flame-analysis-nginx"], 2),
+                                              'service': (["component=flame-analysis", "component=flame-analysis-nginx"], 1),
+                                              'networkpolicy': (["component=flame-nginx-to-analysis-policy"], 2),
+                                              'configmap': (["component=flame-nginx-analysis-config-map"], 2)}.items():
         for selector_arg in selector_args:
             resources = get_k8s_resource_names(res, 'label', selector_arg, namespace=namespace)
             resources = [resources] if type(resources) == str else resources
@@ -261,7 +261,7 @@ def stream_logs(log_entity: CreateLogEntity, node_id: str, database: Database, h
         database.update_analysis_log(log_entity.analysis_id, str(log_entity.to_log_entity()))
         #database.update_analysis_status(log_entity.analysis_id, log_entity.status) #TODO: Implement this?
     except IndexError as e:
-        print(f"Error updating analysis log in database: {e}")
+        print(f"Error: Failed to update analysis log in database\n{e}")
 
     # log to hub
     hub_core_client.create_analysis_node_log(analysis_id=log_entity.analysis_id,

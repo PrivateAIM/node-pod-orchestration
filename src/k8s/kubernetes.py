@@ -31,11 +31,11 @@ def create_harbor_secret(host_address: str,
                              string_data={'docker-server': host_address,
                                           'docker-username': user.replace('$', '\$'),
                                           'docker-password': password,
-                                          '.dockerconfigjson': json.dumps({"auths":
+                                          '.dockerconfigjson': json.dumps({'auths':
                                                                                {host_address:
-                                                                                    {"username": user,
-                                                                                     "password": password,
-                                                                                     "auth": base64.b64encode(f'{user}:{password}'.encode("ascii")).decode("ascii")}}})}
+                                                                                    {'username': user,
+                                                                                     'password': password,
+                                                                                     'auth': base64.b64encode(f"{user}:{password}".encode("ascii")).decode("ascii")}}})}
                              )
     try:
         core_client.create_namespaced_secret(namespace=namespace, body=secret)
@@ -47,7 +47,7 @@ def create_harbor_secret(host_address: str,
             if e.reason != 'Conflict':
                 raise e
             else:
-                print('Conflict remains unresolved!')
+                print("Conflict remains unresolved!")
                 raise e
 
 
@@ -63,14 +63,14 @@ def create_analysis_deployment(name: str,
                                     period_seconds=20,
                                     failure_threshold=1,
                                     timeout_seconds=5)
-    container1 = client.V1Container(name=name, image=image, image_pull_policy="IfNotPresent",
+    container1 = client.V1Container(name=name, image=image, image_pull_policy='IfNotPresent',
                                     ports=[client.V1ContainerPort(PORTS['analysis'][0])],
                                     env=[client.V1EnvVar(name=key, value=val) for key, val in env.items()],
                                     #liveness_probe=liveness_probe,
                                     )
     containers.append(container1)
 
-    labels = {'app': name, 'component': 'flame-analysis'}
+    labels = {'app': name, 'component': "flame-analysis"}
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace, labels=labels)
     depl_pod_metadata = client.V1ObjectMeta(labels=labels)
     depl_selector = client.V1LabelSelector(match_labels=labels)
@@ -103,48 +103,48 @@ def delete_resource(name: str, resource_type: str, namespace: str = 'default') -
     :param resource_type: Type of the resource (e.g., 'deployment', 'service', 'pod', 'configmap').
     :param namespace: Namespace in which the resource exists.
     """
-    print(f"Deleting resource: {name} of type {resource_type} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"PO ACTION - Deleting resource: {name} of type {resource_type} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     if resource_type == 'deployment':
         try:
             app_client = client.AppsV1Api()
             app_client.delete_namespaced_deployment(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Not Found: {name} deployment")
+                print(f"Error: Not Found {name} deployment")
     elif resource_type == 'service':
         try:
             core_client = client.CoreV1Api()
             core_client.delete_namespaced_service(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Not Found: {name} service")
+                print(f"Error: Not Found {name} service")
     elif resource_type == 'pod':
         try:
             core_client = client.CoreV1Api()
             core_client.delete_namespaced_pod(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Not Found: {name} pod")
+                print(f"Error: Not Found {name} pod")
     elif resource_type == 'configmap':
         try:
             core_client = client.CoreV1Api()
             core_client.delete_namespaced_config_map(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Not Found: {name} configmap")
+                print(f"Error: Not Found {name} configmap")
     elif resource_type == 'networkpolicy':
         try:
             network_client = client.NetworkingV1Api()
             network_client.delete_namespaced_network_policy(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Not Found: {name} networkpolicy")
+                print(f"Error: Not Found {name} networkpolicy")
     else:
         raise ValueError(f"Unsupported resource type: {resource_type}")
 
 
 def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
-    print(f"Deleting deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"PO ACTION - Deleting deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     app_client = client.AppsV1Api()
     for name in [deployment_name, f'nginx-{deployment_name}']:
         try:
@@ -152,19 +152,19 @@ def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
             _delete_service(name, namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Not Found {name}")
+                print(f"Error: Not Found {name}")
     network_client = client.NetworkingV1Api()
     try:
         network_client.delete_namespaced_network_policy(name=f'nginx-to-{deployment_name}-policy', namespace=namespace)
     except client.exceptions.ApiException as e:
         if e.reason != 'Not Found':
-            print(f"Not Found nginx-to-{deployment_name}-policy")
+            print(f"Error: Not Found nginx-to-{deployment_name}-policy")
     core_client = client.CoreV1Api()
     try:
         core_client.delete_namespaced_config_map(name=f"nginx-{deployment_name}-config", namespace=namespace)
     except client.exceptions.ApiException as e:
         if e.reason != 'Not Found':
-            print(f"Not Found {deployment_name}-config")
+            print(f"Error: Not Found {deployment_name}-config")
 
 
 def get_analysis_logs(deployment_names: dict[str, str],
@@ -177,18 +177,18 @@ def get_analysis_logs(deployment_names: dict[str, str],
     :param namespace:
     :return:
     """
-    return {"analysis": {analysis_id: _get_logs(name=deployment_name,
+    return {'analysis': {analysis_id: _get_logs(name=deployment_name,
                                                 pod_ids=database.get_deployment_pod_ids(deployment_name),
                                                 namespace=namespace)
                          for analysis_id, deployment_name in deployment_names.items()},
-            "nginx": {analysis_id: _get_logs(name=f"nginx-{deployment_name}",
+            'nginx': {analysis_id: _get_logs(name=f"nginx-{deployment_name}",
                                              namespace=namespace)
                       for analysis_id, deployment_name in deployment_names.items()}
             }
 
 
 def delete_analysis_pods(deployment_name: str, project_id: str, namespace: str = 'default') -> None:
-    print(f"Deleting pods of deployment {deployment_name} in namespace {namespace} at "
+    print(f"PO ACTION - Deleting pods of deployment {deployment_name} in namespace {namespace} at "
           f"{time.strftime('%Y-%m-%d %H:%M:%S')}")
     core_client = client.CoreV1Api()
     # delete nginx deployment
@@ -573,14 +573,14 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
             pod_logs = [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
                         for pod in pods.items if pod.metadata.name in pod_ids]
         except client.exceptions.ApiException as e:
-            print(e)
+            print(f"Error: APIException while trying to retrieve pod logs (pod_ids in list)\n{e}")
             return []
     else:
         try:
             pod_logs = [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
                         for pod in pods.items]
         except client.exceptions.ApiException as e:
-            print(e)
+            print(f"Error: APIException while trying to retrieve pod logs (pod_ids=None)\n{e}")
             return []
 
     # sanitize pod logs

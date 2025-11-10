@@ -17,8 +17,8 @@ def get_project_data_source(keycloak_token, project_id, hub_adapter_service_name
     :return:
     """
     client = AsyncClient(base_url=f"http://{hub_adapter_service_name}:5000",
-                         headers={"Authorization": f"Bearer {keycloak_token}",
-                                  "accept": "application/json"})
+                         headers={'Authorization': f"Bearer {keycloak_token}",
+                                  'accept': "application/json"})
     return asyncio.run(call_sources(client, project_id))
 
 

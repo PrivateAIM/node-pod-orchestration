@@ -10,7 +10,7 @@ from src.status.constants import _MAX_RESTARTS
 
 class LogEntity(BaseModel):
     log: str
-    log_type: Literal["emerg", "alert", "crit", "error", "warn", "notice", "info", "debug"]
+    log_type: Literal['emerg', 'alert', 'crit', 'error', 'warn', 'notice', 'info', 'debug']
 
     id: str = str(uuid.uuid4())
     created_at: str = str(datetime.now())
@@ -21,7 +21,7 @@ class LogEntity(BaseModel):
 
 class CreateLogEntity(BaseModel):
     log: str
-    log_type: Literal["emerg", "alert", "crit", "error", "warn", "notice", "info", "debug"]
+    log_type: Literal['emerg', 'alert', 'crit', 'error', 'warn', 'notice', 'info', 'debug']
 
     analysis_id: str
     status: str
@@ -34,7 +34,7 @@ class CreateLogEntity(BaseModel):
 class CreateStartUpErrorLog(CreateLogEntity):
     def __init__(self,
                  restart_num: int,
-                 error_type: Literal["stuck", "slow", "k8s"],
+                 error_type: Literal['stuck', 'slow', 'k8s'],
                  analysis_id: str,
                  status: str,
                  k8s_error_msg: str = '') -> None:
