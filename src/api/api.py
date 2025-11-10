@@ -189,22 +189,11 @@ class PodOrchestrationAPI:
         pass
 
     def stream_logs_call(self, body: CreateLogEntity):
-        try:
-            print(body)
-        except Exception as e:
-            print(f"Error printing body: {e}")
-        try:
-            print(body.json())
-        except Exception as e:
-            print(f"Error printing body as json: {e}")
-        if self.node_id is not None:
-            return stream_logs(body, self.node_id, self.database, self.hub_core_client)
-        else:
-            return None
+        return stream_logs(body, self.node_id, self.database, self.hub_core_client)
 
     def health_call(self):
         main_alive = threading.main_thread().is_alive()
         if not main_alive:
             raise RuntimeError("Main thread is not alive.")
         else:
-            return {"status": "ok"}
+            return {'status': "ok"}

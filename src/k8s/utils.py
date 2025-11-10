@@ -52,21 +52,6 @@ def get_k8s_resource_names(resource_type: str,
                 return None
 
 
-def get_all_analysis_deployment_names(namespace: str = 'default') -> list[str]:
-    """
-    Get all analysis deployments in the specified namespace.
-    :param namespace: The namespace to search for deployments.
-    :return: A list of deployment names.
-    """
-    analysis_deployment_names = get_k8s_resource_names('deployment',
-                                                       'label',
-                                                       'component=flame-analysis',
-                                                       namespace=namespace)
-    analysis_deployment_names = [analysis_deployment_names] if type(analysis_deployment_names) == str \
-        else analysis_deployment_names
-    return analysis_deployment_names
-
-
 def get_current_namespace() -> str:
     namespace_file = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
     try:
