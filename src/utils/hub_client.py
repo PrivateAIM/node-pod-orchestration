@@ -96,7 +96,7 @@ def update_hub_status(hub_client: flame_hub.CoreClient,
         if run_progress is None:
             hub_client.update_analysis_node(node_analysis_id, run_status=run_status)
         else:
-            hub_client.update_analysis_node(node_analysis_id, run_status=run_status, run_progress=run_progress)
+            hub_client.update_analysis_node(node_analysis_id, run_status=run_status, execution_progress=run_progress)
     except (HTTPStatusError, ConnectError, flame_hub._exceptions.HubAPIError) as e:
         print(f"Error: Failed to update hub status for node_analysis_id {node_analysis_id}\n{e}")
 
