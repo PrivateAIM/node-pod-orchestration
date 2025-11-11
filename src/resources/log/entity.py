@@ -25,6 +25,7 @@ class CreateLogEntity(BaseModel):
 
     analysis_id: str
     status: str
+    progress: int
 
     def to_log_entity(self) -> LogEntity:
         return LogEntity(log=self.log,
@@ -34,7 +35,7 @@ class CreateLogEntity(BaseModel):
 class CreateStartUpErrorLog(CreateLogEntity):
     def __init__(self,
                  restart_num: int,
-                 error_type: Literal["stuck", "slow", "k8s"],
+                 error_type: Literal['stuck', 'slow', 'k8s'],
                  analysis_id: str,
                  status: str,
                  k8s_error_msg: str = '') -> None:
