@@ -136,35 +136,6 @@ def get_analysis_logs(deployment_names: dict[str, str],
             }
 
 
-def delete_analysis_pods(deployment_name: str, project_id: str, namespace: str = 'default') -> None:
-    print(f"PO ACTION - Deleting pods of deployment {deployment_name} in namespace {namespace} at "
-          f"{time.strftime('%Y-%m-%d %H:%M:%S')}")
-    core_client = client.CoreV1Api()
-    # delete nginx deployment
-    delete_k8s_resource(f'nginx-{deployment_name}', 'deployment', namespace)
-    delete_k8s_resource(f'nginx-{deployment_name}', 'service', namespace)
-    delete_k8s_resource(f'nginx-{deployment_name}-config', 'configmap', namespace)
-
-
-    # get pods in deployment  # TODO: Might've become redundant with changes introduced to deployment deletion using propagation_policy='Foreground' in k8s.utils (13.11.25)
-    pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}').items
-    for pod in pods:
-        delete_k8s_resource(pod.metadata.name, 'pod', namespace)
-
-    # delete network policy
-    delete_k8s_resource(f'nginx-to-{deployment_name}-policy', 'networkpolicy', namespace)
-
-    # create new nginx deployment and policy
-    _create_analysis_nginx_deployment(analysis_name=deployment_name,
-                                      analysis_service_name=find_k8s_resources('service',
-                                                                               'label',
-                                                                               f'app={deployment_name}',
-                                                                               namespace=namespace),
-                                      analysis_env={'PROJECT_ID': project_id,
-                                                    'ANALYSIS_ID': deployment_name.split('analysis-')[-1].rsplit('-', 1)[0]},
-                                      namespace=namespace)
-
-
 def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional[dict[str, dict[str, str]]]:
     core_client = client.CoreV1Api()
 
