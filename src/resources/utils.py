@@ -8,10 +8,8 @@ from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
 from src.resources.log.entity import CreateLogEntity
 from src.status.constants import AnalysisStatus
-from src.k8s.kubernetes import (create_harbor_secret,
-                                get_analysis_logs,
-                                delete_resource)
-from src.k8s.utils import get_current_namespace, get_k8s_resource_names
+from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
+from src.k8s.utils import get_current_namespace, find_k8s_resources, delete_k8s_resource
 from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
 from src.utils.hub_client import init_hub_client_and_update_hub_status_with_robot
@@ -205,19 +203,19 @@ def cleanup(cleanup_type: str,
             # Service cleanup/reinit
             if cleanup_type in ['all', 'services', 'mb']:
                 # reinitialize message-broker pod
-                message_broker_pod_name = get_k8s_resource_names('pod',
-                                                                 'label',
-                                                                 "component=flame-message-broker",
-                                                                 namespace=namespace)
-                delete_resource(message_broker_pod_name, 'pod', namespace)
+                message_broker_pod_name = find_k8s_resources('pod',
+                                                             'label',
+                                                             "component=flame-message-broker",
+                                                             namespace=namespace)
+                delete_k8s_resource(message_broker_pod_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset message broker"
             if cleanup_type in ['all', 'services', 'rs']:
                 # reinitialize result-service pod
-                result_service_name = get_k8s_resource_names('pod',
-                                                             'label',
-                                                             "component=flame-result-service",
-                                                             namespace=namespace)
-                delete_resource(result_service_name, 'pod', namespace)
+                result_service_name = find_k8s_resources('pod',
+                                                         'label',
+                                                         "component=flame-result-service",
+                                                         namespace=namespace)
+                delete_k8s_resource(result_service_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset result service"
             if cleanup_type in ['all', 'keycloak']:
                 # cleanup keycloak clients without corresponding analysis
@@ -244,13 +242,13 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
                                               'networkpolicy': (["component=flame-nginx-to-analysis-policy"], 2),
                                               'configmap': (["component=flame-nginx-analysis-config-map"], 2)}.items():
         for selector_arg in selector_args:
-            resources = get_k8s_resource_names(res, 'label', selector_arg, namespace=namespace)
+            resources = find_k8s_resources(res, 'label', selector_arg, namespace=namespace)
             resources = [resources] if type(resources) == str else resources
             if resources is not None:
                 zombie_resources = [r for r in resources
                                     if resource_name_to_analysis(r, max_r_split) not in known_analysis_ids]
                 for z in zombie_resources:
-                    delete_resource(z, res, namespace=namespace)
+                    delete_k8s_resource(z, res, namespace=namespace)
                 result_str += f"Deleted {len(zombie_resources)} zombie " + \
                               f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
     return result_str

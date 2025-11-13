@@ -4,19 +4,15 @@ import base64
 from typing import Optional
 import string
 
-from kubernetes import client, config
+from kubernetes import client
 
 from src.resources.database.entity import Database
-from src.k8s.utils import get_k8s_resource_names
+from src.k8s.utils import find_k8s_resources, delete_k8s_resource
 
 
 PORTS = {'nginx': [80],
          'analysis': [8000],
          'service': [80]}
-
-
-def load_cluster_config():
-    config.load_incluster_config()
 
 
 def create_harbor_secret(host_address: str,
@@ -96,53 +92,6 @@ def create_analysis_deployment(name: str,
     return _get_pods(name)
 
 
-def delete_resource(name: str, resource_type: str, namespace: str = 'default') -> None:
-    """
-    Deletes a Kubernetes resource by name and type.
-    :param name: Name of the resource to delete.
-    :param resource_type: Type of the resource (e.g., 'deployment', 'service', 'pod', 'configmap').
-    :param namespace: Namespace in which the resource exists.
-    """
-    print(f"PO ACTION - Deleting resource: {name} of type {resource_type} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    if resource_type == 'deployment':
-        try:
-            app_client = client.AppsV1Api()
-            app_client.delete_namespaced_deployment(name=name, namespace=namespace)
-        except client.exceptions.ApiException as e:
-            if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} deployment")
-    elif resource_type == 'service':
-        try:
-            core_client = client.CoreV1Api()
-            core_client.delete_namespaced_service(name=name, namespace=namespace)
-        except client.exceptions.ApiException as e:
-            if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} service")
-    elif resource_type == 'pod':
-        try:
-            core_client = client.CoreV1Api()
-            core_client.delete_namespaced_pod(name=name, namespace=namespace)
-        except client.exceptions.ApiException as e:
-            if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} pod")
-    elif resource_type == 'configmap':
-        try:
-            core_client = client.CoreV1Api()
-            core_client.delete_namespaced_config_map(name=name, namespace=namespace)
-        except client.exceptions.ApiException as e:
-            if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} configmap")
-    elif resource_type == 'networkpolicy':
-        try:
-            network_client = client.NetworkingV1Api()
-            network_client.delete_namespaced_network_policy(name=name, namespace=namespace)
-        except client.exceptions.ApiException as e:
-            if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} networkpolicy")
-    else:
-        raise ValueError(f"Unsupported resource type: {resource_type}")
-
-
 def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
     print(f"PO ACTION - Deleting deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     app_client = client.AppsV1Api()
@@ -192,25 +141,25 @@ def delete_analysis_pods(deployment_name: str, project_id: str, namespace: str =
           f"{time.strftime('%Y-%m-%d %H:%M:%S')}")
     core_client = client.CoreV1Api()
     # delete nginx deployment
-    delete_resource(f'nginx-{deployment_name}', 'deployment', namespace)
-    delete_resource(f'nginx-{deployment_name}', 'service', namespace)
-    delete_resource(f'nginx-{deployment_name}-config', 'configmap', namespace)
+    delete_k8s_resource(f'nginx-{deployment_name}', 'deployment', namespace)
+    delete_k8s_resource(f'nginx-{deployment_name}', 'service', namespace)
+    delete_k8s_resource(f'nginx-{deployment_name}-config', 'configmap', namespace)
 
 
-    # get pods in deployment
+    # get pods in deployment  # TODO: Might've become redundant with changes introduced to deployment deletion using propagation_policy='Foreground' in k8s.utils (13.11.25)
     pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}').items
     for pod in pods:
-        delete_resource(pod.metadata.name, 'pod', namespace)
+        delete_k8s_resource(pod.metadata.name, 'pod', namespace)
 
     # delete network policy
-    delete_resource(f'nginx-to-{deployment_name}-policy', 'networkpolicy', namespace)
+    delete_k8s_resource(f'nginx-to-{deployment_name}-policy', 'networkpolicy', namespace)
 
     # create new nginx deployment and policy
     _create_analysis_nginx_deployment(analysis_name=deployment_name,
-                                      analysis_service_name=get_k8s_resource_names('service',
-                                                                                   'label',
-                                                                                   f'app={deployment_name}',
-                                                                                   namespace=namespace),
+                                      analysis_service_name=find_k8s_resources('service',
+                                                                               'label',
+                                                                               f'app={deployment_name}',
+                                                                               namespace=namespace),
                                       analysis_env={'PROJECT_ID': project_id,
                                                     'ANALYSIS_ID': deployment_name.split('analysis-')[-1].rsplit('-', 1)[0]},
                                       namespace=namespace)
@@ -323,16 +272,16 @@ def _create_nginx_config_map(analysis_name: str,
     core_client = client.CoreV1Api()
 
     # get the service name of the message broker
-    message_broker_service_name = get_k8s_resource_names('service',
-                                                         'label',
-                                                         'component=flame-message-broker',
-                                                         namespace=namespace)
-
-    # await and get the pod id and name of the message broker
-    message_broker_pod_name = get_k8s_resource_names('pod',
+    message_broker_service_name = find_k8s_resources('service',
                                                      'label',
                                                      'component=flame-message-broker',
                                                      namespace=namespace)
+
+    # await and get the pod id and name of the message broker
+    message_broker_pod_name = find_k8s_resources('pod',
+                                                 'label',
+                                                 'component=flame-message-broker',
+                                                 namespace=namespace)
     message_broker_pod = None
     while message_broker_pod is None:
         try:
@@ -345,16 +294,16 @@ def _create_nginx_config_map(analysis_name: str,
         time.sleep(1)
 
     # get the service name of the pod orchestrator
-    po_service_name = get_k8s_resource_names('service',
-                                             'label',
-                                             'component=flame-po',
-                                             namespace=namespace)
+    po_service_name = find_k8s_resources('service',
+                                         'label',
+                                         'component=flame-po',
+                                         namespace=namespace)
 
     # await and get the pod ip and name of the pod orchestrator
-    pod_orchestration_name = get_k8s_resource_names('pod',
-                                                   'label',
-                                                   'component=flame-po',
-                                                   namespace=namespace)
+    pod_orchestration_name = find_k8s_resources('pod',
+                                                'label',
+                                                'component=flame-po',
+                                                namespace=namespace)
     pod_orchestration_pod = None
     while pod_orchestration_pod is None:
         try:
@@ -378,19 +327,19 @@ def _create_nginx_config_map(analysis_name: str,
         time.sleep(1)
 
     # get the name of the hub adapter, kong proxy, and result service
-    hub_adapter_service_name = get_k8s_resource_names('service',
-                                                      'label',
-                                                      'component=flame-hub-adapter',
-                                                      namespace=namespace)
-    kong_proxy_name = get_k8s_resource_names('service',
+    hub_adapter_service_name = find_k8s_resources('service',
+                                                  'label',
+                                                  'component=flame-hub-adapter',
+                                                  namespace=namespace)
+    kong_proxy_name = find_k8s_resources('service',
+                                         'label',
+                                         'app.kubernetes.io/name=kong',
+                                         manual_name_selector='proxy',
+                                         namespace=namespace)
+    result_service_name = find_k8s_resources('service',
                                              'label',
-                                             'app.kubernetes.io/name=kong',
-                                             manual_name_selector='proxy',
+                                             'component=flame-result-service',
                                              namespace=namespace)
-    result_service_name = get_k8s_resource_names('service',
-                                                 'label',
-                                                 'component=flame-result-service',
-                                                 namespace=namespace)
 
     # generate config map
     data = {
