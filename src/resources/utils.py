@@ -73,7 +73,7 @@ def retrieve_history(analysis_id_str: str, database: Database) -> dict[str, dict
     analysis_logs, nginx_logs = ({}, {})
     for analysis_id, deployment in deployments.items():
         # interpret log string as a dictionary
-        log = ast.literal_eval(deployment.log)
+        log = ast.literal_eval(str(deployment.log))
         analysis_logs[analysis_id] = log["analysis"][analysis_id]
         nginx_logs[analysis_id] = log["nginx"][analysis_id]
 
