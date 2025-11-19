@@ -144,52 +144,94 @@ class PodOrchestrationAPI:
         uvicorn.run(app, host="0.0.0.0", port=8000)
 
     def create_analysis_call(self, body: CreateAnalysis):
-        return create_analysis(body, self.database)
+        try:
+            return create_analysis(body, self.database)
+        except Exception as e:
+            print(f"Error creating analysis: {e}")
 
     def retrieve_all_history_call(self):
-        return retrieve_history('all', self.database)
+        try:
+            return retrieve_history('all', self.database)
+        except Exception as e:
+            print(f"Error retrieving ALL history data: {e}")
 
     def retrieve_history_call(self, analysis_id: str):
-        return retrieve_history(analysis_id, self.database)
+        try:
+            return retrieve_history(analysis_id, self.database)
+        except Exception as e:
+            print(f"Error retrieving history data: {e}")
 
     def retrieve_all_logs_call(self):
-        return retrieve_logs('all', self.database)
+        try:
+            return retrieve_logs('all', self.database)
+        except Exception as e:
+            print(f"Error retrieving ALL logs data: {e}")
 
     def retrieve_logs_call(self, analysis_id: str):
-        return retrieve_logs(analysis_id, self.database)
+        try:
+            return retrieve_logs(analysis_id, self.database)
+        except Exception as e:
+            print(f"Error retrieving logs data: {e}")
 
     def get_all_status_call(self):
-        return get_status('all', self.database)
+        try:
+            return get_status('all', self.database)
+        except Exception as e:
+            print(f"Error retrieving ALL status data: {e}")
 
     def get_status_call(self, analysis_id: str):
-        return get_status(analysis_id, self.database)
+        try:
+            return get_status(analysis_id, self.database)
+        except Exception as e:
+            print(f"Error retrieving status data: {e}")
 
     def get_all_pods_call(self):
-        return get_pods('all', self.database)
+        try:
+            return get_pods('all', self.database)
+        except Exception as e:
+            print(f"Error retrieving ALL pod names: {e}")
 
     def get_pods_call(self, analysis_id: str):
-        return get_pods(analysis_id, self.database)
+        try:
+            return get_pods(analysis_id, self.database)
+        except Exception as e:
+            print(f"Error retrieving pod name: {e}")
 
     def stop_all_analysis_call(self):
-        return stop_analysis('all', self.database)
+        try:
+            return stop_analysis('all', self.database)
+        except Exception as e:
+            print(f"Error stopping ALL analyzes: {e}")
 
     def stop_analysis_call(self, analysis_id: str):
-        return stop_analysis(analysis_id, self.database)
+        try:
+            return stop_analysis(analysis_id, self.database)
+        except Exception as e:
+            print(f"Error stopping analysis: {e}")
 
     def delete_all_analysis_call(self):
-        return delete_analysis('all', self.database)
+        try:
+            return delete_analysis('all', self.database)
+        except Exception as e:
+            print(f"Error deleting ALL analyzes: {e}")
 
     def delete_analysis_call(self, analysis_id: str):
-        return delete_analysis(analysis_id, self.database)
+        try:
+            return delete_analysis(analysis_id, self.database)
+        except Exception as e:
+            print(f"Error deleting analysis: {e}")
 
     def cleanup_call(self, cleanup_type: str):
-        return cleanup(cleanup_type, self.database, self.namespace)
-
-    def get_service_status_call(self):
-        pass
+        try:
+            return cleanup(cleanup_type, self.database, self.namespace)
+        except Exception as e:
+            print(f"Error cleaning up: {e}")
 
     def stream_logs_call(self, body: CreateLogEntity):
-        return stream_logs(body, self.node_id, self.database, self.hub_core_client)
+        try:
+            return stream_logs(body, self.node_id, self.database, self.hub_core_client)
+        except Exception as e:
+            print(f"Error streaming logs: {e}")
 
     def health_call(self):
         main_alive = threading.main_thread().is_alive()
