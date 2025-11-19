@@ -283,7 +283,7 @@ def _create_analysis_nginx_deployment(analysis_name: str,
         sub_path="nginx.conf"
     )
 
-    container1 = client.V1Container(name=nginx_name, image="nginx:latest", image_pull_policy="Always",
+    container1 = client.V1Container(name=nginx_name, image="nginx:1.29.3", image_pull_policy="IfNotPresent",
                                     ports=[client.V1ContainerPort(PORTS['nginx'][0])],
                                     liveness_probe=liveness_probe,
                                     volume_mounts=[vol_mount])
