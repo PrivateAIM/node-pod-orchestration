@@ -70,6 +70,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                             node_analysis_ids[analysis_id] = node_analysis_id
                         else:
                             hub_client = None
+                            break
                     else:
                         node_analysis_id = node_analysis_ids[analysis_id]
 
