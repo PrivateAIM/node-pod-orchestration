@@ -1,7 +1,7 @@
 import uvicorn
 import os
 import threading
-from fastapi import APIRouter, FastAPI, Depends
+from fastapi import APIRouter, FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -147,91 +147,91 @@ class PodOrchestrationAPI:
         try:
             return create_analysis(body, self.database)
         except Exception as e:
-            print(f"Error creating analysis: {e}")
+            raise HTTPException(status_code=500, detail=f"Error creating analysis: {e}")
 
     def retrieve_all_history_call(self):
         try:
             return retrieve_history('all', self.database)
         except Exception as e:
-            print(f"Error retrieving ALL history data: {e}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving ALL history data: {e}")
 
     def retrieve_history_call(self, analysis_id: str):
         try:
             return retrieve_history(analysis_id, self.database)
         except Exception as e:
-            print(f"Error retrieving history data: {e}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving history data: {e}")
 
     def retrieve_all_logs_call(self):
         try:
             return retrieve_logs('all', self.database)
         except Exception as e:
-            print(f"Error retrieving ALL logs data: {e}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving ALL logs data: {e}")
 
     def retrieve_logs_call(self, analysis_id: str):
         try:
             return retrieve_logs(analysis_id, self.database)
         except Exception as e:
-            print(f"Error retrieving logs data: {e}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving logs data: {e}")
 
     def get_all_status_call(self):
         try:
             return get_status('all', self.database)
         except Exception as e:
-            print(f"Error retrieving ALL status data: {e}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving ALL status data: {e}")
 
     def get_status_call(self, analysis_id: str):
         try:
             return get_status(analysis_id, self.database)
         except Exception as e:
-            print(f"Error retrieving status data: {e}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving status data: {e}")
 
     def get_all_pods_call(self):
         try:
             return get_pods('all', self.database)
         except Exception as e:
-            print(f"Error retrieving ALL pod names: {e}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving ALL pod names: {e}")
 
     def get_pods_call(self, analysis_id: str):
         try:
             return get_pods(analysis_id, self.database)
         except Exception as e:
-            print(f"Error retrieving pod name: {e}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving pod name: {e}")
 
     def stop_all_analysis_call(self):
         try:
             return stop_analysis('all', self.database)
         except Exception as e:
-            print(f"Error stopping ALL analyzes: {e}")
+            raise HTTPException(status_code=500, detail=f"Error stopping ALL analyzes: {e}")
 
     def stop_analysis_call(self, analysis_id: str):
         try:
             return stop_analysis(analysis_id, self.database)
         except Exception as e:
-            print(f"Error stopping analysis: {e}")
+            raise HTTPException(status_code=500, detail=f"Error stopping analysis: {e}")
 
     def delete_all_analysis_call(self):
         try:
             return delete_analysis('all', self.database)
         except Exception as e:
-            print(f"Error deleting ALL analyzes: {e}")
+            raise HTTPException(status_code=500, detail=f"Error deleting ALL analyzes: {e}")
 
     def delete_analysis_call(self, analysis_id: str):
         try:
             return delete_analysis(analysis_id, self.database)
         except Exception as e:
-            print(f"Error deleting analysis: {e}")
+            raise HTTPException(status_code=500, detail=f"Error deleting analysis: {e}")
 
     def cleanup_call(self, cleanup_type: str):
         try:
             return cleanup(cleanup_type, self.database, self.namespace)
         except Exception as e:
-            print(f"Error cleaning up: {e}")
+            raise HTTPException(status_code=500, detail=f"Error cleaning up: {e}")
 
     def stream_logs_call(self, body: CreateLogEntity):
         try:
             return stream_logs(body, self.node_id, self.database, self.hub_core_client)
         except Exception as e:
-            print(f"Error streaming logs: {e}")
+            raise HTTPException(status_code=500, detail=f"Error streaming logs: {e}")
 
     def health_call(self):
         main_alive = threading.main_thread().is_alive()

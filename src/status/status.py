@@ -61,6 +61,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                 if database.analysis_is_running(analysis_id)]
             print(f"Checking for running analyzes...{running_analyzes}")
             if running_analyzes:
+                hub_client_issues = 0
                 for analysis_id in running_analyzes:
                     print(f"Current analysis id: {analysis_id}")
                     # Get node analysis id
@@ -71,6 +72,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         else:
                             print(f"Error: Retrieving node_analysis id for malformed analysis returned None "
                                   f"(analysis_id={analysis_id})... Skipping")
+                            hub_client_issues += 1
                             continue
                     else:
                         node_analysis_id = node_analysis_ids[analysis_id]
@@ -111,6 +113,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                               f"db_status={analysis_status['db_status']}, "
                               f"internal_status={analysis_status['int_status']} "
                               f"to {analysis_hub_status}")
+                hub_client = None if hub_client_issues > 0 else hub_client
 
             time.sleep(status_loop_interval)
             print(f"Status loop iteration completed. Sleeping for {status_loop_interval} seconds.")
