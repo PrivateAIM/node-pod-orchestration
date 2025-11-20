@@ -69,8 +69,9 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         if node_analysis_id is not None:
                             node_analysis_ids[analysis_id] = node_analysis_id
                         else:
-                            hub_client = None
-                            break
+                            print(f"Error: Retrieving node_analysis id for malformed analysis returned None "
+                                  f"(analysis_id={analysis_id})... Skipping")
+                            continue
                     else:
                         node_analysis_id = node_analysis_ids[analysis_id]
 
