@@ -239,9 +239,9 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
                         if status.state.waiting is not None:
                             pod_status[name]['reason'] = str(status.state.waiting.reason)
                             pod_status[name]['message'] = str(status.state.waiting.message)
-                        elif status.state.teminated is not None:
-                            pod_status[name]['reason'] = str(status.state.teminated.reason)
-                            pod_status[name]['message'] = str(status.state.teminated.message)
+                        elif status.state.terminated is not None:
+                            pod_status[name]['reason'] = str(status.state.terminated.reason)
+                            pod_status[name]['message'] = str(status.state.terminated.message)
                         else:
                             pod_status[name]['reason'] = "UnknownError"
                             pod_status[name]['message'] = "Kubernetes fell into an unknown error state (neither terminated nor waiting)."
