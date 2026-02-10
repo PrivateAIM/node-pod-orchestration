@@ -213,13 +213,13 @@ def cleanup(cleanup_type: str,
                 delete_resource(message_broker_pod_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset message broker"
             if cleanup_type in ['all', 'services', 'rs']:
-                # reinitialize result-service pod
-                result_service_name = get_k8s_resource_names('pod',
+                # reinitialize storage-service pod
+                storage_service_name = get_k8s_resource_names('pod',
                                                              'label',
-                                                             'component=flame-result-service',
+                                                             'component=flame-storage-service',
                                                              namespace=namespace)
-                delete_resource(result_service_name, 'pod', namespace)
-                response_content[cleanup_type] = "Reset result service"
+                delete_resource(storage_service_name, 'pod', namespace)
+                response_content[cleanup_type] = "Reset storage service"
             if cleanup_type in ['all', 'keycloak']:
                 # cleanup keycloak clients without corresponding analysis
                 # if all is all flame clients are deleted because ther are no analyzes in the db
