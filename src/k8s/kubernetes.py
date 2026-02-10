@@ -394,9 +394,9 @@ def _create_nginx_config_map(analysis_name: str,
                                              'app.kubernetes.io/name=kong',
                                              manual_name_selector='proxy',
                                              namespace=namespace)
-    storage_service_name = get_k8s_resource_names('service',
+    result_service_name = get_k8s_resource_names('service',
                                                  'label',
-                                                 'component=flame-storage-service',
+                                                 'component=flame-result-service',
                                                  namespace=namespace)
 
     # generate config map
@@ -434,10 +434,10 @@ def _create_nginx_config_map(analysis_name: str,
                     }}
                     
                     
-                    # egress: analysis deployment to storage-service
+                    # egress: analysis deployment to result-service
                     location ~ ^/storage/(final|local|intermediate)/ {{
                         rewrite     ^/storage(/.*) $1 break;
-                        proxy_pass http://{storage_service_name}:8080;
+                        proxy_pass http://{result_service_name}:8080;
                         allow       {analysis_ip};
                         deny        all;
                     }}
