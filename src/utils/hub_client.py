@@ -18,8 +18,8 @@ import flame_hub
 from src.status.constants import AnalysisStatus
 
 
-def init_hub_client_with_robot(robot_id: str,
-                               robot_secret: str,
+def init_hub_client_with_client(client_id: str,
+                               client_secret: str,
                                hub_url_core: str,
                                hub_auth: str,
                                http_proxy: str,
@@ -35,11 +35,11 @@ def init_hub_client_with_robot(robot_id: str,
     try:
 
         robot_client = Client(base_url=hub_auth, mounts=proxies, verify=ssl_ctx)
-        hub_robot = flame_hub.auth.RobotAuth(robot_id=robot_id,
-                                             robot_secret=robot_secret,
+        hub_client = flame_hub.auth.ClientAuth(client_id=client_id,
+                                             client_secret=client_secret,
                                              client=robot_client)
 
-        client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_robot, verify=ssl_ctx)
+        client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_client, verify=ssl_ctx)
         hub_client = flame_hub.CoreClient(client=client)
         print("Hub client init successful")
     except Exception as e:
@@ -87,10 +87,15 @@ def update_hub_status(hub_client: flame_hub.CoreClient, node_analysis_id: str, r
     """
     Update the status of the analysis in the hub.
     """
+    status_mapping = {
+        AnalysisStatus.RUNNING.value: "executing",
+        AnalysisStatus.FINISHED.value: "executed",
+    }
     try:
         if run_status == AnalysisStatus.STUCK.value:
             run_status = AnalysisStatus.FAILED.value
-        hub_client.update_analysis_node(node_analysis_id, run_status=run_status)
+        execution_status = status_mapping.get(run_status, run_status)
+        hub_client.update_analysis_node(node_analysis_id, execution_status=execution_status)
     except (HTTPStatusError, ConnectError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
         print(f"Failed to update hub status for node_analysis_id {node_analysis_id}.\n{e}")
 
