@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - canary
+      - new_hub
 
 
 env:
@@ -42,6 +43,8 @@ jobs:
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/canary" ]]; then
           echo "CUSTOM_TAG=canary" >> $GITHUB_ENV
+          elif [[ "${{ github.ref }}" == "refs/heads/new_hub" ]]; then
+          echo "CUSTOM_TAG=new-hub" >> $GITHUB_ENV
           else
           echo "CUSTOM_TAG=latest" >> $GITHUB_ENV
           fi
