@@ -34,10 +34,10 @@ def init_hub_client_with_client(client_id: str,
         }
     try:
 
-        robot_client = Client(base_url=hub_auth, mounts=proxies, verify=ssl_ctx)
+        _client = Client(base_url=hub_auth, mounts=proxies, verify=ssl_ctx)
         hub_client = flame_hub.auth.ClientAuth(client_id=client_id,
                                              client_secret=client_secret,
-                                             client=robot_client)
+                                             client=_client)
 
         client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_client, verify=ssl_ctx)
         hub_client = flame_hub.CoreClient(client=client)
@@ -58,9 +58,9 @@ def get_ssl_context() -> ssl.SSLContext:
     return ctx
 
 
-def get_node_id_by_robot(hub_client: flame_hub.CoreClient, robot_id: str) -> Optional[str]:
+def get_node_id_by_client(hub_client: flame_hub.CoreClient, client_id: str) -> Optional[str]:
     try:
-        node_id_object = hub_client.find_nodes(filter={"robot_id": robot_id})[0]
+        node_id_object = hub_client.find_nodes(filter={"client_id": client_id})[0]
     except (HTTPStatusError, JSONDecodeError, ConnectTimeout, flame_hub._exceptions.HubAPIError, AttributeError) as e:
         print(f"Error in hub python client whilst retrieving node id object!\n{e}")
         node_id_object = None
@@ -100,19 +100,19 @@ def update_hub_status(hub_client: flame_hub.CoreClient, node_analysis_id: str, r
         print(f"Failed to update hub status for node_analysis_id {node_analysis_id}.\n{e}")
 
 
-def init_hub_client_and_update_hub_status_with_robot(analysis_id: str, status: str) -> None:
+def init_hub_client_and_update_hub_status_with_client(analysis_id: str, status: str) -> None:
     """
     Create a hub client for the analysis and update the current status.
     """
-    robot_id, robot_secret, hub_url_core, hub_auth, http_proxy, https_proxy = (os.getenv('HUB_ROBOT_USER'),
-                                                                               os.getenv('HUB_ROBOT_SECRET'),
+    client_id, client_secret, hub_url_core, hub_auth, http_proxy, https_proxy = (os.getenv('HUB_CLIENT_ID'),
+                                                                               os.getenv('HUB_CLIENT_SECRET'),
                                                                                os.getenv('HUB_URL_CORE'),
                                                                                os.getenv('HUB_URL_AUTH'),
                                                                                os.getenv('PO_HTTP_PROXY'),
                                                                                os.getenv('PO_HTTPS_PROXY'))
-    hub_client = init_hub_client_with_robot(robot_id, robot_secret, hub_url_core, hub_auth, http_proxy, https_proxy)
+    hub_client = init_hub_client_with_client(client_id, client_secret, hub_url_core, hub_auth, http_proxy, https_proxy)
     if hub_client is not None:
-        node_id = get_node_id_by_robot(hub_client, robot_id)
+        node_id = get_node_id_by_client(hub_client, client_id)
         if node_id is not None:
             node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
             if node_analysis_id is not None:

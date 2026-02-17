@@ -5,7 +5,7 @@ from fastapi import APIRouter, FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.utils.hub_client import init_hub_client_with_client, get_node_id_by_robot
+from src.utils.hub_client import init_hub_client_with_client, get_node_id_by_client
 from src.api.oauth import valid_access_token
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import CreateAnalysis
@@ -24,7 +24,7 @@ from src.resources.utils import (create_analysis,
 class PodOrchestrationAPI:
     def __init__(self, database: Database, namespace: str = 'default'):
         self.database = database
-        client_id, client_secret, hub_url_core, hub_auth, http_proxy, https_proxy = (os.getenv('HUB_CLIENT_USER'),
+        client_id, client_secret, hub_url_core, hub_auth, http_proxy, https_proxy = (os.getenv('HUB_CLIENT_ID'),
                                                                                    os.getenv('HUB_CLIENT_SECRET'),
                                                                                    os.getenv('HUB_URL_CORE'),
                                                                                    os.getenv('HUB_URL_AUTH'),
@@ -37,7 +37,7 @@ class PodOrchestrationAPI:
                                                           hub_auth,
                                                           http_proxy,
                                                           https_proxy)
-        self.node_id = get_node_id_by_robot(self.hub_core_client, robot_id) if self.hub_core_client else None
+        self.node_id = get_node_id_by_client(self.hub_core_client, client_id) if self.hub_core_client else None
         self.namespace = namespace
         app = FastAPI(title="FLAME PO",
                       docs_url="/api/docs",
