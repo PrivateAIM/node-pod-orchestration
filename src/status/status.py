@@ -6,19 +6,19 @@ from httpx import AsyncClient, HTTPStatusError, ConnectError, ConnectTimeout
 
 import flame_hub
 
-from src.k8s.kubernetes import PORTS
+from src.k8s.kubernetes import PORTS, get_pod_status
 from src.resources.database.entity import Database, AnalysisDB
-from src.utils.hub_client import (init_hub_client_with_robot,
-                                  get_node_id_by_robot,
-                                  get_node_analysis_id,
-                                  update_hub_status)
+from src.resources.log.entity import CreateStartUpErrorLog
 from src.resources.utils import (unstuck_analysis_deployments,
                                  stop_analysis,
                                  delete_analysis,
                                  stream_logs)
-from src.resources.log.entity import CreateStartUpErrorLog
-from src.k8s.kubernetes import get_pod_status
+from src.utils.hub_client import (init_hub_client_with_robot,
+                                  get_node_id_by_robot,
+                                  get_node_analysis_id,
+                                  update_hub_status)
 from src.status.constants import AnalysisStatus
+from src.utils.other import extract_hub_envs
 from src.utils.token import get_keycloak_token
 from src.status.constants import _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
 
@@ -33,12 +33,8 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
     node_id = None
     node_analysis_ids = {}
 
-    robot_id, robot_secret, hub_url_core, hub_auth, http_proxy, https_proxy = (os.getenv('HUB_ROBOT_USER'),
-                                                                               os.getenv('HUB_ROBOT_SECRET'),
-                                                                               os.getenv('HUB_URL_CORE'),
-                                                                               os.getenv('HUB_URL_AUTH'),
-                                                                               os.getenv('PO_HTTP_PROXY'),
-                                                                               os.getenv('PO_HTTPS_PROXY'))
+    robot_id, robot_secret, hub_url_core, hub_auth, enable_hub_logging, http_proxy, https_proxy = extract_hub_envs()
+
     # Enter lifecycle loop
     while True:
         if hub_client is None:
@@ -60,6 +56,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                 if database.analysis_is_running(analysis_id)]
             print(f"PO ACTION - Checking for running analyzes...{running_analyzes}")
             if running_analyzes:
+                hub_client_issues = 0
                 for analysis_id in running_analyzes:
                     print(f"PO STATUS LOOP - Current analysis id: {analysis_id}")
                     # Get node analysis id
@@ -68,7 +65,10 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         if node_analysis_id is not None:
                             node_analysis_ids[analysis_id] = node_analysis_id
                         else:
-                            hub_client = None
+                            print(f"Error: Retrieving node_analysis id for malformed analysis returned None "
+                                  f"(analysis_id={analysis_id})... Skipping")
+                            hub_client_issues += 1
+                            continue
                     else:
                         node_analysis_id = node_analysis_ids[analysis_id]
 
@@ -85,7 +85,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         # Fix stuck analyzes
                         if analysis_status['status_action'] == 'unstuck':
                             print(f"\tUnstuck analysis with internal status: {analysis_status['int_status']}")
-                            _fix_stuck_status(database, analysis_status, node_id, hub_client)
+                            _fix_stuck_status(database, analysis_status, node_id, enable_hub_logging, hub_client)
                             # Update analysis status (skip iteration if analysis is not deployed)
                             analysis_status = _get_analysis_status(analysis_id, database)
                             if analysis_status is None:
@@ -216,6 +216,7 @@ async def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_
 def _fix_stuck_status(database: Database,
                       analysis_status: dict[str, str],
                       node_id: str,
+                      enable_hub_logging: bool,
                       hub_client: flame_hub.CoreClient) -> None:
     analysis = database.get_latest_deployment(analysis_status['analysis_id'])
     if analysis is not None:
@@ -225,14 +226,15 @@ def _fix_stuck_status(database: Database,
 
         # Tracking restarts
         if analysis.restart_counter < _MAX_RESTARTS:
-            _stream_stuck_logs(analysis, node_id, database, hub_client, is_slow)
+            _stream_stuck_logs(analysis, node_id, enable_hub_logging, database, hub_client, is_slow)
             unstuck_analysis_deployments(analysis_status['analysis_id'], database)
         else:
-            _stream_stuck_logs(analysis, node_id, database, hub_client, is_slow)
+            _stream_stuck_logs(analysis, node_id,enable_hub_logging, database, hub_client, is_slow)
 
 
 def _stream_stuck_logs(analysis: AnalysisDB,
                        node_id: str,
+                       enable_hub_logging: bool,
                        database: Database,
                        hub_client: flame_hub.CoreClient,
                        is_slow: bool) -> None:
@@ -258,6 +260,7 @@ def _stream_stuck_logs(analysis: AnalysisDB,
                                       analysis.status,
                                       k8s_error_msg=reason if is_k8s_related else ''),
                 node_id,
+                enable_hub_logging,
                 database,
                 hub_client)
 

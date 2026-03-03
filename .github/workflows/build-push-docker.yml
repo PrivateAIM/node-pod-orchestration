@@ -26,6 +26,9 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract release information
+        run: |
+          echo "RELEASE=$(grep -m1 '^version' pyproject.toml | cut -d '"' -f2)" >> $GITHUB_ENV
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
@@ -33,6 +36,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=sha
+            type=raw,value=${{ env.RELEASE }},enable={{is_default_branch}}
       - name: Set custom tag if on canary branch
         id: custom-tag
         run: |

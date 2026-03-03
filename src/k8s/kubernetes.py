@@ -152,12 +152,19 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
                 if status is not None:
                     pod_status[name] = {}
                     pod_status[name]['ready'] = status.ready
-                    if not status.ready:
-                        pod_status[name]['reason'] = str(status.state.waiting.reason)
-                        pod_status[name]['message'] = str(status.state.waiting.message)
-                    else:
+                    if status.ready:
                         pod_status[name]['reason'] = ''
                         pod_status[name]['message'] = ''
+                    else:
+                        if status.state.waiting is not None:
+                            pod_status[name]['reason'] = str(status.state.waiting.reason)
+                            pod_status[name]['message'] = str(status.state.waiting.message)
+                        elif status.state.terminated is not None:
+                            pod_status[name]['reason'] = str(status.state.terminated.reason)
+                            pod_status[name]['message'] = str(status.state.terminated.message)
+                        else:
+                            pod_status[name]['reason'] = "UnknownError"
+                            pod_status[name]['message'] = "Kubernetes fell into an unknown error state (neither terminated nor waiting)."
         if pod_status:
             return pod_status
         else:
@@ -203,7 +210,7 @@ def _create_analysis_nginx_deployment(analysis_name: str,
         sub_path="nginx.conf"
     )
 
-    container1 = client.V1Container(name=nginx_name, image="nginx:latest", image_pull_policy="Always",
+    container1 = client.V1Container(name=nginx_name, image="nginx:1.29.3", image_pull_policy="IfNotPresent",
                                     ports=[client.V1ContainerPort(PORTS['nginx'][0])],
                                     liveness_probe=liveness_probe,
                                     volume_mounts=[vol_mount])
