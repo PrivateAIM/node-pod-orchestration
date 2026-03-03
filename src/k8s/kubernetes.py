@@ -599,7 +599,15 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
             return []
 
     # sanitize pod logs
-    return [''.join(filter(lambda x: x in string.printable, log)) for log in pod_logs]
+    final_logs = []
+    for log in pod_logs:
+        log = ''.join(filter(lambda x: x in string.printable, log))
+        log = '\n'.join([l for l in log.split('\n')
+                         if not l.startswith('INFO:') and
+                         not (l.endswith('"GET /healthz HTTP/1.0" 200 OK') or
+                              l.endswith('"POST /webhook HTTP/1.0" 200 OK'))])
+        final_logs.append(log)
+    return final_logs
 
 
 def _get_pods(name: str, namespace: str = 'default') -> list[str]:
