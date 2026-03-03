@@ -225,7 +225,7 @@ def cleanup(cleanup_type: str,
                 # if all is all flame clients are deleted because ther are no analyzes in the db
                 analysis_ids = database.get_analysis_ids()
                 for client in _get_all_keycloak_clients():
-                    if client['clientId'] not in analysis_ids and client['name'].startswith('flame-'):
+                    if (client['clientId'] not in analysis_ids) and client['name'].startswith('flame-'):
                         delete_keycloak_client(client['clientId'])
 
         else:
@@ -257,7 +257,7 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
     return result_str
 
 
-def stream_logs(log_entity: CreateLogEntity, node_id: str, database: Database, hub_core_client: CoreClient) -> None:
+def stream_logs(log_entity: CreateLogEntity, node_id: str, enable_hub_logging: bool, database: Database, hub_core_client: CoreClient) -> None:
     try:
         database.update_analysis_log(log_entity.analysis_id, str(log_entity.to_log_entity()))
         #database.update_analysis_status(log_entity.analysis_id, log_entity.status) #TODO: Implement this?
@@ -265,8 +265,9 @@ def stream_logs(log_entity: CreateLogEntity, node_id: str, database: Database, h
         print(f"Error updating analysis log in database: {e}")
 
     # log to hub
-    hub_core_client.create_analysis_node_log(analysis_id=log_entity.analysis_id,
-                                             node_id=node_id,
-                                             status=log_entity.status,
-                                             level=log_entity.log_type,
-                                             message=log_entity.log)
+    if enable_hub_logging:
+        hub_core_client.create_analysis_node_log(analysis_id=log_entity.analysis_id,
+                                                 node_id=node_id,
+                                                 status=log_entity.status,
+                                                 level=log_entity.log_type,
+                                                 message=log_entity.log)
