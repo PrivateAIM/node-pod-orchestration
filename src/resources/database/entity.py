@@ -11,12 +11,12 @@ from .db_models import Base, AnalysisDB
 
 class Database:
     def __init__(self) -> None:
-        host = os.getenv("POSTGRES_HOST")
+        host = os.getenv('POSTGRES_HOST')
         port = "5432"
-        user = os.getenv("POSTGRES_USER")
-        password = os.getenv("POSTGRES_PASSWORD")
-        database = os.getenv("POSTGRES_DB")
-        conn_uri = f'postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}'
+        user = os.getenv('POSTGRES_USER')
+        password = os.getenv('POSTGRES_PASSWORD')
+        database = os.getenv('POSTGRES_DB')
+        conn_uri = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
         print(conn_uri)
         self.engine = create_engine(conn_uri,
                                     pool_pre_ping=True,
@@ -31,11 +31,11 @@ class Database:
 
     def get_deployment(self, deployment_name: str) -> Optional[AnalysisDB]:
         with self.SessionLocal() as session:
-            return session.query(AnalysisDB).filter_by(**{"deployment_name": deployment_name}).first()
+            return session.query(AnalysisDB).filter_by(**{'deployment_name': deployment_name}).first()
 
     def get_latest_deployment(self, analysis_id: str) -> Optional[AnalysisDB]:
         with self.SessionLocal() as session:
-            deployments = session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
+            deployments = session.query(AnalysisDB).filter_by(**{'analysis_id': analysis_id}).all()
             if deployments:
                 return deployments[-1]
             return None
@@ -50,7 +50,7 @@ class Database:
 
     def get_deployments(self, analysis_id: str) -> list[AnalysisDB]:
         with self.SessionLocal() as session:
-            return session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
+            return session.query(AnalysisDB).filter_by(**{'analysis_id': analysis_id}).all()
 
     def create_analysis(self,
                         analysis_id: str,
@@ -63,7 +63,8 @@ class Database:
                         registry_user: str,
                         registry_password: str,
                         kong_token: str,
-                        restart_counter: int ,
+                        restart_counter: int,
+                        progress: int,
                         namespace: str = 'default') -> AnalysisDB:
         analysis = AnalysisDB(analysis_id=analysis_id,
                               deployment_name=deployment_name,
@@ -77,6 +78,7 @@ class Database:
                               namespace=namespace,
                               kong_token=kong_token,
                               restart_counter=restart_counter,
+                              progress=progress,
                               time_created=time.time())
         with self.SessionLocal() as session:
             session.add(analysis)
@@ -86,7 +88,7 @@ class Database:
 
     def update_analysis(self, analysis_id: str, **kwargs) -> list[AnalysisDB]:
         with self.SessionLocal() as session:
-            analysis = session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
+            analysis = session.query(AnalysisDB).filter_by(**{'analysis_id': analysis_id}).all()
             for deployment in analysis:
                 if deployment:
                     for key, value in kwargs.items():
@@ -97,7 +99,7 @@ class Database:
 
     def update_deployment(self, deployment_name: str, **kwargs) -> AnalysisDB:
         with self.SessionLocal() as session:
-            deployment = session.query(AnalysisDB).filter_by(**{"deployment_name": deployment_name}).first()
+            deployment = session.query(AnalysisDB).filter_by(**{'deployment_name': deployment_name}).first()
             for key, value in kwargs.items():
                 setattr(deployment, key, value)
             session.commit()
@@ -105,7 +107,7 @@ class Database:
 
     def delete_analysis(self, analysis_id: str) -> None:
         with self.SessionLocal() as session:
-            analysis = session.query(AnalysisDB).filter_by(**{"analysis_id": analysis_id}).all()
+            analysis = session.query(AnalysisDB).filter_by(**{'analysis_id': analysis_id}).all()
             for deployment in analysis:
                 if deployment:
                     session.delete(deployment)
@@ -137,12 +139,20 @@ class Database:
         return [deployment.pod_ids for deployment in self.get_deployments(analysis_id) if deployment is not None]
 
     def get_analysis_log(self, analysis_id: str) -> str:
-        deployment = self.get_deployments(analysis_id)[0]
+        deployment = self.get_latest_deployment(analysis_id)
         if deployment is not None:
             log = deployment.log
             if log is not None:
                 return log
         return ""
+
+    def get_analysis_progress(self, analysis_id: str) -> Optional[int]:
+        deployment = self.get_latest_deployment(analysis_id)
+        if deployment is not None:
+            progress = deployment.progress
+            if progress is not None:
+                return progress
+        return None
 
     def update_analysis_log(self, analysis_id: str, log: str) -> None:
         latest = self.get_analysis_log(analysis_id)
@@ -150,11 +160,20 @@ class Database:
             log = latest + "\n" + log
         self.update_analysis(analysis_id, log=log)
 
+    def progress_valid(self, analysis_id: str, progress: int) -> bool:
+        latest = self.get_analysis_progress(analysis_id)
+        if (latest is not None) and (latest < progress <= 100):
+            return True
+        return False
+
+    def update_analysis_progress(self, analysis_id: str, progress: int) -> None:
+        self.update_analysis(analysis_id, progress=progress)
+
     def update_analysis_status(self, analysis_id: str, status: str) -> None:
         self.update_analysis(analysis_id, status=status)
 
     def update_deployment_status(self, deployment_name: str, status: str) -> None:
-        print(f"Updating deployment {deployment_name} to status {status}")
+        print(f"PO ACTION - Updating deployment {deployment_name} to status {status}")
         self.update_deployment(deployment_name, status=status)
 
     def stop_analysis(self, analysis_id: str) -> None:
@@ -164,15 +183,16 @@ class Database:
         analysis = self.get_deployments(analysis_id)
         if analysis:
             analysis = analysis[0]
-            return {"analysis_id": analysis.analysis_id,
-                    "project_id": analysis.project_id,
-                    "registry_url": analysis.registry_url,
-                    "image_url": analysis.image_url,
-                    "registry_user": analysis.registry_user,
-                    "registry_password": analysis.registry_password,
-                    "namespace": analysis.namespace,
-                    "kong_token": analysis.kong_token,
-                    "restart_counter": analysis.restart_counter}
+            return {'analysis_id': analysis.analysis_id,
+                    'project_id': analysis.project_id,
+                    'registry_url': analysis.registry_url,
+                    'image_url': analysis.image_url,
+                    'registry_user': analysis.registry_user,
+                    'registry_password': analysis.registry_password,
+                    'namespace': analysis.namespace,
+                    'kong_token': analysis.kong_token,
+                    'restart_counter': analysis.restart_counter,
+                    'progress': 0}
         return None
 
     def delete_old_deployments_from_db(self, analysis_id: str) -> None:

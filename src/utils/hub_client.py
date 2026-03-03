@@ -4,7 +4,7 @@ import ssl
 from pathlib import Path
 from functools import lru_cache
 from json import JSONDecodeError
-from typing import Optional, Tuple
+from typing import Optional
 from httpx import (Client,
                    HTTPTransport,
                    HTTPStatusError,
@@ -41,10 +41,10 @@ def init_hub_client_with_client(client_id: str,
 
         client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_client, verify=ssl_ctx)
         hub_client = flame_hub.CoreClient(client=client)
-        print("Hub client init successful")
+        print("PO ACTION - Hub client init successful")
     except Exception as e:
         hub_client = None
-        print(f"Failed to authenticate with hub python client library.\n{e}")
+        print(f"Error: Failed to authenticate with hub python client library.\n{e}")
     return hub_client
 
 
@@ -83,7 +83,10 @@ def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, nod
     return node_analysis_id
 
 
-def update_hub_status(hub_client: flame_hub.CoreClient, node_analysis_id: str, run_status: str) -> None:
+def update_hub_status(hub_client: flame_hub.CoreClient,
+                      node_analysis_id: str,
+                      run_status: str,
+                      run_progress: Optional[int] = None) -> None:
     """
     Update the status of the analysis in the hub.
     """
@@ -95,9 +98,12 @@ def update_hub_status(hub_client: flame_hub.CoreClient, node_analysis_id: str, r
         if run_status == AnalysisStatus.STUCK.value:
             run_status = AnalysisStatus.FAILED.value
         execution_status = status_mapping.get(run_status, run_status)
-        hub_client.update_analysis_node(node_analysis_id, execution_status=execution_status)
+        if run_progress is None:
+            hub_client.update_analysis_node(node_analysis_id, execution_status=execution_status)
+        else:
+            hub_client.update_analysis_node(node_analysis_id, execution_status=execution_status, execution_progress=run_progress)
     except (HTTPStatusError, ConnectError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
-        print(f"Failed to update hub status for node_analysis_id {node_analysis_id}.\n{e}")
+        print(f"Error: Failed to update hub status for node_analysis_id {node_analysis_id}\n{e}")
 
 
 def init_hub_client_and_update_hub_status_with_client(analysis_id: str, status: str) -> None:
@@ -118,11 +124,11 @@ def init_hub_client_and_update_hub_status_with_client(analysis_id: str, status: 
             if node_analysis_id is not None:
                 update_hub_status(hub_client, node_analysis_id, run_status=status)
             else:
-                print("Failed to retrieve node_analysis_id from hub client. Cannot update status.")
+                print("Error: Failed to retrieve node_analysis_id from hub client. Cannot update status.")
         else:
-            print("Failed to retrieve node_id from hub client. Cannot update status.")
+            print("Error: Failed to retrieve node_id from hub client. Cannot update status.")
     else:
-        print("Failed to initialize hub client. Cannot update status.")
+        print("Error: Failed to initialize hub client. Cannot update status.")
 
 
 # TODO: Import this from flame sdk? (from flamesdk import HUB_LOG_LITERALS)

@@ -16,7 +16,9 @@ def get_keycloak_token(analysis_id: str) -> Optional[str]:
     client_secret = _get_keycloak_client_secret(analysis_id)
 
     keycloak_url = f"{_KEYCLOAK_URL}/realms/flame/protocol/openid-connect/token"
-    data = {"grant_type": "client_credentials", "client_id": analysis_id, "client_secret": client_secret}
+    data = {'grant_type': 'client_credentials',
+            'client_id': analysis_id,
+            'client_secret': client_secret}
 
     # get token from keycloak like in the above curl command
     try:
@@ -25,7 +27,7 @@ def get_keycloak_token(analysis_id: str) -> Optional[str]:
 
         return response.json()['access_token']
     except requests.exceptions.RequestException as e:
-        print(e)
+        print(f"Error: Failed to retrieve keycloak token\n{e}")
         return None
 
 
@@ -38,7 +40,7 @@ def _get_keycloak_client_secret(analysis_id: str) -> str:
 
     # get client secret
     url_get_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients?clientId={analysis_id}"
-    headers = {"Authorization": f"Bearer {admin_token}"}
+    headers = {'Authorization': f"Bearer {admin_token}"}
 
     response = requests.get(url_get_client, headers=headers)
     response.raise_for_status()
@@ -53,9 +55,9 @@ def _get_keycloak_admin_token() -> str:
     # get admin token
     url_admin_access_token = f"{_KEYCLOAK_URL}/realms/{_KEYCLOAK_REALM}/protocol/openid-connect/token"
     data = {
-        "grant_type": "client_credentials",
-        "client_id": keycloak_admin_client_id,
-        "client_secret": keycloak_admin_client_secret
+        'grant_type': 'client_credentials',
+        'client_id': keycloak_admin_client_id,
+        'client_secret': keycloak_admin_client_secret
     }
     response = requests.post(url_admin_access_token, data=data)
     response.raise_for_status()
@@ -65,7 +67,7 @@ def _get_keycloak_admin_token() -> str:
 
 def _keycloak_client_exists(analysis_id: str, admin_token: str) -> bool:
     url_get_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients?clientId={analysis_id}"
-    headers = {"Authorization": f"Bearer {admin_token}"}
+    headers = {'Authorization': f"Bearer {admin_token}"}
 
     response = requests.get(url_get_client, headers=headers)
     response.raise_for_status()
@@ -75,11 +77,11 @@ def _keycloak_client_exists(analysis_id: str, admin_token: str) -> bool:
 
 def _create_keycloak_client(admin_token: str, analysis_id: str) -> None:
     url_create_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients"
-    headers = {"Authorization": f"Bearer {admin_token}",
-                "Content-Type": "application/json"}
-    client_data = {"clientId": f"{analysis_id}",
-                    "name": f"flame-{analysis_id}",
-                   "serviceAccountsEnabled": "true"}
+    headers = {'Authorization': f"Bearer {admin_token}",
+               'Content-Type': "application/json"}
+    client_data = {'clientId': f"{analysis_id}",
+                   'name': f"flame-{analysis_id}",
+                   'serviceAccountsEnabled': 'true'}
 
     response = requests.post(url_create_client, headers=headers, json=client_data)
     response.raise_for_status()
@@ -87,7 +89,7 @@ def _create_keycloak_client(admin_token: str, analysis_id: str) -> None:
 def _get_all_keycloak_clients() -> list[dict]:
     admin_token = _get_keycloak_admin_token()
     url_get_clients = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients"
-    headers = {"Authorization": f"Bearer {admin_token}"}
+    headers = {'Authorization': f"Bearer {admin_token}"}
 
     response = requests.get(url_get_clients, headers=headers)
     response.raise_for_status()
@@ -99,19 +101,18 @@ def delete_keycloak_client(analysis_id: str) -> None:
 
     # get client uuid
     url_get_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients?clientId={analysis_id}"
-    headers = {"Authorization": f"Bearer {admin_token}"}
+    headers = {'Authorization': f"Bearer {admin_token}"}
 
     response = requests.get(url_get_client, headers=headers)
     response.raise_for_status()
     try:
         uuid = response.json()[0]['id']
-    except (KeyError, IndexError):
-        print('keycloak Client not found')
+    except (KeyError, IndexError) as e:
+        print(f"Error: Keycloak client not found\n{e}")
         return
 
     url_delete_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients/{uuid}"
-    headers = {"Authorization": f"Bearer {admin_token}"}
+    headers = {'Authorization': f"Bearer {admin_token}"}
 
     response = requests.delete(url_delete_client, headers=headers)
     response.raise_for_status()
-
