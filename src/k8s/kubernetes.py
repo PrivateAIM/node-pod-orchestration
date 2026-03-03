@@ -435,7 +435,7 @@ def _create_nginx_config_map(analysis_name: str,
                     
                     
                     # egress: analysis deployment to storage-service
-                    location ~ ^/storage/(final|local|intermediate)/ {{
+                    location ~ ^/storage/(final|local|intermediate) {{
                         rewrite     ^/storage(/.*) $1 break;
                         proxy_pass http://{storage_service_name}:8080;
                         allow       {analysis_ip};
