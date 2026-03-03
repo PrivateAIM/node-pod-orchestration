@@ -19,11 +19,11 @@ from src.status.constants import AnalysisStatus
 
 
 def init_hub_client_with_client(client_id: str,
-                               client_secret: str,
-                               hub_url_core: str,
-                               hub_auth: str,
-                               http_proxy: str,
-                               https_proxy: str) -> Optional[flame_hub.CoreClient]:
+                                client_secret: str,
+                                hub_url_core: str,
+                                hub_auth: str,
+                                http_proxy: str,
+                                https_proxy: str) -> Optional[flame_hub.CoreClient]:
     # Attempt to init hub client
     proxies = None
     ssl_ctx = get_ssl_context()
@@ -36,8 +36,8 @@ def init_hub_client_with_client(client_id: str,
 
         _client = Client(base_url=hub_auth, mounts=proxies, verify=ssl_ctx)
         hub_client = flame_hub.auth.ClientAuth(client_id=client_id,
-                                             client_secret=client_secret,
-                                             client=_client)
+                                               client_secret=client_secret,
+                                               client=_client)
 
         client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_client, verify=ssl_ctx)
         hub_client = flame_hub.CoreClient(client=client)
@@ -111,11 +111,11 @@ def init_hub_client_and_update_hub_status_with_client(analysis_id: str, status: 
     Create a hub client for the analysis and update the current status.
     """
     client_id, client_secret, hub_url_core, hub_auth, http_proxy, https_proxy = (os.getenv('HUB_CLIENT_ID'),
-                                                                               os.getenv('HUB_CLIENT_SECRET'),
-                                                                               os.getenv('HUB_URL_CORE'),
-                                                                               os.getenv('HUB_URL_AUTH'),
-                                                                               os.getenv('PO_HTTP_PROXY'),
-                                                                               os.getenv('PO_HTTPS_PROXY'))
+                                                                                 os.getenv('HUB_CLIENT_SECRET'),
+                                                                                 os.getenv('HUB_URL_CORE'),
+                                                                                 os.getenv('HUB_URL_AUTH'),
+                                                                                 os.getenv('PO_HTTP_PROXY'),
+                                                                                 os.getenv('PO_HTTPS_PROXY'))
     hub_client = init_hub_client_with_client(client_id, client_secret, hub_url_core, hub_auth, http_proxy, https_proxy)
     if hub_client is not None:
         node_id = get_node_id_by_client(hub_client, client_id)

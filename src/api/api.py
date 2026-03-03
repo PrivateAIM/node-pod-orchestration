@@ -13,7 +13,7 @@ from src.resources.log.entity import CreateLogEntity
 from src.resources.utils import (create_analysis,
                                  retrieve_history,
                                  retrieve_logs,
-                                 get_status,
+                                 get_status_and_progress,
                                  get_pods,
                                  stop_analysis,
                                  delete_analysis,
@@ -82,12 +82,12 @@ class PodOrchestrationAPI:
                              methods=["GET"],
                              response_class=JSONResponse)
         router.add_api_route("/status",
-                             self.get_all_status_call,
+                             self.get_all_status_and_progress_call,
                              dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
         router.add_api_route("/status/{analysis_id}",
-                             self.get_status_call,
+                             self.get_status_and_progress_call,
                              dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
@@ -173,15 +173,15 @@ class PodOrchestrationAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error retrieving logs data: {e}")
 
-    def get_all_status_call(self):
+    def get_all_status_and_progress_call(self):
         try:
-            return get_status('all', self.database)
+            return get_status_and_progress('all', self.database)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error retrieving ALL status data: {e}")
 
-    def get_status_call(self, analysis_id: str):
+    def get_status_and_progress_call(self, analysis_id: str):
         try:
-            return get_status(analysis_id, self.database)
+            return get_status_and_progress(analysis_id, self.database)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error retrieving status data: {e}")
 
