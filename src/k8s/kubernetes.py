@@ -304,7 +304,7 @@ def _create_nginx_config_map(analysis_name: str,
             analysis_ip = pod_list_object.items[0].status.pod_ip
         time.sleep(1)
 
-    # get the name of the hub adapter, kong proxy, and result service
+    # get the name of the hub adapter, kong proxy, and storage service
     hub_adapter_service_name = find_k8s_resources('service',
                                                   'label',
                                                   'component=flame-hub-adapter',
@@ -314,9 +314,9 @@ def _create_nginx_config_map(analysis_name: str,
                                          'app.kubernetes.io/name=kong',
                                          manual_name_selector='proxy',
                                          namespace=namespace)
-    result_service_name = find_k8s_resources('service',
+    storage_service_name = find_k8s_resources('service',
                                              'label',
-                                             'component=flame-result-service',
+                                             'component=flame-storage-service',
                                              namespace=namespace)
 
     # generate config map
@@ -354,10 +354,10 @@ def _create_nginx_config_map(analysis_name: str,
                     }}
                     
                     
-                    # egress: analysis deployment to result-service
+                    # egress: analysis deployment to storage-service
                     location ~ ^/storage/(final|local|intermediate)/ {{
                         rewrite     ^/storage(/.*) $1 break;
-                        proxy_pass http://{result_service_name}:8080;
+                        proxy_pass http://{storage_service_name}:8080;
                         allow       {analysis_ip};
                         deny        all;
                     }}
