@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "Node-Pod-Orchestration"
-version = "0.3.5"
+version = "0.3.7"
 description = ""
 authors = ["Alexander Röhl <alexander.roehl@uni-tuebingen.de>", "David Hieber <david.hieber@uni-tuebingen.de>"]
 license = "Apache 2.0"
@@ -8,7 +8,7 @@ readme = "README.md"
 packages = [{ include = "src" }]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.10"
 kubernetes = "^28.1.0"
 fastapi = "^0.109.0"
 uvicorn = "^0.27.0"
