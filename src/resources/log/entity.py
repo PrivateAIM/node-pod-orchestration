@@ -60,4 +60,4 @@ class CreateStartUpErrorLog(CreateLogEntity):
         else:
             log = ''
 
-        super().__init__(log=log, log_type="error", analysis_id=analysis_id, status=status)
+        super().__init__(log=log, log_type="error", analysis_id=analysis_id, status=status, progress=0)
