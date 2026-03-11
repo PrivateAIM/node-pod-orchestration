@@ -144,6 +144,7 @@ class PodOrchestrationAPI:
         try:
             return create_analysis(body, self.database)
         except Exception as e:
+            print(f"Error creating analysis: {e}")
             raise HTTPException(status_code=500, detail=f"Error creating analysis: {e}")
 
     def retrieve_all_history_call(self):
