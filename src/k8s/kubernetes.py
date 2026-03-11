@@ -148,6 +148,15 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
             if pod is not None:
                 name = pod.metadata.name
                 status = pod.status.container_statuses[0]
+                print(f"Pod {name} status retrieved successfully.")
+                if status is not None:
+                    print(f"ready:{status.ready}, started:{status.started}\n"
+                          f"\tstate: {status.state}\n"
+                          f"\t\trunning:{status.state.running}, started_at:{status.state.running.started_at}\n"
+                          f"\t\twaiting:{status.state.waiting}, reason:{status.state.waiting.reason}, reason:{status.state.waiting.message}\n"
+                          f"\t\tterminated:{status.state.terminated}, reason:{status.state.terminated.reason}, reason:{status.state.terminated.message}\n")
+                else:
+                    print("No status found yet")
 
                 if status is not None:
                     pod_status[name] = {}
@@ -316,7 +325,7 @@ def _create_nginx_config_map(analysis_name: str,
                                          namespace=namespace)
     storage_service_name = find_k8s_resources('service',
                                              'label',
-                                             'component=flame-result-service',
+                                             'component=flame-storage-service',
                                              namespace=namespace)
 
     # generate config map
