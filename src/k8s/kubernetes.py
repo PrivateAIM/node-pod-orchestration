@@ -148,24 +148,6 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
             if pod is not None:
                 name = pod.metadata.name
                 status = pod.status.container_statuses[0]
-                print(f"Pod {name} status retrieved successfully.")
-                if status is not None:
-                    print(f"ready:{status.ready}, started:{status.started}\n"
-                          f"\tstate: {status.state}")
-                    if status.state.running is not None:
-                        print(f"\t\trunning:{status.state.running}, started_at:{status.state.running.started_at}")
-                    else:
-                        print(f"\t\trunning:{status.state.running}")
-                    if status.state.waiting is not None:
-                         print(f"\t\twaiting:{status.state.waiting}, reason:{status.state.waiting.reason}, reason:{status.state.waiting.message}")
-                    else:
-                        print(f"\t\twaiting:{status.state.waiting}")
-                    if status.state.terminated is not None:
-                        print(f"\t\tterminated:{status.state.terminated}, reason:{status.state.terminated.reason}, reason:{status.state.terminated.message}")
-                    else:
-                        print(f"\t\tterminated:{status.state.terminated}")
-                else:
-                    print("No status found yet")
 
                 if status is not None:
                     pod_status[name] = {}

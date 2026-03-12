@@ -95,6 +95,26 @@ def update_hub_status(hub_client: flame_hub.CoreClient, node_analysis_id: str, r
         print(f"Error: Failed to update hub status for node_analysis_id {node_analysis_id}\n{e}")
 
 
+def get_analysis_node_statuses(hub_client: flame_hub.CoreClient, analysis_id: str) -> Optional[dict[str, str]]:
+    try:
+        node_analyzes = hub_client.find_analysis_nodes(filter={'analysis_id': analysis_id})
+    except (HTTPStatusError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
+        print(f"Error: Failed to retrieve node analyzes from hub python client\n{e}")
+        return  None
+    analysis_node_statuses = {}
+    for node in node_analyzes:
+        analysis_node_statuses[node.id] = node.run_status
+    return analysis_node_statuses
+
+
+def get_partner_node_statuses(hub_client: flame_hub.CoreClient,
+                              analysis_id: str,
+                              node_analysis_id: str) -> Optional[dict[str, str]]:
+    analysis_node_statuses = get_analysis_node_statuses(hub_client, analysis_id)
+    return {k : v for k, v in analysis_node_statuses.items() if k != node_analysis_id} \
+        if analysis_node_statuses is not None else None
+
+
 def init_hub_client_and_update_hub_status_with_robot(analysis_id: str, status: str) -> None:
     """
     Create a hub client for the analysis and update the current status.
