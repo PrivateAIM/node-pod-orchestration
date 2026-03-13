@@ -103,7 +103,7 @@ def get_analysis_node_statuses(hub_client: flame_hub.CoreClient, analysis_id: st
         return  None
     analysis_node_statuses = {}
     for node in node_analyzes:
-        analysis_node_statuses[node.id] = node.run_status
+        analysis_node_statuses[str(node.id)] = node.run_status
     return analysis_node_statuses
 
 
