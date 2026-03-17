@@ -1,8 +1,7 @@
 import time
 import os
-import asyncio
 from typing import Optional
-from httpx import AsyncClient, HTTPStatusError, ConnectError, ConnectTimeout
+from httpx import Client, HTTPStatusError, ConnectError, ConnectTimeout
 
 import flame_hub
 
@@ -16,6 +15,7 @@ from src.resources.utils import (unstuck_analysis_deployments,
 from src.utils.hub_client import (init_hub_client_with_robot,
                                   get_node_id_by_robot,
                                   get_node_analysis_id,
+                                  get_partner_node_statuses,
                                   update_hub_status)
 from src.status.constants import AnalysisStatus
 from src.utils.other import extract_hub_envs
@@ -75,6 +75,15 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                     # If node analysis id found
                     print(f"\tNode analysis id: {node_analysis_id}")
                     if node_analysis_id is not None:
+                        try:
+                            # Inform local analysis of partner node statuses
+                            _ = inform_analysis_of_partner_statuses(database,
+                                                                    hub_client,
+                                                                    analysis_id,
+                                                                    node_analysis_id)
+                        except Exception as e:
+                            print(f"\tPO STATUS LOOP - Error when attempting to access partner_status endpoint of {analysis_id} ({repr(e)})")
+
                         # Retrieve analysis status (skip iteration if analysis is not deployed)
                         analysis_status = _get_analysis_status(analysis_id, database)
                         if analysis_status is None:
@@ -119,6 +128,28 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
             time.sleep(status_loop_interval)
             print(f"PO STATUS LOOP - Status loop iteration completed. Sleeping for {status_loop_interval} seconds.")
 
+
+def inform_analysis_of_partner_statuses(database: Database,
+                                        hub_client: flame_hub.CoreClient,
+                                        analysis_id: str,
+                                        node_analysis_id: str) -> Optional[dict[str, str]]:
+    node_statuses = get_partner_node_statuses(hub_client, analysis_id, node_analysis_id)
+    deployment_name = database.get_latest_deployment(analysis_id).deployment_name
+    try: # try except, in case analysis api is not yet ready
+        response = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}").post(url="/analysis/partner_status",
+                                                                                               headers=[('Connection', 'close')],
+                                                                                               json={'partner_status': node_statuses})
+        response.raise_for_status()
+        return response.json()
+    except HTTPStatusError as e:
+        print(f"\tError whilst trying to access analysis partner_status endpoint: {e}")
+    except ConnectError as e:
+        print(f"\tConnection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {e}")
+    except ConnectTimeout as e:
+        print(f"\tConnection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {e}")
+    return None
+
+
 def _get_analysis_status(analysis_id: str, database: Database) -> Optional[dict[str, str]]:
     analysis = database.get_latest_deployment(analysis_id)
     if analysis is not None:
@@ -128,7 +159,7 @@ def _get_analysis_status(analysis_id: str, database: Database) -> Optional[dict[
         if db_status == AnalysisStatus.FINISHED.value:
             int_status = AnalysisStatus.FINISHED.value
         else:
-            int_status = asyncio.run(_get_internal_deployment_status(analysis.deployment_name, analysis_id))
+            int_status = _get_internal_deployment_status(analysis.deployment_name, analysis_id)
         return {'analysis_id': analysis_id,
                 'db_status': analysis.status,
                 'int_status': int_status,
@@ -145,23 +176,24 @@ def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
     newly_ended = ((db_status in [AnalysisStatus.RUNNING.value, AnalysisStatus.FAILED.value])
                    and (int_status in [AnalysisStatus.FINISHED.value, AnalysisStatus.FAILED.value]))
     firmly_stuck = ((db_status in [AnalysisStatus.FAILED.value]) and (int_status in [AnalysisStatus.STUCK.value]))
+    was_stopped = int_status == AnalysisStatus.STOPPED.value
     if is_stuck or is_slow:
         return 'unstuck'
     elif newly_running:
         return 'running'
-    elif speedy_finished or newly_ended or firmly_stuck:
+    elif speedy_finished or newly_ended or firmly_stuck or was_stopped:
         return 'finishing'
     else:
         return None
 
 
-async def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> str:
+def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> str:
     # Attempt to retrieve internal analysis status via health endpoint
     start_time = time.time()
     while True:
         try:
-            response = await (AsyncClient(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}")
-                              .get("/analysis/healthz", headers=[('Connection', 'close')]))
+            response = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}").get("/analysis/healthz",
+                                                                                                  headers=[('Connection', 'close')])
             response.raise_for_status()
             break
         except HTTPStatusError as e:
@@ -172,7 +204,7 @@ async def _get_internal_deployment_status(deployment_name: str, analysis_id: str
             print(f"\tConnection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {e}")
         elapsed_time = time.time() - start_time
         time.sleep(1)
-        if elapsed_time > _INTERNAL_STATUS_TIMEOUT:             # TODO: Handle case of this happening for large images
+        if elapsed_time > _INTERNAL_STATUS_TIMEOUT:
             print(f"\tTimeout getting internal deployment status after {elapsed_time} seconds")
             return AnalysisStatus.FAILED.value
 
@@ -180,9 +212,9 @@ async def _get_internal_deployment_status(deployment_name: str, analysis_id: str
     analysis_status, analysis_token_remaining_time = (response.json()['status'],
                                                       response.json()['token_remaining_time'])
     # Check if token needs refresh, do so if needed
-    await _refresh_keycloak_token(deployment_name=deployment_name,
-                                  analysis_id=analysis_id,
-                                  token_remaining_time=analysis_token_remaining_time)
+    _refresh_keycloak_token(deployment_name=deployment_name,
+                            analysis_id=analysis_id,
+                            token_remaining_time=analysis_token_remaining_time)
 
     # Map status from response to preset values
     if analysis_status == AnalysisStatus.FINISHED.value:
@@ -196,7 +228,7 @@ async def _get_internal_deployment_status(deployment_name: str, analysis_id: str
     return health_status
 
 
-async def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_remaining_time: int) -> None:
+def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_remaining_time: int) -> None:
     """
     Refresh the keycloak token
     :return:
@@ -204,10 +236,9 @@ async def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_
     if token_remaining_time < (int(os.getenv('STATUS_LOOP_INTERVAL')) * 2 + 1):
         keycloak_token = get_keycloak_token(analysis_id)
         try:
-            response = await (AsyncClient(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}")
-                              .post("/analysis/token_refresh",
-                                    json={'token': keycloak_token},
-                                    headers=[('Connection', 'close')]))
+            response = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}").post("/analysis/token_refresh",
+                                                                                                   json={'token': keycloak_token},
+                                                                                                   headers=[('Connection', 'close')])
             response.raise_for_status()
         except HTTPStatusError as e:
             print(f"Error: Failed to refresh keycloak token in deployment {deployment_name}.\n{e}")

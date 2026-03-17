@@ -60,3 +60,11 @@ class CreateStartUpErrorLog(CreateLogEntity):
             log = ''
 
         super().__init__(log=log, log_type="error", analysis_id=analysis_id, status=status)
+
+
+class AnalysisStoppedLog(CreateLogEntity):
+    def __init__(self, analysis_id: str) -> None:
+        log = (f"[flame -- POAPI: ANALYSISSTOPPED -- "
+               f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
+               f"Info: The analysis was stopped either locally, or externally on another node.")
+        super().__init__(log=log, log_type="info", analysis_id=analysis_id, status="stopped")

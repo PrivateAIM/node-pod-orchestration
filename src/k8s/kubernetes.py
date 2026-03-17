@@ -316,7 +316,7 @@ def _create_nginx_config_map(analysis_name: str,
                                          namespace=namespace)
     storage_service_name = find_k8s_resources('service',
                                              'label',
-                                             'component=flame-result-service',
+                                             'component=flame-storage-service',
                                              namespace=namespace)
 
     # generate config map
