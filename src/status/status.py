@@ -75,11 +75,14 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                     # If node analysis id found
                     print(f"\tNode analysis id: {node_analysis_id}")
                     if node_analysis_id is not None:
-                        # Inform local analysis of partner node statuses
-                        _ = inform_analysis_of_partner_statuses(database,
-                                                                hub_client,
-                                                                analysis_id,
-                                                                node_analysis_id)
+                        try:
+                            # Inform local analysis of partner node statuses
+                            _ = inform_analysis_of_partner_statuses(database,
+                                                                    hub_client,
+                                                                    analysis_id,
+                                                                    node_analysis_id)
+                        except Exception as e:
+                            print(f"\tPO STATUS LOOP - Error when attempting to access partner_status endpoint of {analysis_id} ({repr(e)})")
 
                         # Retrieve analysis status (skip iteration if analysis is not deployed)
                         analysis_status = _get_analysis_status(analysis_id, database)
