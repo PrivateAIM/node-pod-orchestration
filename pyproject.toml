@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "Node-Pod-Orchestration"
-version = "0.3.7.1"
+version = "0.3.8"
 description = ""
 authors = ["Alexander Röhl <alexander.roehl@uni-tuebingen.de>", "David Hieber <david.hieber@uni-tuebingen.de>"]
 license = "Apache 2.0"
