@@ -136,7 +136,6 @@ def inform_analysis_of_partner_statuses(database: Database,
     node_statuses = get_partner_node_statuses(hub_client, analysis_id, node_analysis_id)
     deployment_name = database.get_latest_deployment(analysis_id).deployment_name
     try: # try except, in case analysis api is not yet ready
-        print(f"Node statuses to be submitted to {f'http://nginx-{deployment_name}:80'}: {node_statuses} (size={len(node_statuses)})")
         response = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}").post(url="/analysis/partner_status",
                                                                                                headers=[('Connection', 'close')],
                                                                                                json={'partner_status': node_statuses})
