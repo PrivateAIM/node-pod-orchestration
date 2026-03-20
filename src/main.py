@@ -5,8 +5,7 @@ from dotenv import load_dotenv, find_dotenv
 
 from src.resources.database.entity import Database
 from src.api.api import PodOrchestrationAPI
-from src.k8s.kubernetes import load_cluster_config
-from src.k8s.utils import get_current_namespace
+from src.k8s.utils import get_current_namespace, load_cluster_config
 from src.status.status import status_loop
 
 

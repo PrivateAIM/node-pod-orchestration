@@ -1,5 +1,16 @@
 from httpx import AsyncClient
 import asyncio
+import os
+
+
+def extract_hub_envs() -> tuple[str, str, str, str, bool, str, str]:
+    return (os.getenv('HUB_ROBOT_USER'),
+            os.getenv('HUB_ROBOT_SECRET'),
+            os.getenv('HUB_URL_CORE'),
+            os.getenv('HUB_URL_AUTH'),
+            os.getenv('HUB_LOGGING') in ['True', 'true', '1', 't'],
+            os.getenv('PO_HTTP_PROXY'),
+            os.getenv('PO_HTTPS_PROXY'))
 
 
 def resource_name_to_analysis(deployment_name: str, max_r_split: int = 1) -> str:
