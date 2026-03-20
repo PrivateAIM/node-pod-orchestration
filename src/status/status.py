@@ -5,24 +5,20 @@ from httpx import Client, HTTPStatusError, ConnectError, ConnectTimeout
 
 import flame_hub
 
+from src.resources.log.entity import CreateStartUpErrorLog
 from src.k8s.kubernetes import PORTS, get_pod_status
-from src.resources.database.entity import Database,
+from src.resources.database.entity import Database, AnalysisDB
 
 
 from src.utils.hub_client import (init_hub_client_with_client,
                                   get_node_id_by_client,
                                   get_node_analysis_id,
-
+                                  get_partner_node_statuses,
                                   update_hub_status)
 from src.resources.utils import (unstuck_analysis_deployments,
                                  stop_analysis,
                                  delete_analysis,
                                  stream_logs)
-from src.utils.hub_client import (init_hub_client_with_robot,
-                                  get_node_id_by_robot,
-                                  get_node_analysis_id,
-                                  get_partner_node_statuses,
-                                  update_hub_status)
 from src.status.constants import AnalysisStatus
 from src.utils.other import extract_hub_envs
 from src.utils.token import get_keycloak_token

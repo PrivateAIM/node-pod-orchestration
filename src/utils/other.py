@@ -4,8 +4,8 @@ import os
 
 
 def extract_hub_envs() -> tuple[str, str, str, str, bool, str, str]:
-    return (os.getenv('HUB_ROBOT_USER'),
-            os.getenv('HUB_ROBOT_SECRET'),
+    return (os.getenv('HUB_CLIENT_ID'),
+            os.getenv('HUB_CLIENT_SECRET'),
             os.getenv('HUB_URL_CORE'),
             os.getenv('HUB_URL_AUTH'),
             os.getenv('HUB_LOGGING') in ['True', 'true', '1', 't'],
