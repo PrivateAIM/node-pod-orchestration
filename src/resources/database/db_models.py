@@ -30,6 +30,7 @@ class AnalysisDB(Base):
     namespace = Column(String, nullable=True)
     kong_token = Column(String, nullable=True)
     restart_counter = Column(Integer, nullable=True, default=0)
+    progress = Column(Integer, nullable=True, default=0)
     time_created = Column(Float, nullable=True)
     time_updated = Column(Float, nullable=True)
 
@@ -50,6 +51,7 @@ class ArchiveDB(Base):
     namespace = Column(String, nullable=True)
     kong_token = Column(String, nullable=True)
     restart_counter = Column(Integer, nullable=True, default=0)
+    progress = Column(Integer, nullable=True, default=0)
     time_created = Column(Float, nullable=True)
     time_updated = Column(Float, nullable=True)
 
