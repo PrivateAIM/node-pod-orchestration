@@ -12,7 +12,9 @@ from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
 from src.k8s.utils import get_current_namespace, find_k8s_resources, delete_k8s_resource
 from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
-from src.utils.hub_client import init_hub_client_and_update_hub_status_with_robot
+from src.utils.hub_client import (init_hub_client_and_update_hub_status_with_client,
+                                  update_hub_status,
+                                  get_node_analysis_id)
 from src.utils.other import resource_name_to_analysis
 
 
@@ -37,12 +39,13 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dic
         registry_password=body.registry_password,
         namespace=namespace,
         kong_token=body.kong_token,
-        restart_counter=body.restart_counter + 1
+        restart_counter=body.restart_counter + 1,
+        progress=body.progress
     )
     analysis.start(database=database, namespace=namespace)
 
     # update hub status
-    init_hub_client_and_update_hub_status_with_robot(body.analysis_id, AnalysisStatus.STARTED.value)
+    init_hub_client_and_update_hub_status_with_client(body.analysis_id, AnalysisStatus.STARTED.value)
 
     return {body.analysis_id: analysis.status}
 
@@ -94,7 +97,7 @@ def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[st
     return get_analysis_logs(deployment_names, database=database)
 
 
-def get_status(analysis_id_str: str, database: Database) -> dict[str, str]:
+def get_status_and_progress(analysis_id_str: str, database: Database) -> dict[str, dict[str, str]]:
     if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
@@ -106,7 +109,8 @@ def get_status(analysis_id_str: str, database: Database) -> dict[str, str]:
         if deployment is not None:
             deployments[analysis_id] = read_db_analysis(deployment)
 
-    return {analysis_id: deployment.status for analysis_id, deployment in deployments.items()}
+    return {analysis_id: {'status': deployment.status, 'progress': deployment.progress}
+            for analysis_id, deployment in deployments.items()}
 
 
 def get_pods(analysis_id_str: str, database: Database) -> dict[str, list[str]]:
@@ -150,7 +154,7 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
                 final_status = AnalysisStatus.STOPPED.value
 
         # update hub status
-        init_hub_client_and_update_hub_status_with_robot(analysis_id, final_status)
+        init_hub_client_and_update_hub_status_with_client(analysis_id, final_status)
 
     return {analysis_id: deployment.status for analysis_id, deployment in deployments.items()}
 
@@ -268,3 +272,14 @@ def stream_logs(log_entity: CreateLogEntity, node_id: str, enable_hub_logging: b
                                                  status=log_entity.status,
                                                  level=log_entity.log_type,
                                                  message=log_entity.log)
+
+    if database.progress_valid(log_entity.analysis_id, log_entity.progress):
+        database.update_analysis_progress(log_entity.analysis_id, log_entity.progress)
+        update_hub_status(hub_core_client,
+                          get_node_analysis_id(hub_core_client, log_entity.analysis_id, node_id),
+                          run_status=log_entity.status,
+                          run_progress=log_entity.progress)
+    else:
+        update_hub_status(hub_core_client,
+                          get_node_analysis_id(hub_core_client, log_entity.analysis_id, node_id),
+                          run_status=log_entity.status)

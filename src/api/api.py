@@ -5,7 +5,7 @@ from fastapi import APIRouter, FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.utils.hub_client import init_hub_client_with_robot, get_node_id_by_robot
+from src.utils.hub_client import init_hub_client_with_client, get_node_id_by_client
 from src.utils.other import extract_hub_envs
 from src.api.oauth import valid_access_token
 from src.resources.database.entity import Database
@@ -14,7 +14,7 @@ from src.resources.log.entity import CreateLogEntity, AnalysisStoppedLog
 from src.resources.utils import (create_analysis,
                                  retrieve_history,
                                  retrieve_logs,
-                                 get_status,
+                                 get_status_and_progress,
                                  get_pods,
                                  stop_analysis,
                                  delete_analysis,
@@ -25,16 +25,17 @@ from src.resources.utils import (create_analysis,
 class PodOrchestrationAPI:
     def __init__(self, database: Database, namespace: str = 'default'):
         self.database = database
-        robot_id, robot_secret, hub_url_core, hub_auth, enable_hub_logging, http_proxy, https_proxy = extract_hub_envs()
+
+        client_id, client_secret, hub_url_core, hub_auth, enable_hub_logging, http_proxy, https_proxy = extract_hub_envs()
 
         self.enable_hub_logging = enable_hub_logging
-        self.hub_client = init_hub_client_with_robot(robot_id,
-                                                     robot_secret,
-                                                     hub_url_core,
-                                                     hub_auth,
-                                                     http_proxy,
-                                                     https_proxy)
-        self.node_id = get_node_id_by_robot(self.hub_client, robot_id) if self.hub_client else None
+        self.hub_client = init_hub_client_with_client(client_id,
+                                                          client_secret,
+                                                          hub_url_core,
+                                                          hub_auth,
+                                                          http_proxy,
+                                                          https_proxy)
+        self.node_id = get_node_id_by_client(self.hub_client, client_id) if self.hub_client else None
         self.namespace = namespace
         app = FastAPI(title="FLAME PO",
                       docs_url="/api/docs",
@@ -79,12 +80,12 @@ class PodOrchestrationAPI:
                              methods=["GET"],
                              response_class=JSONResponse)
         router.add_api_route("/status",
-                             self.get_all_status_call,
+                             self.get_all_status_and_progress_call,
                              dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
         router.add_api_route("/status/{analysis_id}",
-                             self.get_status_call,
+                             self.get_status_and_progress_call,
                              dependencies=[Depends(valid_access_token)],
                              methods=["GET"],
                              response_class=JSONResponse)
@@ -170,15 +171,15 @@ class PodOrchestrationAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error retrieving logs data: {e}")
 
-    def get_all_status_call(self):
+    def get_all_status_and_progress_call(self):
         try:
-            return get_status('all', self.database)
+            return get_status_and_progress('all', self.database)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error retrieving ALL status data: {e}")
 
-    def get_status_call(self, analysis_id: str):
+    def get_status_and_progress_call(self, analysis_id: str):
         try:
-            return get_status(analysis_id, self.database)
+            return get_status_and_progress(analysis_id, self.database)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error retrieving status data: {e}")
 

@@ -21,6 +21,7 @@ class Analysis(BaseModel):
     kong_token: str
 
     restart_counter: int = 0
+    progress: int = 0
     deployment_name: str = ''
     tokens: Optional[dict[str, str]] = None
     analysis_config: Optional[dict[str, str]] = None
@@ -53,7 +54,8 @@ class Analysis(BaseModel):
                                  registry_password=self.registry_password,
                                  namespace=self.namespace,
                                  kong_token=self.kong_token,
-                                 restart_counter=self.restart_counter)
+                                 restart_counter=self.restart_counter,
+                                 progress=self.progress)
 
     def stop(self,
              database: Database,
@@ -82,7 +84,8 @@ def read_db_analysis(analysis: AnalysisDB) -> Analysis:
                     log=analysis.log,
                     namespace=analysis.namespace,
                     kong_token=analysis.kong_token,
-                    restart_counter=analysis.restart_counter)
+                    restart_counter=analysis.restart_counter,
+                    progress=analysis.progress)
 
 
 class CreateAnalysis(BaseModel):
@@ -94,3 +97,4 @@ class CreateAnalysis(BaseModel):
     registry_password: str = 'default_pw'
     kong_token: str = 'default_kong_token'
     restart_counter: int = 0
+    progress: int = 0

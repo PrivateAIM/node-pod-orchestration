@@ -5,18 +5,20 @@ from httpx import Client, HTTPStatusError, ConnectError, ConnectTimeout
 
 import flame_hub
 
+from src.resources.log.entity import CreateStartUpErrorLog
 from src.k8s.kubernetes import PORTS, get_pod_status
 from src.resources.database.entity import Database, AnalysisDB
-from src.resources.log.entity import CreateStartUpErrorLog
+
+
+from src.utils.hub_client import (init_hub_client_with_client,
+                                  get_node_id_by_client,
+                                  get_node_analysis_id,
+                                  get_partner_node_statuses,
+                                  update_hub_status)
 from src.resources.utils import (unstuck_analysis_deployments,
                                  stop_analysis,
                                  delete_analysis,
                                  stream_logs)
-from src.utils.hub_client import (init_hub_client_with_robot,
-                                  get_node_id_by_robot,
-                                  get_node_analysis_id,
-                                  get_partner_node_statuses,
-                                  update_hub_status)
 from src.status.constants import AnalysisStatus
 from src.utils.other import extract_hub_envs
 from src.utils.token import get_keycloak_token
@@ -33,18 +35,18 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
     node_id = None
     node_analysis_ids = {}
 
-    robot_id, robot_secret, hub_url_core, hub_auth, enable_hub_logging, http_proxy, https_proxy = extract_hub_envs()
+    client_id, client_secret, hub_url_core, hub_auth, enable_hub_logging, http_proxy, https_proxy = extract_hub_envs()
 
     # Enter lifecycle loop
     while True:
         if hub_client is None:
-            hub_client = init_hub_client_with_robot(robot_id,
-                                                    robot_secret,
+            hub_client = init_hub_client_with_client(client_id,
+                                                    client_secret,
                                                     hub_url_core,
                                                     hub_auth,
                                                     http_proxy,
                                                     https_proxy)
-            node_id = get_node_id_by_robot(hub_client, robot_id)
+            node_id = get_node_id_by_client(hub_client, client_id)
             # Catch unresponsive hub client
             if node_id is None:
                 print("PO ACTION - Resetting hub client...")
