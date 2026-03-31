@@ -56,7 +56,7 @@ class Database:
                         analysis_id: str,
                         deployment_name: str,
                         project_id: str,
-                        pod_ids: list[str],
+                        pod_ids: Optional[list[str]],
                         status: str,
                         registry_url: str,
                         image_url: str,
@@ -175,6 +175,9 @@ class Database:
     def update_deployment_status(self, deployment_name: str, status: str) -> None:
         print(f"PO ACTION - Updating deployment {deployment_name} to status {status}")
         self.update_deployment(deployment_name, status=status)
+
+    def update_deployment_pod_ids(self, deployment_name: str, pod_ids: list[str]) -> None:
+        self.update_deployment(deployment_name, pod_ids=json.dumps(pod_ids))
 
     def stop_analysis(self, analysis_id: str) -> None:
         self.update_analysis_status(analysis_id, status=AnalysisStatus.STOPPED.value)

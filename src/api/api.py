@@ -1,10 +1,11 @@
 import uvicorn
 import os
 import threading
-from fastapi import APIRouter, FastAPI, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.status.constants import AnalysisStatus
 from src.utils.hub_client import init_hub_client_with_client, get_node_id_by_client
 from src.utils.other import extract_hub_envs
 from src.api.oauth import valid_access_token
@@ -141,11 +142,12 @@ class PodOrchestrationAPI:
 
         uvicorn.run(app, host="0.0.0.0", port=8000)
 
-    def create_analysis_call(self, body: CreateAnalysis):
+    def create_analysis_call(self, body: CreateAnalysis, background_tasks: BackgroundTasks):
         try:
-            return create_analysis(body, self.database)
+            background_tasks.add_task(create_analysis, body, self.database)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error creating analysis: {e}")
+        return {body.analysis_id: AnalysisStatus.STARTING.value}
 
     def retrieve_all_history_call(self):
         try:
