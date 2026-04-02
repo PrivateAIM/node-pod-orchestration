@@ -43,7 +43,7 @@ class Database:
     def analysis_is_running(self, analysis_id: str) -> bool:
         latest_deployment = self.get_latest_deployment(analysis_id)
         if latest_deployment is not None:
-            return latest_deployment.status not in [AnalysisStatus.FINISHED.value,
+            return latest_deployment.status not in [AnalysisStatus.EXECUTED.value,
                                                     AnalysisStatus.STOPPED.value,
                                                     AnalysisStatus.FAILED.value]
         return False

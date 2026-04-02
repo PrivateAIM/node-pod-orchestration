@@ -158,8 +158,8 @@ def _get_analysis_status(analysis_id: str, database: Database) -> Optional[dict[
         db_status = analysis.status
         # Make the Finished status final, the internal status is not checked anymore,
         # because the analysis will already be deleted
-        if db_status == AnalysisStatus.FINISHED.value:
-            int_status = AnalysisStatus.FINISHED.value
+        if db_status == AnalysisStatus.EXECUTED.value:
+            int_status = AnalysisStatus.EXECUTED.value
         else:
             int_status = _get_internal_deployment_status(analysis.deployment_name, analysis_id)
         return {'analysis_id': analysis_id,
@@ -173,10 +173,10 @@ def _get_analysis_status(analysis_id: str, database: Database) -> Optional[dict[
 def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
     is_stuck = int_status == AnalysisStatus.STUCK.value
     is_slow = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.FAILED.value]))
-    newly_running = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.RUNNING.value]))
-    speedy_finished = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.FINISHED.value]))
-    newly_ended = ((db_status in [AnalysisStatus.RUNNING.value, AnalysisStatus.FAILED.value])
-                   and (int_status in [AnalysisStatus.FINISHED.value, AnalysisStatus.FAILED.value]))
+    newly_running = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.EXECUTING.value]))
+    speedy_finished = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.EXECUTED.value]))
+    newly_ended = ((db_status in [AnalysisStatus.EXECUTING.value, AnalysisStatus.FAILED.value])
+                   and (int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]))
     firmly_stuck = ((db_status in [AnalysisStatus.FAILED.value]) and (int_status in [AnalysisStatus.STUCK.value]))
     was_stopped = int_status == AnalysisStatus.STOPPED.value
     if is_stuck or is_slow:
@@ -219,10 +219,10 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
                             token_remaining_time=analysis_token_remaining_time)
 
     # Map status from response to preset values
-    if analysis_status == AnalysisStatus.FINISHED.value:
-        health_status = AnalysisStatus.FINISHED.value
-    elif analysis_status == AnalysisStatus.RUNNING.value:
-        health_status = AnalysisStatus.RUNNING.value
+    if analysis_status == AnalysisStatus.EXECUTED.value:
+        health_status = AnalysisStatus.EXECUTED.value
+    elif analysis_status == AnalysisStatus.EXECUTING.value:
+        health_status = AnalysisStatus.EXECUTING.value
     elif analysis_status == AnalysisStatus.STUCK.value:
         health_status = AnalysisStatus.STUCK.value
     else:
@@ -301,14 +301,14 @@ def _stream_stuck_logs(analysis: AnalysisDB,
 def _update_running_status(database: Database, analysis_status: dict[str, str]) -> None:
     analysis = database.get_latest_deployment(analysis_status['analysis_id'])
     if analysis is not None:
-        database.update_deployment_status(analysis.deployment_name, AnalysisStatus.RUNNING.value)
+        database.update_deployment_status(analysis.deployment_name, AnalysisStatus.EXECUTING.value)
 
 
 def _update_finished_status(database: Database, analysis_status: dict[str, str]) -> None:
     analysis = database.get_latest_deployment(analysis_status['analysis_id'])
     if analysis is not None:
         database.update_deployment_status(analysis.deployment_name, analysis_status['int_status'])
-        if analysis_status['int_status'] == AnalysisStatus.FINISHED.value:
+        if analysis_status['int_status'] == AnalysisStatus.EXECUTED.value:
             print("\tDelete deployment")
             # TODO: final local log save (minio?)  # archive logs
             # delete_analysis(analysis_status['analysis_id'], database)  # delete analysis from database
@@ -322,11 +322,11 @@ def _set_analysis_hub_status(hub_client: flame_hub.CoreClient,
                              node_analysis_id: str,
                              analysis_status: dict[str, str]) -> str:
     if analysis_status['db_status'] in [AnalysisStatus.FAILED.value,
-                                        AnalysisStatus.FINISHED.value]:
+                                        AnalysisStatus.EXECUTED.value]:
         analysis_hub_status = analysis_status['db_status']
     elif analysis_status['int_status'] in [AnalysisStatus.FAILED.value,
-                                           AnalysisStatus.FINISHED.value,
-                                           AnalysisStatus.RUNNING.value]:
+                                           AnalysisStatus.EXECUTED.value,
+                                           AnalysisStatus.EXECUTING.value]:
         analysis_hub_status = analysis_status['int_status']
     else:
         analysis_hub_status = analysis_status['db_status']

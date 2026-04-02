@@ -16,6 +16,6 @@ class AnalysisStatus(Enum):
     STOPPING = 'stopping'
     STOPPED = 'stopped'
 
-    RUNNING = 'executing'
-    FINISHED = 'executed'
+    EXECUTING = 'executing'
+    EXECUTED = 'executed'
     FAILED = 'failed'

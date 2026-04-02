@@ -91,8 +91,8 @@ def update_hub_status(hub_client: flame_hub.CoreClient,
     Update the status of the analysis in the hub.
     """
     status_mapping = {
-        AnalysisStatus.RUNNING.value: "executing",
-        AnalysisStatus.FINISHED.value: "executed",
+        AnalysisStatus.EXECUTING.value: "executing",
+        AnalysisStatus.EXECUTED.value: "executed",
     }
     try:
         if run_status == AnalysisStatus.STUCK.value:

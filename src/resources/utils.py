@@ -67,7 +67,7 @@ def retrieve_history(analysis_id_str: str, database: Database) -> dict[str, dict
         deployment = database.get_latest_deployment(analysis_id)
         if deployment is not None:
             if deployment.status in [AnalysisStatus.STOPPED.value,
-                                     AnalysisStatus.FINISHED.value,
+                                     AnalysisStatus.EXECUTED.value,
                                      AnalysisStatus.FAILED.value]:
                 deployments[analysis_id] = read_db_analysis(deployment)
 
@@ -91,7 +91,7 @@ def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[st
     for analysis_id in analysis_ids:
         deployment = database.get_latest_deployment(analysis_id)
         if deployment is not None:
-            if deployment.status in [AnalysisStatus.RUNNING.value]:
+            if deployment.status in [AnalysisStatus.EXECUTING.value]:
                 deployment_names[analysis_id] = read_db_analysis(deployment).deployment_name
 
     return get_analysis_logs(deployment_names, database=database)
@@ -138,13 +138,13 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
     for analysis_id, deployment in deployments.items():
         # save logs as string to database (will be read as dict in retrieve_history)
         log = str(get_analysis_logs({analysis_id: deployment.deployment_name}, database=database))
-        if deployment.status in [AnalysisStatus.FAILED.value, AnalysisStatus.FINISHED.value]:
+        if deployment.status in [AnalysisStatus.FAILED.value, AnalysisStatus.EXECUTED.value]:
             deployment.stop(database, log=log, status=deployment.status)
 
             # set final status (finished overwrites any other case)
-            if deployment.status == AnalysisStatus.FINISHED.value:
-                final_status = AnalysisStatus.FINISHED.value
-            elif final_status != AnalysisStatus.FINISHED.value:
+            if deployment.status == AnalysisStatus.EXECUTED.value:
+                final_status = AnalysisStatus.EXECUTED.value
+            elif final_status != AnalysisStatus.EXECUTED.value:
                 final_status = AnalysisStatus.FAILED.value
         else:
             deployment.stop(database, log=log)
