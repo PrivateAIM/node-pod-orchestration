@@ -90,18 +90,13 @@ def update_hub_status(hub_client: flame_hub.CoreClient,
     """
     Update the status of the analysis in the hub.
     """
-    status_mapping = {
-        AnalysisStatus.EXECUTING.value: "executing",
-        AnalysisStatus.EXECUTED.value: "executed",
-    }
     try:
         if run_status == AnalysisStatus.STUCK.value:
             run_status = AnalysisStatus.FAILED.value
-        execution_status = status_mapping.get(run_status, run_status)
         if run_progress is None:
-            hub_client.update_analysis_node(node_analysis_id, execution_status=execution_status)
+            hub_client.update_analysis_node(node_analysis_id, execution_status=run_status)
         else:
-            hub_client.update_analysis_node(node_analysis_id, execution_status=execution_status, execution_progress=run_progress)
+            hub_client.update_analysis_node(node_analysis_id, execution_status=run_status, execution_progress=run_progress)
     except (HTTPStatusError, ConnectError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
         print(f"Error: Failed to update hub status for node_analysis_id {node_analysis_id}\n{e}")
 
