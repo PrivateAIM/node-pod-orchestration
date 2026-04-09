@@ -11,7 +11,6 @@ from httpx import (Client,
                    ConnectError,
                    ConnectTimeout)
 import truststore
-from enum import Enum
 
 import flame_hub
 
@@ -144,12 +143,3 @@ def init_hub_client_and_update_hub_status_with_client(analysis_id: str, status: 
             print("Error: Failed to retrieve node_id from hub client. Cannot update status.")
     else:
         print("Error: Failed to initialize hub client. Cannot update status.")
-
-
-# TODO: Import this from flame sdk? (from flamesdk import HUB_LOG_LITERALS)
-class HUB_LOG_LITERALS(Enum):
-    info_log = 'informational'
-    notice_message = 'notice'
-    debug_log = 'debug'
-    warning_log = 'warning'
-    error_code = 'error'
