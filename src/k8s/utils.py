@@ -122,3 +122,14 @@ def delete_k8s_resource(name: str, resource_type: str, namespace: str = 'default
                 print(f"Error: Not Found {name} job")
     else:
         raise ValueError(f"Unsupported resource type: {resource_type}")
+
+
+def get_cluster_dns_ip() -> str:
+    try:
+        with open('/etc/resolv.conf') as f:
+            for line in f:
+                if line.startswith('nameserver'):
+                    return line.split()[1]
+    except Exception as e:
+        raise Exception(f"Error while trying to read cluster DNS IP from /etc/resolv.conf: {str(e)}")
+    raise RuntimeError("No nameserver entry found in /etc/resolv.conf")

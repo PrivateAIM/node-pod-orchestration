@@ -7,7 +7,7 @@ import string
 from kubernetes import client
 
 from src.resources.database.entity import Database
-from src.k8s.utils import find_k8s_resources, delete_k8s_resource
+from src.k8s.utils import find_k8s_resources, delete_k8s_resource, get_cluster_dns_ip
 
 
 PORTS = {'nginx': [80],
@@ -457,19 +457,13 @@ def _create_service(name: str,
 def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespace: str = 'default') -> None:
     network_client = client.NetworkingV1Api()
 
-    # egress to nginx and kube-dns pod (kube dns' namespace has to be specified)
-    # currently hardcoded for this label TODO make it work with ports and protocols
-    egress = [client.V1NetworkPolicyEgressRule(
-        to=[client.V1NetworkPolicyPeer(
-            pod_selector=client.V1LabelSelector(
-                match_labels={'app': nginx_name})),
-            client.V1NetworkPolicyPeer(
-                pod_selector=client.V1LabelSelector(
-                    match_labels={'k8s-app': 'kube-dns'}),
-                namespace_selector=client.V1LabelSelector(
-                    match_labels={'kubernetes.io/metadata.name': 'kube-system'}))
-            ]
-    )]
+    # egress to nginx and to cluster DNS
+    egress = [
+        client.V1NetworkPolicyEgressRule(
+            to=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_name})),
+                client.V1NetworkPolicyPeer(ip_block=client.V1IPBlock(cidr=f"{get_cluster_dns_ip()}/32"))]
+        )
+    ]
 
     # ingress from nginx pod
     ingress = [client.V1NetworkPolicyIngressRule(
