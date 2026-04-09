@@ -253,7 +253,7 @@ def _fix_stuck_status(database: Database,
                       hub_client: flame_hub.CoreClient) -> None:
     analysis = database.get_latest_deployment(analysis_status['analysis_id'])
     if analysis is not None:
-        database.update_deployment_status(analysis.deployment_name, status=AnalysisStatus.FAILED.value)
+        database.update_deployment_status(analysis.deployment_name, status=AnalysisStatus.STARTING.value)
         is_slow = ((analysis_status['db_status'] in [AnalysisStatus.STARTED.value]) and
                    (analysis_status['int_status'] in [AnalysisStatus.FAILED.value]))
 
@@ -262,7 +262,8 @@ def _fix_stuck_status(database: Database,
             _stream_stuck_logs(analysis, node_id, enable_hub_logging, database, hub_client, is_slow)
             unstuck_analysis_deployments(analysis_status['analysis_id'], database)
         else:
-            _stream_stuck_logs(analysis, node_id,enable_hub_logging, database, hub_client, is_slow)
+            database.update_deployment_status(analysis.deployment_name, status=AnalysisStatus.FAILED.value)
+            _stream_stuck_logs(analysis, node_id, enable_hub_logging, database, hub_client, is_slow)
 
 
 def _stream_stuck_logs(analysis: AnalysisDB,
