@@ -11,7 +11,6 @@ from httpx import (Client,
                    ConnectError,
                    ConnectTimeout)
 import truststore
-from enum import Enum
 
 import flame_hub
 
@@ -90,18 +89,13 @@ def update_hub_status(hub_client: flame_hub.CoreClient,
     """
     Update the status of the analysis in the hub.
     """
-    status_mapping = {
-        AnalysisStatus.RUNNING.value: "executing",
-        AnalysisStatus.FINISHED.value: "executed",
-    }
     try:
         if run_status == AnalysisStatus.STUCK.value:
             run_status = AnalysisStatus.FAILED.value
-        execution_status = status_mapping.get(run_status, run_status)
         if run_progress is None:
-            hub_client.update_analysis_node(node_analysis_id, execution_status=execution_status)
+            hub_client.update_analysis_node(node_analysis_id, execution_status=run_status)
         else:
-            hub_client.update_analysis_node(node_analysis_id, execution_status=execution_status, execution_progress=run_progress)
+            hub_client.update_analysis_node(node_analysis_id, execution_status=run_status, execution_progress=run_progress)
     except (HTTPStatusError, ConnectError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
         print(f"Error: Failed to update hub status for node_analysis_id {node_analysis_id}\n{e}")
 
@@ -114,7 +108,7 @@ def get_analysis_node_statuses(hub_client: flame_hub.CoreClient, analysis_id: st
         return  None
     analysis_node_statuses = {}
     for node in node_analyzes:
-        analysis_node_statuses[str(node.id)] = node.run_status
+        analysis_node_statuses[str(node.id)] = node.execution_status
     return analysis_node_statuses
 
 
@@ -149,12 +143,3 @@ def init_hub_client_and_update_hub_status_with_client(analysis_id: str, status: 
             print("Error: Failed to retrieve node_id from hub client. Cannot update status.")
     else:
         print("Error: Failed to initialize hub client. Cannot update status.")
-
-
-# TODO: Import this from flame sdk? (from flamesdk import HUB_LOG_LITERALS)
-class HUB_LOG_LITERALS(Enum):
-    info_log = 'informational'
-    notice_message = 'notice'
-    debug_log = 'debug'
-    warning_log = 'warning'
-    error_code = 'error'

@@ -68,4 +68,4 @@ class AnalysisStoppedLog(CreateLogEntity):
         log = (f"[flame -- POAPI: ANALYSISSTOPPED -- "
                f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
                f"Info: The analysis was stopped either locally, or externally on another node.")
-        super().__init__(log=log, log_type="info", analysis_id=analysis_id, status="stopped")
+        super().__init__(log=log, log_type="info", analysis_id=analysis_id, status="stopped", progress=0)

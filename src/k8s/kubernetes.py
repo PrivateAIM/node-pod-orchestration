@@ -54,17 +54,12 @@ def create_analysis_deployment(name: str,
     app_client = client.AppsV1Api()
     containers = []
 
-    liveness_probe = client.V1Probe(http_get=client.V1HTTPGetAction(path="/healthz", port=PORTS['analysis'][0]),
-                                    initial_delay_seconds=15,
-                                    period_seconds=20,
-                                    failure_threshold=1,
-                                    timeout_seconds=5)
-    container1 = client.V1Container(name=name, image=image, image_pull_policy='IfNotPresent',
-                                    ports=[client.V1ContainerPort(PORTS['analysis'][0])],
-                                    env=[client.V1EnvVar(name=key, value=val) for key, val in env.items()],
-                                    #liveness_probe=liveness_probe,
-                                    )
-    containers.append(container1)
+    container = client.V1Container(name=name,
+                                   image=image,
+                                   image_pull_policy='IfNotPresent',
+                                   ports=[client.V1ContainerPort(PORTS['analysis'][0])],
+                                   env=[client.V1EnvVar(name=key, value=val) for key, val in env.items()])
+    containers.append(container)
 
     labels = {'app': name, 'component': "flame-analysis"}
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace, labels=labels)
@@ -210,11 +205,13 @@ def _create_analysis_nginx_deployment(analysis_name: str,
         sub_path="nginx.conf"
     )
 
-    container1 = client.V1Container(name=nginx_name, image="nginx:1.29.3", image_pull_policy="IfNotPresent",
-                                    ports=[client.V1ContainerPort(PORTS['nginx'][0])],
-                                    liveness_probe=liveness_probe,
-                                    volume_mounts=[vol_mount])
-    containers.append(container1)
+    container = client.V1Container(name=nginx_name,
+                                   image="nginx:1.29.3",    # TODO
+                                   image_pull_policy="IfNotPresent",
+                                   ports=[client.V1ContainerPort(PORTS['nginx'][0])],
+                                   liveness_probe=liveness_probe,
+                                   volume_mounts=[vol_mount])
+    containers.append(container)
 
     depl_metadata = client.V1ObjectMeta(name=nginx_name,
                                         namespace=namespace,

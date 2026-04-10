@@ -12,10 +12,10 @@ class AnalysisStatus(Enum):
     STARTED = 'started'
 
     STUCK = 'stuck'         # internal analysis status only
-    RUNNING = 'running'
 
     STOPPING = 'stopping'
     STOPPED = 'stopped'
 
-    FINISHED = 'finished'
+    EXECUTING = 'executing'
+    EXECUTED = 'executed'
     FAILED = 'failed'
