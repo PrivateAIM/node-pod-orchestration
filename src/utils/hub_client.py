@@ -15,6 +15,9 @@ import truststore
 import flame_hub
 
 from src.status.constants import AnalysisStatus
+from src.utils.po_logging import get_logger
+
+logger = get_logger()
 
 
 def init_hub_client_with_client(client_id: str,
@@ -40,10 +43,10 @@ def init_hub_client_with_client(client_id: str,
 
         client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_client, verify=ssl_ctx)
         hub_client = flame_hub.CoreClient(client=client)
-        print("PO ACTION - Hub client init successful")
+        logger.action("Hub client init successful")
     except Exception as e:
         hub_client = None
-        print(f"Error: Failed to authenticate with hub python client library.\n{e}")
+        logger.error(f"Failed to  authenticate with hub python client library: {repr(e)}")
     return hub_client
 
 
@@ -61,7 +64,7 @@ def get_node_id_by_client(hub_client: flame_hub.CoreClient, client_id: str) -> O
     try:
         node_id_object = hub_client.find_nodes(filter={'client_id': client_id})[0]
     except (HTTPStatusError, JSONDecodeError, ConnectTimeout, flame_hub._exceptions.HubAPIError, AttributeError) as e:
-        print(f"Error: Failed to retrieve node id object from hub python client\n{e}")
+        logger.error(f"Failed to retrieve node id object from hub python client {client_id}: {repr(e)}")
         node_id_object = None
     return str(node_id_object.id) if node_id_object is not None else None
 
@@ -71,7 +74,7 @@ def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, nod
         node_analyzes = hub_client.find_analysis_nodes(filter={'analysis_id': analysis_id,
                                                                'node_id': node_id_object_id})
     except (HTTPStatusError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
-        print(f"Error: Failed to retrieve node analyzes from hub python client\n{e}")
+        logger.error(f"Failed to retrieve node analyzes from hub python client: {repr(e)}")
         node_analyzes = None
 
     if node_analyzes:
@@ -97,14 +100,14 @@ def update_hub_status(hub_client: flame_hub.CoreClient,
         else:
             hub_client.update_analysis_node(node_analysis_id, execution_status=run_status, execution_progress=run_progress)
     except (HTTPStatusError, ConnectError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
-        print(f"Error: Failed to update hub status for node_analysis_id {node_analysis_id}\n{e}")
+        logger.error(f"Failed to update hub status for node_analysis_id {node_analysis_id}: {repr(e)}")
 
 
 def get_analysis_node_statuses(hub_client: flame_hub.CoreClient, analysis_id: str) -> Optional[dict[str, str]]:
     try:
         node_analyzes = hub_client.find_analysis_nodes(filter={'analysis_id': analysis_id})
     except (HTTPStatusError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
-        print(f"Error: Failed to retrieve node analyzes from hub python client\n{e}")
+        logger.error(f"Failed to retrieve node analyzes from hub python client: {repr(e)}")
         return  None
     analysis_node_statuses = {}
     for node in node_analyzes:
@@ -138,8 +141,8 @@ def init_hub_client_and_update_hub_status_with_client(analysis_id: str, status: 
             if node_analysis_id is not None:
                 update_hub_status(hub_client, node_analysis_id, run_status=status)
             else:
-                print("Error: Failed to retrieve node_analysis_id from hub client. Cannot update status.")
+                logger.error("Failed to retrieve node_analysis_id from hub client. Cannot update status.")
         else:
-            print("Error: Failed to retrieve node_id from hub client. Cannot update status.")
+            logger.error("Failed to retrieve node_id from hub client. Cannot update status.")
     else:
-        print("Error: Failed to initialize hub client. Cannot update status.")
+        logger.error(f"Failed to initialize hub client. Cannot update status.")

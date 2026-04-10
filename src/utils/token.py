@@ -2,6 +2,10 @@ import os
 import requests
 from typing import Optional
 
+from src.utils.po_logging import get_logger
+
+logger = get_logger()
+
 _KEYCLOAK_URL = os.getenv('KEYCLOAK_URL')
 _KEYCLOAK_REALM = os.getenv('KEYCLOAK_REALM')
 
@@ -27,7 +31,7 @@ def get_keycloak_token(analysis_id: str) -> Optional[str]:
 
         return response.json()['access_token']
     except requests.exceptions.RequestException as e:
-        print(f"Error: Failed to retrieve keycloak token\n{e}")
+        logger.error(f"Failed to retrieve keycloak token: {repr(e)}")
         return None
 
 
@@ -108,7 +112,7 @@ def delete_keycloak_client(analysis_id: str) -> None:
     try:
         uuid = response.json()[0]['id']
     except (KeyError, IndexError) as e:
-        print(f"Error: Keycloak client not found\n{e}")
+        logger.error(f"Failed to retrieve keycloak client: {repr(e)}")
         return
 
     url_delete_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients/{uuid}"

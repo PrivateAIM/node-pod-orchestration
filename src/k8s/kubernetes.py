@@ -7,7 +7,10 @@ import string
 from kubernetes import client
 
 from src.resources.database.entity import Database
-from src.k8s.utils import find_k8s_resources, delete_k8s_resource
+from src.k8s.utils import find_k8s_resources
+from src.utils.po_logging import get_logger
+
+logger = get_logger()
 
 
 PORTS = {'nginx': [80],
@@ -41,10 +44,9 @@ def create_harbor_secret(host_address: str,
             core_client.create_namespaced_secret(namespace=namespace, body=secret)
         except client.exceptions.ApiException as e:
             if e.reason != 'Conflict':
-                raise e
+                raise Exception(f"Unknown error during harbor secret creation {repr(e)}!")
             else:
-                print("Conflict remains unresolved!")
-                raise e
+                raise Exception(f"Conflict in harbor secret creation remains unresolved {repr(e)}!")
 
 
 def create_analysis_deployment(name: str,
@@ -88,27 +90,33 @@ def create_analysis_deployment(name: str,
 
 
 def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
-    print(f"PO ACTION - Deleting deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.action(f"Deleting deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     app_client = client.AppsV1Api()
     for name in [deployment_name, f'nginx-{deployment_name}']:
         try:
             app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
             _delete_service(name, namespace)
         except client.exceptions.ApiException as e:
-            if e.reason != 'Not Found':
-                print(f"Error: Not Found {name}")
+            if e.reason == 'Not Found':
+                logger.error(f"Could not find {name} for deletion")
+            else:
+                logger.error(f"Unknown error when attempting to delete {name} (reason={e.reason})")
     network_client = client.NetworkingV1Api()
     try:
         network_client.delete_namespaced_network_policy(name=f'nginx-to-{deployment_name}-policy', namespace=namespace)
     except client.exceptions.ApiException as e:
-        if e.reason != 'Not Found':
-            print(f"Error: Not Found nginx-to-{deployment_name}-policy")
+        if e.reason == 'Not Found':
+            logger.error(f"Could not find nginx-to-{deployment_name}-policy for deletion")
+        else:
+            logger.error(f"Unknown error when attempting to delete nginx-to-{deployment_name}-policy (reason={e.reason})")
     core_client = client.CoreV1Api()
     try:
         core_client.delete_namespaced_config_map(name=f"nginx-{deployment_name}-config", namespace=namespace)
     except client.exceptions.ApiException as e:
-        if e.reason != 'Not Found':
-            print(f"Error: Not Found {deployment_name}-config")
+        if e.reason == 'Not Found':
+            logger.error(f"Could not find {deployment_name}-config for deletion")
+        else:
+            logger.error(f"Unknown error when attempting to delete {deployment_name}-config (reason={e.reason})")
 
 
 def get_analysis_logs(deployment_names: dict[str, str],
@@ -505,14 +513,14 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
             pod_logs = [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
                         for pod in pods.items if pod.metadata.name in pod_ids]
         except client.exceptions.ApiException as e:
-            print(f"Error: APIException while trying to retrieve pod logs (pod_ids in list)\n{e}")
+            logger.error(f"APIException while trying to retrieve pod logs (pod_ids in list)\n{repr(e)}")
             return []
     else:
         try:
             pod_logs = [core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
                         for pod in pods.items]
         except client.exceptions.ApiException as e:
-            print(f"Error: APIException while trying to retrieve pod logs (pod_ids=None)\n{e}")
+            logger.error(f"APIException while trying to retrieve pod logs (pod_ids=None)\n{repr(e)}")
             return []
 
     # sanitize pod logs

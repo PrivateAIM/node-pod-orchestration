@@ -3,6 +3,10 @@ from typing import Literal, Optional, Union
 
 from kubernetes import config, client
 
+from src.utils.po_logging import get_logger
+
+logger = get_logger()
+
 
 def load_cluster_config():
     config.load_incluster_config()
@@ -77,48 +81,48 @@ def delete_k8s_resource(name: str, resource_type: str, namespace: str = 'default
     :param resource_type: Type of the resource (e.g., 'deployment', 'service', 'pod', 'configmap', 'job').
     :param namespace: Namespace in which the resource exists.
     """
-    print(f"PO ACTION - Deleting resource: {name} of type {resource_type} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.action(f"Deleting resource: {name} of type {resource_type} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     if resource_type == 'deployment':
         try:
             app_client = client.AppsV1Api()
             app_client.delete_namespaced_deployment(name=name, namespace=namespace, propagation_policy='Foreground')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} deployment")
+                logger.error(f"Not Found {name} deployment")
     elif resource_type == 'service':
         try:
             core_client = client.CoreV1Api()
             core_client.delete_namespaced_service(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} service")
+                logger.error(f"Not Found {name} service")
     elif resource_type == 'pod':
         try:
             core_client = client.CoreV1Api()
             core_client.delete_namespaced_pod(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} pod")
+                logger.error(f"Not Found {name} pod")
     elif resource_type == 'configmap':
         try:
             core_client = client.CoreV1Api()
             core_client.delete_namespaced_config_map(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} configmap")
+                logger.error(f"Not Found {name} configmap")
     elif resource_type == 'networkpolicy':
         try:
             network_client = client.NetworkingV1Api()
             network_client.delete_namespaced_network_policy(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} networkpolicy")
+                logger.error(f"Not Found {name} networkpolicy")
     elif resource_type == 'job':
         try:
             batch_client = client.BatchV1Api()
             batch_client.delete_namespaced_job(name=name, namespace=namespace, propagation_policy='Foreground')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} job")
+                logger.error(f"Not Found {name} job")
     else:
         raise ValueError(f"Unsupported resource type: {resource_type}")

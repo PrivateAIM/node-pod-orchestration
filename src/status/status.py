@@ -23,6 +23,9 @@ from src.status.constants import AnalysisStatus
 from src.utils.other import extract_hub_envs
 from src.utils.token import get_keycloak_token
 from src.status.constants import _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
+from src.utils.po_logging import get_logger
+
+logger = get_logger()
 
 
 def status_loop(database: Database, status_loop_interval: int) -> None:
@@ -49,33 +52,33 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
             node_id = get_node_id_by_client(hub_client, client_id)
             # Catch unresponsive hub client
             if node_id is None:
-                print("PO ACTION - Resetting hub client...")
+                logger.action("Resetting hub client...")
                 hub_client = None
                 continue
         else:
             # If running analyzes exist, enter status loop
             running_analyzes = [analysis_id for analysis_id in database.get_analysis_ids()
                                 if database.analysis_is_running(analysis_id)]
-            print(f"PO ACTION - Checking for running analyzes...{running_analyzes}")
+            logger.action(f"Checking for running analyzes...{running_analyzes}")
             if running_analyzes:
                 hub_client_issues = 0
                 for analysis_id in running_analyzes:
-                    print(f"PO STATUS LOOP - Current analysis id: {analysis_id}")
+                    logger.status_loop(f"Current analysis id: {analysis_id}")
                     # Get node analysis id
                     if analysis_id not in node_analysis_ids.keys():
                         node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
                         if node_analysis_id is not None:
                             node_analysis_ids[analysis_id] = node_analysis_id
                         else:
-                            print(f"Error: Retrieving node_analysis id for malformed analysis returned None "
-                                  f"(analysis_id={analysis_id})... Skipping")
+                            logger.warning(f"Retrieving node_analysis id for malformed analysis returned None "
+                                           f"(analysis_id={analysis_id})... Skipping")
                             hub_client_issues += 1
                             continue
                     else:
                         node_analysis_id = node_analysis_ids[analysis_id]
 
                     # If node analysis id found
-                    print(f"\tNode analysis id: {node_analysis_id}")
+                    logger.info(f"\tNode analysis id: {node_analysis_id}")
                     if node_analysis_id is not None:
                         try:
                             # Inform local analysis of partner node statuses
@@ -84,18 +87,19 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                                                     analysis_id,
                                                                     node_analysis_id)
                         except Exception as e:
-                            print(f"\tPO STATUS LOOP - Error when attempting to access partner_status endpoint of {analysis_id} ({repr(e)})")
+                            logger.status_loop(f"Error when attempting to access partner_status endpoint of "
+                                               f"{analysis_id} ({repr(e)})")
 
                         # Retrieve analysis status (skip iteration if analysis is not deployed)
                         analysis_status = _get_analysis_status(analysis_id, database)
                         if analysis_status is None:
                             continue
-                        print(f"\tDatabase status: {analysis_status['db_status']}")
-                        print(f"\tInternal status: {analysis_status['int_status']}")
+                        logger.debug(f"Database status: {analysis_status['db_status']}")
+                        logger.debug(f"Internal status: {analysis_status['int_status']}")
 
                         # Fix stuck analyzes
                         if analysis_status['status_action'] == 'unstuck':
-                            print(f"\tUnstuck analysis with internal status: {analysis_status['int_status']}")
+                            logger.info(f"Unstuck analysis with internal status: {analysis_status['int_status']}")
                             _fix_stuck_status(database, analysis_status, node_id, enable_hub_logging, hub_client)
                             # Update analysis status (skip iteration if analysis is not deployed)
                             analysis_status = _get_analysis_status(analysis_id, database)
@@ -104,7 +108,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
 
                         # Update created to running status
                         if analysis_status['status_action'] == 'running':
-                            print(f"\tUpdate created-to-running database status: {analysis_status['db_status']}")
+                            logger.info(f"Update created-to-running database status: {analysis_status['db_status']}")
                             _update_running_status(database, analysis_status)
                             # Update analysis status (skip iteration if analysis is not deployed)
                             analysis_status = _get_analysis_status(analysis_id, database)
@@ -113,7 +117,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
 
                         # Update running to finished status
                         if analysis_status['status_action'] == 'finishing':
-                            print(f"\tUpdate running-to-finished database status: {analysis_status['db_status']}")
+                            logger.info(f"Update running-to-finished database status: {analysis_status['db_status']}")
                             _update_finished_status(database, analysis_status)
                             # Update analysis status (skip iteration if analysis is not deployed)
                             analysis_status = _get_analysis_status(analysis_id, database)
@@ -122,13 +126,14 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
 
                         # Submit analysis_status to hub
                         analysis_hub_status = _set_analysis_hub_status(hub_client, node_analysis_id, analysis_status)
-                        print(f"\tSet Hub analysis status with node_analysis={node_analysis_id}, "
-                              f"db_status={analysis_status['db_status']}, "
-                              f"internal_status={analysis_status['int_status']} "
-                              f"to {analysis_hub_status}")
+                        logger.info(f"Set Hub analysis status with node_analysis={node_analysis_id}, "
+                                    f"db_status={analysis_status['db_status']}, "
+                                    f"internal_status={analysis_status['int_status']} "
+                                    f"to {analysis_hub_status}")
 
             time.sleep(status_loop_interval)
-            print(f"PO STATUS LOOP - Status loop iteration completed. Sleeping for {status_loop_interval} seconds.")
+            logger.status_loop(f"Iteration completed. Sleeping for {status_loop_interval} seconds.")
+
 
 
 def inform_analysis_of_partner_statuses(database: Database,
@@ -144,11 +149,11 @@ def inform_analysis_of_partner_statuses(database: Database,
         response.raise_for_status()
         return response.json()
     except HTTPStatusError as e:
-        print(f"\tError whilst trying to access analysis partner_status endpoint: {e}")
+        logger.warning(f"Error whilst trying to access analysis partner_status endpoint: {repr(e)}")
     except ConnectError as e:
-        print(f"\tConnection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {e}")
+        logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {repr(e)}")
     except ConnectTimeout as e:
-        print(f"\tConnection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {e}")
+        logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {repr(e)}")
     return None
 
 
@@ -199,15 +204,15 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
             response.raise_for_status()
             break
         except HTTPStatusError as e:
-            print(f"\tError whilst retrieving internal deployment status: {e}")
+            logger.warning(f"Error whilst retrieving internal deployment status: {repr(e)}")
         except ConnectError as e:
-            print(f"\tConnection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {e}")
+            logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {repr(e)}")
         except ConnectTimeout as e:
-            print(f"\tConnection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {e}")
+            logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {repr(e)}")
         elapsed_time = time.time() - start_time
         time.sleep(1)
         if elapsed_time > _INTERNAL_STATUS_TIMEOUT:
-            print(f"\tTimeout getting internal deployment status after {elapsed_time} seconds")
+            logger.error(f"Timeout getting internal deployment status after {elapsed_time:.1f} seconds")
             return AnalysisStatus.FAILED.value
 
     # Extract fields from response
@@ -243,7 +248,7 @@ def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_remain
                                                                                                    headers=[('Connection', 'close')])
             response.raise_for_status()
         except HTTPStatusError as e:
-            print(f"Error: Failed to refresh keycloak token in deployment {deployment_name}.\n{e}")
+            logger.error(f"Failed to refresh keycloak token in deployment {deployment_name}: {repr(e)}")
 
 
 def _fix_stuck_status(database: Database,
@@ -283,8 +288,8 @@ def _stream_stuck_logs(analysis: AnalysisDB,
             # ready=True implicates slow state, else assume kubernetes_error state
             if not ready:
                 is_k8s_related = True
-                print(f"\tDeployment of analysis={analysis.analysis_id} failed (ready={ready}).\n"
-                      f"\t\t{reason}: {message}")
+                logger.error(f"Deployment of analysis={analysis.analysis_id} failed (ready={ready}). "
+                               f"{reason}: {message}")
 
     # Create and stream POAPIError logs or either slow, stuck, or kubernetes_error state to Hub
     stream_logs(CreateStartUpErrorLog(analysis.restart_counter,
@@ -309,12 +314,12 @@ def _update_finished_status(database: Database, analysis_status: dict[str, str])
     if analysis is not None:
         database.update_deployment_status(analysis.deployment_name, analysis_status['int_status'])
         if analysis_status['int_status'] == AnalysisStatus.EXECUTED.value:
-            print("\tDelete deployment")
+            logger.info("Delete deployment")
             # TODO: final local log save (minio?)  # archive logs
             # delete_analysis(analysis_status['analysis_id'], database)  # delete analysis from database
             stop_analysis(analysis_status['analysis_id'], database)  # stop analysis TODO: Change to delete in the future (when archive logs implemented)
         else:
-            print("\tStop deployment")
+            logger.info("Stop deployment")
             stop_analysis(analysis_status['analysis_id'], database)  # stop analysis
 
 

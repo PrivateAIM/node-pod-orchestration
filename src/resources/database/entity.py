@@ -6,7 +6,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.status.constants import AnalysisStatus
-from .db_models import Base, AnalysisDB
+from src.resources.database.db_models import Base, AnalysisDB
+from src.utils.po_logging import get_logger
+
+logger = get_logger()
 
 
 class Database:
@@ -17,7 +20,8 @@ class Database:
         password = os.getenv('POSTGRES_PASSWORD')
         database = os.getenv('POSTGRES_DB')
         conn_uri = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
-        print(conn_uri)
+
+        logger.debug(f"Connecting to database at {conn_uri}")
         self.engine = create_engine(conn_uri,
                                     pool_pre_ping=True,
                                     pool_recycle=3600)
@@ -172,7 +176,7 @@ class Database:
         self.update_analysis(analysis_id, status=status)
 
     def update_deployment_status(self, deployment_name: str, status: str) -> None:
-        print(f"PO ACTION - Updating deployment {deployment_name} to status {status}")
+        logger.action(f"Updating deployment {deployment_name} to status {status}")
         self.update_deployment(deployment_name, status=status)
 
     def stop_analysis(self, analysis_id: str) -> None:

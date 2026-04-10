@@ -16,6 +16,9 @@ from src.utils.hub_client import (init_hub_client_and_update_hub_status_with_cli
                                   update_hub_status,
                                   get_node_analysis_id)
 from src.utils.other import resource_name_to_analysis
+from src.utils.po_logging import get_logger
+
+logger = get_logger()
 
 
 def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dict[str, str]:
@@ -259,7 +262,7 @@ def stream_logs(log_entity: CreateLogEntity, node_id: str, enable_hub_logging: b
         database.update_analysis_log(log_entity.analysis_id, str(log_entity.to_log_entity()))
         #database.update_analysis_status(log_entity.analysis_id, log_entity.status)     # TODO: Implement this?
     except IndexError as e:
-        print(f"Error: Failed to update analysis log in database\n{e}")
+        logger.error(f"Failed to update analysis log in database: {repr(e)}")
 
     # log to hub
     if enable_hub_logging:

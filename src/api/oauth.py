@@ -6,6 +6,7 @@ from jwt import PyJWKClient
 import jwt
 from typing import Annotated
 
+
 oauth2_scheme = OAuth2AuthorizationCodeBearer(
     tokenUrl=os.getenv('KEYCLOAK_URL') + "/realms/flame/protocol/openid-connect/token",
     authorizationUrl=os.getenv('KEYCLOAK_URL') + "/realms/flame/protocol/openid-connect/auth",

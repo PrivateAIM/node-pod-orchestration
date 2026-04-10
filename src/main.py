@@ -7,6 +7,9 @@ from src.resources.database.entity import Database
 from src.api.api import PodOrchestrationAPI
 from src.k8s.utils import get_current_namespace, load_cluster_config
 from src.status.status import status_loop
+from src.utils.po_logging import get_logger
+
+logger = get_logger()
 
 
 def main():
@@ -33,5 +36,5 @@ def start_po_api(database: Database, namespace: str):
 
 
 if __name__ == '__main__':
-    print("Starting server")
+    logger.info("Starting server")
     main()
