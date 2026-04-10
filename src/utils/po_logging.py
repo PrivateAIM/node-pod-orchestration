@@ -3,7 +3,7 @@ import logging
 
 def get_logger() -> logging.Logger:
     _set_custom_log_level(11, 'ACTION')
-    _set_custom_log_level(12, 'STATUS LOOP')
+    _set_custom_log_level(12, 'STATUS_LOOP')
 
     logging.basicConfig(format='[PO %(levelname)s] - %(message)s', level=logging.INFO)
     logger = logging.getLogger(__name__)

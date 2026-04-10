@@ -315,7 +315,6 @@ def _update_finished_status(database: Database, analysis_status: dict[str, str])
         database.update_deployment_status(analysis.deployment_name, analysis_status['int_status'])
         if analysis_status['int_status'] == AnalysisStatus.EXECUTED.value:
             logger.info("Delete deployment")
-            # TODO: final local log save (minio?)  # archive logs
             # delete_analysis(analysis_status['analysis_id'], database)  # delete analysis from database
             stop_analysis(analysis_status['analysis_id'], database)  # stop analysis TODO: Change to delete in the future (when archive logs implemented)
         else:
