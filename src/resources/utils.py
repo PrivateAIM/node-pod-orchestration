@@ -134,18 +134,14 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
             deployments[analysis_id] = read_db_analysis(deployment)
 
     final_status = None
-
     for analysis_id, deployment in deployments.items():
         # save logs as string to database (will be read as dict in retrieve_history)
         log = str(get_analysis_logs({analysis_id: deployment.deployment_name}, database=database))
-        if deployment.status in [AnalysisStatus.FAILED.value, AnalysisStatus.EXECUTED.value]:
+        if deployment.status in [AnalysisStatus.FAILED.value,
+                                 AnalysisStatus.EXECUTED.value,
+                                 AnalysisStatus.STARTED.value]:
             deployment.stop(database, log=log, status=deployment.status)
-
-            # set final status (finished overwrites any other case)
-            if deployment.status == AnalysisStatus.EXECUTED.value:
-                final_status = AnalysisStatus.EXECUTED.value
-            elif final_status != AnalysisStatus.EXECUTED.value:
-                final_status = AnalysisStatus.FAILED.value
+            final_status = deployment.status
         else:
             deployment.stop(database, log=log)
 

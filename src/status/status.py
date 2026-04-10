@@ -253,7 +253,6 @@ def _fix_stuck_status(database: Database,
                       hub_client: flame_hub.CoreClient) -> None:
     analysis = database.get_latest_deployment(analysis_status['analysis_id'])
     if analysis is not None:
-        database.update_deployment_status(analysis.deployment_name, status=AnalysisStatus.STARTING.value)
         is_slow = ((analysis_status['db_status'] in [AnalysisStatus.STARTED.value]) and
                    (analysis_status['int_status'] in [AnalysisStatus.FAILED.value]))
 
