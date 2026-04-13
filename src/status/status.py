@@ -54,6 +54,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
             if node_id is None:
                 logger.action("Resetting hub client...")
                 hub_client = None
+                time.sleep(status_loop_interval)
                 continue
         else:
             # If running analyzes exist, enter status loop
