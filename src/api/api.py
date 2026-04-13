@@ -139,7 +139,7 @@ class PodOrchestrationAPI:
             prefix="/po",
         )
 
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        uvicorn.run(app, host="0.0.0.0", port=8000, log_config=None)
 
     def create_analysis_call(self, body: CreateAnalysis):
         try:
