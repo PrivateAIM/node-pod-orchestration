@@ -1,3 +1,4 @@
+import os
 import time
 import json
 import base64
@@ -16,6 +17,8 @@ logger = get_logger()
 PORTS = {'nginx': [80],
          'analysis': [8000],
          'service': [80]}
+
+NGINX_IMAGE = os.getenv('NGINX_IMAGE', 'nginx:1.29.8')
 
 
 def create_harbor_secret(host_address: str,
@@ -212,9 +215,8 @@ def _create_analysis_nginx_deployment(analysis_name: str,
         mount_path="/etc/nginx/nginx.conf",
         sub_path="nginx.conf"
     )
-
     container = client.V1Container(name=nginx_name,
-                                   image="nginx:1.29.3",    # TODO
+                                   image=NGINX_IMAGE,
                                    image_pull_policy="IfNotPresent",
                                    ports=[client.V1ContainerPort(PORTS['nginx'][0])],
                                    liveness_probe=liveness_probe,

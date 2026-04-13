@@ -19,6 +19,9 @@ def main():
     # load cluster config
     load_cluster_config()
 
+    if not os.getenv('NGINX_IMAGE'):
+        logger.warning("Environment variable 'NGINX_IMAGE' is not set, defaulting to 'nginx:1.29.8'.")
+
     # init database
     database = Database()
 
