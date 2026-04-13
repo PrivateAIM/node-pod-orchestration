@@ -28,7 +28,7 @@ def create_harbor_secret(host_address: str,
     secret = client.V1Secret(metadata=secret_metadata,
                              type='kubernetes.io/dockerconfigjson',
                              string_data={'docker-server': host_address,
-                                          'docker-username': user.replace('$', '\$'),
+                                          'docker-username': user.replace('$', '\\$'),
                                           'docker-password': password,
                                           '.dockerconfigjson': json.dumps({'auths':
                                                                                {host_address:
