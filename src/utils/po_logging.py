@@ -1,11 +1,37 @@
+import json
 import logging
+import sys
+
+
+class JsonFormatter(logging.Formatter):
+    """Emit each log record as a single JSON line for structured log ingestion."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        log = {
+            "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+            "level": record.levelname,
+            "logger": record.name,
+            "module": record.module,
+            "msg": record.getMessage(),
+        }
+
+        if record.exc_info:
+            log["error"] = self.formatException(record.exc_info)
+
+        return json.dumps(log, default=str)  # for non-serializable msgs
 
 
 def get_logger() -> logging.Logger:
     _set_custom_log_level(21, 'ACTION')
     _set_custom_log_level(22, 'STATUS_LOOP')
 
-    logging.basicConfig(format='[PO %(levelname)s] - %(message)s', level=logging.INFO)
+    root = logging.getLogger()
+    if not any(isinstance(h.formatter, JsonFormatter) for h in root.handlers):
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(JsonFormatter())
+        root.addHandler(handler)
+        root.setLevel(logging.INFO)
+
     logger = logging.getLogger(__name__)
     return logger
 
