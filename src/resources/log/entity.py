@@ -12,8 +12,8 @@ class LogEntity(BaseModel):
     log: str
     log_type: Literal['emerg', 'alert', 'crit', 'error', 'warn', 'notice', 'info', 'debug']
 
-    id: str = str(uuid.uuid4())
-    created_at: str = str(datetime.now())
+    id: str
+    created_at: str
 
     def __str__(self) -> str:
         return f"LogEntity(id={self.id}, log={self.log}, log_type={self.log_type}, created_at={self.created_at})"
@@ -28,8 +28,12 @@ class CreateLogEntity(BaseModel):
     progress: int
 
     def to_log_entity(self) -> LogEntity:
-        return LogEntity(log=self.log,
-                         log_type=self.log_type)
+        return LogEntity(
+            log=self.log,
+            log_type=self.log_type,
+            id=str(uuid.uuid4()),
+            created_at=str(datetime.now())
+        )
 
 
 class CreateStartUpErrorLog(CreateLogEntity):

@@ -2,6 +2,7 @@ import ast
 import time
 from typing import Union
 
+from fastapi import HTTPException
 from flame_hub import CoreClient
 
 from src.resources.database.entity import Database
@@ -17,12 +18,18 @@ from src.utils.hub_client import (init_hub_client_and_update_hub_status_with_cli
                                   get_node_analysis_id)
 from src.utils.other import resource_name_to_analysis
 from src.utils.po_logging import get_logger
+from src.utils.other import is_uuid
+
 
 logger = get_logger()
 
 
 def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dict[str, str]:
     namespace = get_current_namespace()
+
+    if not(is_uuid(body.analysis_id) or is_uuid(body.project_id)):
+        logger.error(f"Received request to create analysis with ID {body.analysis_id} for project {body.project_id}")
+        raise HTTPException(status_code=400, detail="Analysis ID and Project ID must be valid UUIDs.")
 
     if isinstance(body, str):
         body = database.extract_analysis_body(body)
@@ -136,7 +143,6 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
         if deployment is not None:
             deployments[analysis_id] = read_db_analysis(deployment)
 
-    final_status = None
     for analysis_id, deployment in deployments.items():
         # save logs as string to database (will be read as dict in retrieve_history)
         log = str(get_analysis_logs({analysis_id: deployment.deployment_name}, database=database))
@@ -144,21 +150,16 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
                                  AnalysisStatus.EXECUTED.value,
                                  AnalysisStatus.STARTED.value]:
             deployment.stop(database, log=log, status=deployment.status)
-            final_status = deployment.status
         else:
             deployment.stop(database, log=log)
 
-            # set final status (finished overwrites any other case)
-            if final_status is None:
-                final_status = AnalysisStatus.STOPPED.value
-
         # update hub status
-        init_hub_client_and_update_hub_status_with_client(analysis_id, final_status)
+        init_hub_client_and_update_hub_status_with_client(analysis_id, deployment.status)
 
     return {analysis_id: deployment.status for analysis_id, deployment in deployments.items()}
 
 
-def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
+def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]:
     if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
@@ -171,14 +172,11 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
             deployments[analysis_id] = read_db_analysis(deployment)
 
     for analysis_id, deployment in deployments.items():
-        if deployment.status != AnalysisStatus.STOPPED.value:
-            deployment.stop(database, log='')
-            deployment.status = AnalysisStatus.STOPPED.value
-
+        deployment.stop(database, log='')
         delete_keycloak_client(analysis_id)
         database.delete_analysis(analysis_id)
 
-    return {analysis_id: deployment.status for analysis_id, deployment in deployments.items()}
+    return {analysis_id: None for analysis_id, deployment in deployments.items()}
 
 
 def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
@@ -192,11 +190,11 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
 def cleanup(cleanup_type: str,
             database: Database,
             namespace: str = 'default') -> dict[str, str]:
-    cleanup_types = set(cleanup_type.split(',')) if ',' in cleanup_type else [cleanup_type]
+    cleanup_types = cleanup_type.split(',') if ',' in cleanup_type else [cleanup_type]
 
     response_content = {}
     for cleanup_type in cleanup_types:
-        if cleanup_type in ['zombies', 'all', 'analyzes', 'services', 'mb', 'rs', 'keycloak']:
+        if cleanup_type in ['all', 'analyzes', 'services', 'mb', 'rs', 'keycloak']:
             # Analysis cleanup
             if cleanup_type in ['all', 'analyzes']:
                 # cleanup all analysis deployments, associated services, policies and configmaps
@@ -209,7 +207,7 @@ def cleanup(cleanup_type: str,
                 message_broker_pod_name = find_k8s_resources('pod',
                                                              'label',
                                                              "component=flame-message-broker",
-                                                             namespace=namespace)
+                                                             namespace=namespace)[0]
                 delete_k8s_resource(message_broker_pod_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset message broker"
             if cleanup_type in ['all', 'services', 'rs']:
@@ -217,7 +215,7 @@ def cleanup(cleanup_type: str,
                 storage_service_name = find_k8s_resources('pod',
                                                          'label',
                                                          "component=flame-storage-service",
-                                                         namespace=namespace)
+                                                         namespace=namespace)[0]
                 delete_k8s_resource(storage_service_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset storage service"
             if cleanup_type in ['all', 'keycloak']:
@@ -246,21 +244,18 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
                                               'configmap': (["component=flame-nginx-analysis-config-map"], 2)}.items():
         for selector_arg in selector_args:
             resources = find_k8s_resources(res, 'label', selector_arg, namespace=namespace)
-            resources = [resources] if type(resources) == str else resources
-            if resources is not None:
-                zombie_resources = [r for r in resources
-                                    if resource_name_to_analysis(r, max_r_split) not in known_analysis_ids]
-                for z in zombie_resources:
-                    delete_k8s_resource(z, res, namespace=namespace)
-                result_str += f"Deleted {len(zombie_resources)} zombie " + \
-                              f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
+            zombie_resources = [r for r in resources
+                                if (resource_name_to_analysis(r, max_r_split) not in known_analysis_ids) and (r is not None)]
+            for z in zombie_resources:
+                delete_k8s_resource(z, res, namespace=namespace)
+            result_str += f"Deleted {len(zombie_resources)} zombie " + \
+                          f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
     return result_str
 
 
 def stream_logs(log_entity: CreateLogEntity, node_id: str, enable_hub_logging: bool, database: Database, hub_core_client: CoreClient) -> None:
     try:
         database.update_analysis_log(log_entity.analysis_id, str(log_entity.to_log_entity()))
-        #database.update_analysis_status(log_entity.analysis_id, log_entity.status)     # TODO: Implement this?
     except IndexError as e:
         logger.error(f"Failed to update analysis log in database: {repr(e)}")
 

@@ -2,6 +2,9 @@ import os
 from threading import Thread
 
 from dotenv import load_dotenv, find_dotenv
+# load env
+load_dotenv(find_dotenv())
+
 
 from src.resources.database.entity import Database
 from src.api.api import PodOrchestrationAPI
@@ -9,13 +12,11 @@ from src.k8s.utils import get_current_namespace, load_cluster_config
 from src.status.status import status_loop
 from src.utils.po_logging import get_logger
 
+
 logger = get_logger()
 
 
 def main():
-    # load env
-    load_dotenv(find_dotenv())
-
     # load cluster config
     load_cluster_config()
 
@@ -29,9 +30,7 @@ def main():
     api_thread.start()
 
     # start status loop
-    if not os.getenv('STATUS_LOOP_INTERVAL'):
-        os.environ['STATUS_LOOP_INTERVAL'] = '10'
-    status_loop(database, int(os.getenv('STATUS_LOOP_INTERVAL')))
+    status_loop(database, int(os.getenv('STATUS_LOOP_INTERVAL', '10')))
 
 
 def start_po_api(database: Database, namespace: str):

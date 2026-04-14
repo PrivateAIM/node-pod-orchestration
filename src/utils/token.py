@@ -4,6 +4,7 @@ from typing import Optional
 
 from src.utils.po_logging import get_logger
 
+
 logger = get_logger()
 
 _KEYCLOAK_URL = os.getenv('KEYCLOAK_URL')

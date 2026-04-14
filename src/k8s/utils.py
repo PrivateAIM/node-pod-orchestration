@@ -5,6 +5,7 @@ from kubernetes import config, client
 
 from src.utils.po_logging import get_logger
 
+
 logger = get_logger()
 
 
@@ -27,7 +28,7 @@ def find_k8s_resources(resource_type: str,
                        selector_type: Optional[Literal['label', 'field']] = None,
                        selector_arg: Optional[str] = None,
                        manual_name_selector: Optional[str] = None,
-                       namespace: str = "default") -> Optional[Union[str, list[str]]]:
+                       namespace: str = "default") -> list[Optional[str]]:
     if resource_type not in ['deployment', 'pod', 'service', 'networkpolicy', 'configmap', 'job']:
         raise ValueError("For k8s resource search: resource_type must be one of 'deployment', 'pod', 'service', "
                          "'networkpolicy', 'configmap', or 'job")
@@ -37,41 +38,37 @@ def find_k8s_resources(resource_type: str,
         raise ValueError("For k8s resource search: if given a resource_type, selector_arg must not be None")
 
     kwargs = {'namespace': namespace}
-    if selector_type:
+    if (selector_type is not None) and isinstance(selector_arg, str):
         kwargs[f'{selector_type}_selector'] = selector_arg
 
     if resource_type == 'deployment':
-        resources = client.AppsV1Api().list_namespaced_deployment(**kwargs)
+        resources = list(client.AppsV1Api().list_namespaced_deployment(**kwargs))
     elif resource_type == 'networkpolicy':
-        resources = client.NetworkingV1Api().list_namespaced_network_policy(**kwargs)
+        resources = list(client.NetworkingV1Api().list_namespaced_network_policy(**kwargs))
     elif resource_type in ['pod', 'service', 'configmap']:
         core_client = client.CoreV1Api()
         if resource_type == 'pod':
-            resources = core_client.list_namespaced_pod(**kwargs)
+            resources = list(core_client.list_namespaced_pod(**kwargs))
         elif resource_type == 'service':
-            resources = core_client.list_namespaced_service(**kwargs)
+            resources = list(core_client.list_namespaced_service(**kwargs))
         elif resource_type == 'configmap':
-            resources = core_client.list_namespaced_config_map(**kwargs)
+            resources = list(core_client.list_namespaced_config_map(**kwargs))
+        else:
+            raise RuntimeError("Undefined resource")
     elif resource_type == 'job':
-        resources = client.BatchV1Api().list_namespaced_job(**kwargs)
+        resources = list(client.BatchV1Api().list_namespaced_job(**kwargs))
     else:
         raise ValueError(f"Uncaptured resource type discovered! Message the Devs... (found={resource_type})")
-
+    print(f"Found {len(resources)} {resource_type}(s) with {selector_type}={selector_arg} in namespace {namespace}")
     if not resources:
-        return None
+        return [None]
     else:
         resource_names = [resource.metadata.name for resource in resources.items]
-        if len(resource_names) > 1:
-            if manual_name_selector is not None:
-                resource_names = [name for name in resource_names if manual_name_selector in name]
-                return resource_names if len(resource_names) > 1 else resource_names[0]
-            else:
-                return resource_names
+        if manual_name_selector is not None:
+            resource_names = [name for name in resource_names if manual_name_selector in name]
+            return resource_names
         else:
-            if len(resource_names) == 1:
-                return resource_names[0]
-            else:
-                return None
+            return resource_names
 
 
 def delete_k8s_resource(name: str, resource_type: str, namespace: str = 'default') -> None:

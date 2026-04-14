@@ -17,6 +17,7 @@ import flame_hub
 from src.status.constants import AnalysisStatus
 from src.utils.po_logging import get_logger
 
+
 logger = get_logger()
 
 

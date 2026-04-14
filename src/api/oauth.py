@@ -7,21 +7,23 @@ import jwt
 from typing import Annotated
 
 
-oauth2_scheme = OAuth2AuthorizationCodeBearer(
-    tokenUrl=os.getenv('KEYCLOAK_URL') + "/realms/flame/protocol/openid-connect/token",
-    authorizationUrl=os.getenv('KEYCLOAK_URL') + "/realms/flame/protocol/openid-connect/auth",
-    refreshUrl=os.getenv('KEYCLOAK_URL') + "/realms/flame/protocol/openid-connect/token",
+_KEYCLOAK_URL = os.getenv("KEYCLOAK_URL")
+_REALM = os.getenv("KEYCLOAK_REALM", "flame")
+_REALM_BASE = f"{_KEYCLOAK_URL}/realms/{_REALM}/protocol/openid-connect"
+
+
+_oauth2_scheme = OAuth2AuthorizationCodeBearer(
+    tokenUrl=f"{_REALM_BASE}/token",
+    authorizationUrl=f"{_REALM_BASE}/auth",
+    refreshUrl=f"{_REALM_BASE}/token",
 )
 
 
-async def valid_access_token(token: Annotated[str, Depends(oauth2_scheme)]) -> dict:
-    url = os.getenv('KEYCLOAK_URL') + "/realms/flame/protocol/openid-connect/certs"
-    jwks_client = PyJWKClient(url)
-
+def valid_access_token(token: Annotated[str, Depends(_oauth2_scheme)]) -> dict:
     try:
-        sig_key = jwks_client.get_signing_key_from_jwt(token)
+        sig_key = PyJWKClient(f"{_REALM_BASE}/certs").get_signing_key_from_jwt(token)
         return jwt.decode(token,
                           key=sig_key,
-                          options={'verify_signature': True, 'verify_aud': False, 'exp': True})
+                          options={'verify_signature': True, 'verify_aud': False, 'verify_exp': True})
     except jwt.exceptions.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Not authenticated")

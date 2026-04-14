@@ -29,7 +29,7 @@ class TestValidAccessToken:
             patch("src.api.oauth.PyJWKClient", return_value=mock_jwks_client),
             patch("src.api.oauth.jwt.decode", return_value=fake_payload),
         ):
-            result = anyio.run(valid_access_token, fake_token)
+            result = valid_access_token(fake_token)
 
         assert result == fake_payload
 
@@ -42,7 +42,7 @@ class TestValidAccessToken:
 
         with patch("src.api.oauth.PyJWKClient", return_value=mock_jwks_client):
             with pytest.raises(HTTPException) as exc_info:
-                anyio.run(valid_access_token, "bad.token.here")
+                valid_access_token("bad.token.here")
 
         assert exc_info.value.status_code == 401
         assert "Not authenticated" in exc_info.value.detail

@@ -26,6 +26,7 @@ truststore = "^0.10.4"
 pytest = "^9.0.3"
 ruff = "^0.15.10"
 pre-commit = "^4.5.1"
+coverage = "^7.13.5"
 
 [build-system]
 requires = ["poetry-core"]

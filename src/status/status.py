@@ -25,6 +25,7 @@ from src.utils.token import get_keycloak_token
 from src.status.constants import _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
 from src.utils.po_logging import get_logger
 
+
 logger = get_logger()
 
 
@@ -143,11 +144,13 @@ def inform_analysis_of_partner_statuses(database: Database,
                                         node_analysis_id: str) -> Optional[dict[str, str]]:
     node_statuses = get_partner_node_statuses(hub_client, analysis_id, node_analysis_id)
     deployment_name = database.get_latest_deployment(analysis_id).deployment_name
+    client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}")
     try: # try except, in case analysis api is not yet ready
-        response = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}").post(url="/analysis/partner_status",
-                                                                                               headers=[('Connection', 'close')],
-                                                                                               json={'partner_status': node_statuses})
+        response = client.post(url="/analysis/partner_status",
+                               headers=[('Connection', 'close')],
+                               json={'partner_status': node_statuses})
         response.raise_for_status()
+        client.close()
         return response.json()
     except HTTPStatusError as e:
         logger.warning(f"Error whilst trying to access analysis partner_status endpoint: {repr(e)}")
@@ -155,6 +158,7 @@ def inform_analysis_of_partner_statuses(database: Database,
         logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {repr(e)}")
     except ConnectTimeout as e:
         logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {repr(e)}")
+    client.close()
     return None
 
 
@@ -198,11 +202,12 @@ def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
 def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> str:
     # Attempt to retrieve internal analysis status via health endpoint
     start_time = time.time()
+    client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}")
     while True:
         try:
-            response = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}").get("/analysis/healthz",
-                                                                                                  headers=[('Connection', 'close')])
+            response = client.get("/analysis/healthz", headers=[('Connection', 'close')])
             response.raise_for_status()
+            client.close()
             break
         except HTTPStatusError as e:
             logger.warning(f"Error whilst retrieving internal deployment status: {repr(e)}")
@@ -211,10 +216,11 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
         except ConnectTimeout as e:
             logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {repr(e)}")
         elapsed_time = time.time() - start_time
-        time.sleep(1)
         if elapsed_time > _INTERNAL_STATUS_TIMEOUT:
             logger.error(f"Timeout getting internal deployment status after {elapsed_time:.1f} seconds")
+            client.close()
             return AnalysisStatus.FAILED.value
+        time.sleep(1)
 
     # Extract fields from response
     analysis_status, analysis_token_remaining_time = (response.json()['status'],
@@ -241,15 +247,17 @@ def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_remain
     Refresh the keycloak token
     :return:
     """
-    if token_remaining_time < (int(os.getenv('STATUS_LOOP_INTERVAL')) * 2 + 1):
+    if token_remaining_time < (int(os.getenv('STATUS_LOOP_INTERVAL', '10')) * 2 + 1):
         keycloak_token = get_keycloak_token(analysis_id)
+        client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}")
         try:
-            response = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}").post("/analysis/token_refresh",
-                                                                                                   json={'token': keycloak_token},
-                                                                                                   headers=[('Connection', 'close')])
+            response = client.post("/analysis/token_refresh",
+                                   json={'token': keycloak_token},
+                                   headers=[('Connection', 'close')])
             response.raise_for_status()
         except HTTPStatusError as e:
             logger.error(f"Failed to refresh keycloak token in deployment {deployment_name}: {repr(e)}")
+        client.close()
 
 
 def _fix_stuck_status(database: Database,
@@ -316,8 +324,7 @@ def _update_finished_status(database: Database, analysis_status: dict[str, str])
         database.update_deployment_status(analysis.deployment_name, analysis_status['int_status'])
         if analysis_status['int_status'] == AnalysisStatus.EXECUTED.value:
             logger.info("Delete deployment")
-            # delete_analysis(analysis_status['analysis_id'], database)  # delete analysis from database
-            stop_analysis(analysis_status['analysis_id'], database)  # stop analysis TODO: Change to delete in the future (when archive logs implemented)
+            delete_analysis(analysis_status['analysis_id'], database)  # delete analysis from database
         else:
             logger.info("Stop deployment")
             stop_analysis(analysis_status['analysis_id'], database)  # stop analysis

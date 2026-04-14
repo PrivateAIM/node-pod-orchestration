@@ -9,6 +9,7 @@ from src.status.constants import AnalysisStatus
 from src.resources.database.db_models import Base, AnalysisDB
 from src.utils.po_logging import get_logger
 
+
 logger = get_logger()
 
 
@@ -21,7 +22,8 @@ class Database:
         database = os.getenv('POSTGRES_DB')
         conn_uri = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
 
-        logger.debug(f"Connecting to database at {conn_uri}")
+        logger.debug(f"Connecting to database at postgresql+psycopg2://{user}:*******@{host}:{port}/{database}")
+
         self.engine = create_engine(conn_uri,
                                     pool_pre_ping=True,
                                     pool_recycle=3600)
@@ -38,10 +40,8 @@ class Database:
 
     def get_latest_deployment(self, analysis_id: str) -> Optional[AnalysisDB]:
         with self.SessionLocal() as session:
-            deployments = session.query(AnalysisDB).filter_by(**{'analysis_id': analysis_id}).all()
-            if deployments:
-                return deployments[-1]
-            return None
+            deployment = session.query(AnalysisDB).filter_by(**{'analysis_id': analysis_id}).order_by(AnalysisDB.time_created.desc()).first()
+            return deployment
 
     def analysis_is_running(self, analysis_id: str) -> bool:
         latest_deployment = self.get_latest_deployment(analysis_id)
@@ -59,8 +59,9 @@ class Database:
                         analysis_id: str,
                         deployment_name: str,
                         project_id: str,
-                        pod_ids: list[str],
+                        pod_ids: Optional[list[str]],
                         status: str,
+                        log: Optional[str],
                         registry_url: str,
                         image_url: str,
                         registry_user: str,
@@ -74,6 +75,7 @@ class Database:
                               project_id=project_id,
                               pod_ids=json.dumps(pod_ids),
                               status=status,
+                              log=log,
                               registry_url=registry_url,
                               image_url=image_url,
                               registry_user=registry_user,

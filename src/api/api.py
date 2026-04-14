@@ -20,7 +20,9 @@ from src.resources.utils import (create_analysis,
                                  delete_analysis,
                                  cleanup,
                                  stream_logs)
+from src.utils.po_logging import get_logger
 
+logger = get_logger()
 
 class PodOrchestrationAPI:
     def __init__(self, database: Database, namespace: str = 'default'):
@@ -43,7 +45,7 @@ class PodOrchestrationAPI:
                       openapi_url="/api/v1/openapi.json")
 
         origins = [
-            "http://localhost:8080/",
+            "http://localhost:8080",
         ]
 
         app.add_middleware(
@@ -145,55 +147,64 @@ class PodOrchestrationAPI:
         try:
             return create_analysis(body, self.database)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error creating analysis: {e}")
+            logger.error(f"Error creating analysis: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error creating analysis (see po logs).")
 
     def retrieve_all_history_call(self):
         try:
             return retrieve_history('all', self.database)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error retrieving ALL history data: {e}")
+            logger.error(f"Eerr retrieving ALL history data: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving ALL history data (see po logs).")
 
     def retrieve_history_call(self, analysis_id: str):
         try:
             return retrieve_history(analysis_id, self.database)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error retrieving history data: {e}")
+            logger.error(f"Error retrieving history data: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving history data (see po logs).")
 
     def retrieve_all_logs_call(self):
         try:
             return retrieve_logs('all', self.database)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error retrieving ALL logs data: {e}")
+            logger.error(f"Error retrieving ALL logs data: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving ALL logs data (see po logs).")
 
     def retrieve_logs_call(self, analysis_id: str):
         try:
             return retrieve_logs(analysis_id, self.database)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error retrieving logs data: {e}")
+            logger.error(f"Error retrieving logs data: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving logs data (see po logs).")
 
     def get_all_status_and_progress_call(self):
         try:
             return get_status_and_progress('all', self.database)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error retrieving ALL status data: {e}")
+            logger.error(f"eror retrieving ALL status data: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving ALL status data (see po logs).")
 
     def get_status_and_progress_call(self, analysis_id: str):
         try:
             return get_status_and_progress(analysis_id, self.database)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error retrieving status data: {e}")
+            logger.error(f"Error retrieving status data: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving status data (see po logs).")
 
     def get_all_pods_call(self):
         try:
             return get_pods('all', self.database)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error retrieving ALL pod names: {e}")
+            logger.error(f"Error retrieving ALL pod names: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving ALL pod names (see po logs).")
 
     def get_pods_call(self, analysis_id: str):
         try:
             return get_pods(analysis_id, self.database)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error retrieving pod name: {e}")
+            logger.error(f"Error retrieving pod name: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving pod name (see po logs).")
 
     def stop_all_analysis_call(self):
         try:
@@ -206,7 +217,8 @@ class PodOrchestrationAPI:
                             self.hub_client)
             return response
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error stopping ALL analyzes: {e}")
+            logger.error(f"Error stopping ALL analyzes: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error stopping ALL analyzes (see po logs).")
 
     def stop_analysis_call(self, analysis_id: str):
         try:
@@ -218,31 +230,36 @@ class PodOrchestrationAPI:
                         self.hub_client)
             return response
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error stopping analysis: {e}")
+            logger.error(f"Error stopping analysis: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error stopping analysis (see po logs).")
 
     def delete_all_analysis_call(self):
         try:
             return delete_analysis('all', self.database)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error deleting ALL analyzes: {e}")
+            logger.error(f"Error deleting ALL analyzes: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error deleting ALL analyzes (see po logs).")
 
     def delete_analysis_call(self, analysis_id: str):
         try:
             return delete_analysis(analysis_id, self.database)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error deleting analysis: {e}")
+            logger.error(f"Error deleting analysis: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error deleting analysis (see po logs).")
 
     def cleanup_call(self, cleanup_type: str):
         try:
             return cleanup(cleanup_type, self.database, self.namespace)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error cleaning up: {e}")
+            logger.error(f"Error cleaning up: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error cleaning up (see po logs).")
 
     def stream_logs_call(self, body: CreateLogEntity):
         try:
             return stream_logs(body, self.node_id, self.enable_hub_logging, self.database, self.hub_client)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error streaming logs: {e}")
+            logger.error(f"Error streaming logs: {repr(e)}")
+            raise HTTPException(status_code=500, detail=f"Error streaming logs (see po logs).")
 
     def health_call(self):
         main_alive = threading.main_thread().is_alive()

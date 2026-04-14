@@ -48,6 +48,7 @@ class Analysis(BaseModel):
                                  project_id=self.project_id,
                                  pod_ids=self.pod_ids,
                                  status=self.status,
+                                 log=self.log,
                                  registry_url=self.registry_url,
                                  image_url=self.image_url,
                                  registry_user=self.registry_user,
@@ -89,12 +90,12 @@ def read_db_analysis(analysis: AnalysisDB) -> Analysis:
 
 
 class CreateAnalysis(BaseModel):
-    analysis_id: str = 'analysis_id'
-    project_id: str = 'project_id'
-    registry_url: str = 'harbor.privateaim'
-    image_url: str = 'harbor.privateaim/node_id/analysis_id'
-    registry_user: str = 'robot_user'
-    registry_password: str = 'default_pw'
-    kong_token: str = 'default_kong_token'
+    analysis_id: str
+    project_id: str
+    registry_url: str
+    image_url: str
+    registry_user: str
+    registry_password: str
+    kong_token: str
     restart_counter: int = 0
     progress: int = 0

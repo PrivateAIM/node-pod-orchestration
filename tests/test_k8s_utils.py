@@ -86,7 +86,8 @@ class TestFindK8sResourcesResults:
         mock_k8s_clients.apps_v1.list_namespaced_deployment.return_value = (
             _make_resource_list(["analysis-123-0"])
         )
-        result = find_k8s_resources("deployment")
+        result = find_k8s_resources("deployment")[0]
+        print(mock_k8s_clients.apps_v1.list_namespaced_deployment.return_value, result)
         assert result == "analysis-123-0"
 
     def test_deployment_multiple_results(self, mock_k8s_clients):
@@ -101,41 +102,41 @@ class TestFindK8sResourcesResults:
             _make_resource_list([])
         )
         result = find_k8s_resources("deployment")
-        assert result is None
+        assert result == [None]
 
     def test_networkpolicy_resource(self, mock_k8s_clients):
         mock_k8s_clients.networking_v1.list_namespaced_network_policy.return_value = (
             _make_resource_list(["np-analysis-123"])
         )
-        result = find_k8s_resources("networkpolicy")
+        result = find_k8s_resources("networkpolicy")[0]
         assert result == "np-analysis-123"
 
     def test_pod_resource(self, mock_k8s_clients):
         mock_k8s_clients.core_v1.list_namespaced_pod.return_value = (
             _make_resource_list(["pod-abc"])
         )
-        result = find_k8s_resources("pod")
+        result = find_k8s_resources("pod")[0]
         assert result == "pod-abc"
 
     def test_service_resource(self, mock_k8s_clients):
         mock_k8s_clients.core_v1.list_namespaced_service.return_value = (
             _make_resource_list(["svc-analysis-123"])
         )
-        result = find_k8s_resources("service")
+        result = find_k8s_resources("service")[0]
         assert result == "svc-analysis-123"
 
     def test_configmap_resource(self, mock_k8s_clients):
         mock_k8s_clients.core_v1.list_namespaced_config_map.return_value = (
             _make_resource_list(["cm-nginx-123"])
         )
-        result = find_k8s_resources("configmap")
+        result = find_k8s_resources("configmap")[0]
         assert result == "cm-nginx-123"
 
     def test_job_resource(self, mock_k8s_clients):
         mock_k8s_clients.batch_v1.list_namespaced_job.return_value = (
             _make_resource_list(["job-analysis-123"])
         )
-        result = find_k8s_resources("job")
+        result = find_k8s_resources("job")[0]
         assert result == "job-analysis-123"
 
 
