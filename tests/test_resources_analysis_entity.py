@@ -280,7 +280,15 @@ class TestReadDbAnalysis:
 
 class TestCreateAnalysis:
     def test_default_values(self):
-        ca = CreateAnalysis()
+        ca = CreateAnalysis(
+            analysis_id="analysis_id",
+            project_id="project_id",
+            registry_url="harbor.privateaim",
+            image_url="harbor.privateaim/node_id/analysis_id",
+            registry_user="robot_user",
+            registry_password="default_pw",
+            kong_token="default_kong_token",
+        )
         assert ca.analysis_id == "analysis_id"
         assert ca.project_id == "project_id"
         assert ca.registry_url == "harbor.privateaim"

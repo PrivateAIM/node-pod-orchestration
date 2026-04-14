@@ -175,7 +175,7 @@ class TestFindK8sResourcesManualNameSelector:
             _make_resource_list(["analysis-123-dep", "analysis-456-dep", "other-dep"])
         )
         result = find_k8s_resources("deployment", manual_name_selector="analysis-123")
-        assert result == "analysis-123-dep"
+        assert result == ["analysis-123-dep"]
 
     def test_returns_list_when_multiple_match(self, mock_k8s_clients):
         mock_k8s_clients.apps_v1.list_namespaced_deployment.return_value = (
@@ -184,15 +184,12 @@ class TestFindK8sResourcesManualNameSelector:
         result = find_k8s_resources("deployment", manual_name_selector="analysis-123")
         assert result == ["analysis-123-dep-0", "analysis-123-dep-1"]
 
-    def test_no_match_raises_index_error(self, mock_k8s_clients):
-        """Documents a bug in find_k8s_resources: when manual_name_selector matches
-        none of the multi-result names, the filtered list is empty but the code still
-        executes `resource_names[0]`, raising IndexError (utils.py line 63)."""
+    def test_no_match_returns_empty_list(self, mock_k8s_clients):
         mock_k8s_clients.apps_v1.list_namespaced_deployment.return_value = (
             _make_resource_list(["analysis-456-dep", "other-dep"])
         )
-        with pytest.raises(IndexError):
-            find_k8s_resources("deployment", manual_name_selector="analysis-123")
+        result = find_k8s_resources("deployment", manual_name_selector="analysis-123")
+        assert result == []
 
 
 # ─── delete_k8s_resource ─────────────────────────────────────────────────────

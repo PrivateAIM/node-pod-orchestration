@@ -42,6 +42,7 @@ def _insert(db, analysis_id="a1", deployment_name="analysis-a1-0", **kwargs):
         project_id="proj1",
         pod_ids=["pod-1"],
         status="started",
+        log=None,
         registry_url="harbor.test",
         image_url="harbor.test/img",
         registry_user="user",

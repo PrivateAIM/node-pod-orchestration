@@ -55,6 +55,19 @@ def _analysis_mock(
 # ─── create_analysis ──────────────────────────────────────────────────────────
 
 class TestCreateAnalysis:
+    _VALID_UUID = "123e4567-e89b-42d3-a456-426614174000"
+
+    def _valid_body_kwargs(self):
+        return {
+            "analysis_id": self._VALID_UUID,
+            "project_id": self._VALID_UUID,
+            "registry_url": "harbor.privateaim",
+            "image_url": "harbor.privateaim/node_id/analysis_id",
+            "registry_user": "robot_user",
+            "registry_password": "default_pw",
+            "kong_token": "default_kong_token",
+        }
+
     @patch("src.resources.utils.init_hub_client_and_update_hub_status_with_client")
     @patch("src.resources.utils.Analysis")
     @patch("src.resources.utils.create_harbor_secret")
@@ -64,16 +77,18 @@ class TestCreateAnalysis:
     ):
         from src.resources.utils import create_analysis
 
-        mock_inst = _analysis_mock(status=AnalysisStatus.STARTED.value)
+        mock_inst = _analysis_mock(
+            analysis_id=self._VALID_UUID, status=AnalysisStatus.STARTED.value
+        )
         mock_analysis_cls.return_value = mock_inst
 
-        body = CreateAnalysis()
+        body = CreateAnalysis(**self._valid_body_kwargs())
         result = create_analysis(body, mock_database)
 
         mock_harbor.assert_called_once()
         mock_inst.start.assert_called_once_with(database=mock_database, namespace="default")
-        mock_hub.assert_called_once_with(_ANALYSIS_ID, AnalysisStatus.STARTED.value)
-        assert result == {_ANALYSIS_ID: AnalysisStatus.STARTED.value}
+        mock_hub.assert_called_once_with(self._VALID_UUID, AnalysisStatus.STARTED.value)
+        assert result == {self._VALID_UUID: AnalysisStatus.STARTED.value}
 
     @patch("src.resources.utils.init_hub_client_and_update_hub_status_with_client")
     @patch("src.resources.utils.Analysis")
@@ -85,15 +100,18 @@ class TestCreateAnalysis:
         """When body is a string, extract_analysis_body is called and the analysis is restarted."""
         from src.resources.utils import create_analysis
 
-        mock_inst = _analysis_mock(status=AnalysisStatus.STARTED.value)
+        mock_inst = _analysis_mock(
+            analysis_id=self._VALID_UUID, status=AnalysisStatus.STARTED.value
+        )
         mock_analysis_cls.return_value = mock_inst
+        mock_database.extract_analysis_body.return_value = self._valid_body_kwargs()
 
-        result = create_analysis(_ANALYSIS_ID, mock_database)
+        result = create_analysis(self._VALID_UUID, mock_database)
 
-        mock_database.extract_analysis_body.assert_called_once_with(_ANALYSIS_ID)
+        mock_database.extract_analysis_body.assert_called_once_with(self._VALID_UUID)
         mock_harbor.assert_called_once()
         mock_hub.assert_called_once()
-        assert _ANALYSIS_ID in result
+        assert self._VALID_UUID in result
 
     def test_from_string_not_found_returns_status_message(self, mock_database):
         """When extract_analysis_body returns None, return a status error dict."""
@@ -347,7 +365,8 @@ class TestStopAnalysis:
 class TestDeleteAnalysis:
     @patch("src.resources.utils.delete_keycloak_client")
     @patch("src.resources.utils.read_db_analysis")
-    def test_stopped_analysis_not_stopped_again(self, mock_read, mock_keycloak, mock_database):
+    def test_stopped_analysis_also_stopped(self, mock_read, mock_keycloak, mock_database):
+        """New behavior: delete_analysis unconditionally calls stop() on the deployment."""
         from src.resources.utils import delete_analysis
 
         mock_deployment = _analysis_mock(status=AnalysisStatus.STOPPED.value)
@@ -355,7 +374,7 @@ class TestDeleteAnalysis:
 
         delete_analysis(_ANALYSIS_ID, mock_database)
 
-        mock_deployment.stop.assert_not_called()
+        mock_deployment.stop.assert_called_once_with(mock_database, log="")
         mock_keycloak.assert_called_once_with(_ANALYSIS_ID)
         mock_database.delete_analysis.assert_called_once_with(_ANALYSIS_ID)
 
@@ -440,7 +459,7 @@ class TestCleanup:
     @patch("src.resources.utils.delete_k8s_resource")
     @patch(
         "src.resources.utils.find_k8s_resources",
-        return_value="flame-message-broker-pod",
+        return_value=["flame-message-broker-pod"],
     )
     def test_mb_reinitializes_message_broker(self, mock_find, mock_delete, mock_cztr, mock_database):
         from src.resources.utils import cleanup
@@ -457,7 +476,7 @@ class TestCleanup:
     @patch("src.resources.utils.delete_k8s_resource")
     @patch(
         "src.resources.utils.find_k8s_resources",
-        return_value="flame-storage-service-pod",
+        return_value=["flame-storage-service-pod"],
     )
     def test_rs_reinitializes_storage_service(self, mock_find, mock_delete, mock_cztr, mock_database):
         from src.resources.utils import cleanup
@@ -499,7 +518,7 @@ class TestCleanup:
 
     @patch("src.resources.utils.clean_up_the_rest", return_value="")
     @patch("src.resources.utils.delete_k8s_resource")
-    @patch("src.resources.utils.find_k8s_resources", return_value="pod-name")
+    @patch("src.resources.utils.find_k8s_resources", return_value=["pod-name"])
     def test_comma_separated_processes_both_types(self, mock_find, mock_delete, mock_cztr, mock_database):
         from src.resources.utils import cleanup
 
@@ -554,7 +573,7 @@ class TestCleanUpTheRest:
         mock_delete.assert_not_called()
 
     @patch("src.resources.utils.delete_k8s_resource")
-    @patch("src.resources.utils.find_k8s_resources", return_value=None)
+    @patch("src.resources.utils.find_k8s_resources", return_value=[None])
     def test_handles_none_resources(self, mock_find, mock_delete, mock_database):
         from src.resources.utils import clean_up_the_rest
 
@@ -605,9 +624,11 @@ class TestStreamLogs:
             with patch("src.resources.utils.update_hub_status"):
                 stream_logs(log_entity, "node-id", False, mock_database, mock_hub_client)
 
-        mock_database.update_analysis_log.assert_called_once_with(
-            _ANALYSIS_ID, str(log_entity.to_log_entity())
-        )
+        mock_database.update_analysis_log.assert_called_once()
+        args, _ = mock_database.update_analysis_log.call_args
+        assert args[0] == _ANALYSIS_ID
+        assert "test log message" in args[1]
+        assert "log_type=info" in args[1]
 
     def test_hub_logging_disabled_skips_hub_log(self, mock_database, mock_hub_client):
         from src.resources.utils import stream_logs

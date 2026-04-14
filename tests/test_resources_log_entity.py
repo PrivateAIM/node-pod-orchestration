@@ -15,12 +15,12 @@ from src.status.constants import _MAX_RESTARTS
 
 class TestLogEntity:
     def test_creation_with_required_fields(self):
-        entity = LogEntity(log="test message", log_type="info")
+        entity = LogEntity(log="test message", log_type="info", id="id-1", created_at="2026-01-01")
         assert entity.log == "test message"
         assert entity.log_type == "info"
 
     def test_id_and_created_at_are_strings(self):
-        entity = LogEntity(log="msg", log_type="debug")
+        entity = LogEntity(log="msg", log_type="debug", id="id-1", created_at="2026-01-01")
         assert isinstance(entity.id, str)
         assert isinstance(entity.created_at, str)
 
@@ -28,15 +28,15 @@ class TestLogEntity:
         "emerg", "alert", "crit", "error", "warn", "notice", "info", "debug"
     ])
     def test_all_valid_log_types(self, log_type):
-        entity = LogEntity(log="msg", log_type=log_type)
+        entity = LogEntity(log="msg", log_type=log_type, id="id-1", created_at="2026-01-01")
         assert entity.log_type == log_type
 
     def test_invalid_log_type_raises(self):
         with pytest.raises(Exception):
-            LogEntity(log="msg", log_type="invalid")
+            LogEntity(log="msg", log_type="invalid", id="id-1", created_at="2026-01-01")
 
     def test_str_representation(self):
-        entity = LogEntity(log="hello", log_type="warn")
+        entity = LogEntity(log="hello", log_type="warn", id="id-1", created_at="2026-01-01")
         s = str(entity)
         assert "LogEntity" in s
         assert entity.id in s

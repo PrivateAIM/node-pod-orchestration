@@ -281,8 +281,8 @@ class TestUpdateRunningStatus:
 # ─── TestUpdateFinishedStatus ─────────────────────────────────────────────────
 
 class TestUpdateFinishedStatus:
-    @patch("src.status.status.stop_analysis")
-    def test_executed_stops_analysis(self, mock_stop, mock_database, sample_analysis_db):
+    @patch("src.status.status.delete_analysis")
+    def test_executed_deletes_analysis(self, mock_delete, mock_database, sample_analysis_db):
         analysis = sample_analysis_db(deployment_name="dep-name")
         mock_database.get_latest_deployment.return_value = analysis
 
@@ -292,7 +292,7 @@ class TestUpdateFinishedStatus:
         )
 
         mock_database.update_deployment_status.assert_called_once_with("dep-name", AnalysisStatus.EXECUTED.value)
-        mock_stop.assert_called_once_with("analysis_id", mock_database)
+        mock_delete.assert_called_once_with("analysis_id", mock_database)
 
     @patch("src.status.status.stop_analysis")
     def test_failed_stops_analysis(self, mock_stop, mock_database, sample_analysis_db):
