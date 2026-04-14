@@ -516,7 +516,7 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
 
     pod_logs = []
     for pod in pods.items:
-        if ((pod_is is not None) and (pod.metadata.name in pod_ids)) or pod_ids:
+        if pod_ids is None or pod.metadata.name in pod_ids:
             try:
                 pod_logs.append(core_client.read_namespaced_pod_log(pod.metadata.name, namespace))
             except client.exceptions.ApiException as e:

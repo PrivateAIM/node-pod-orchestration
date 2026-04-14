@@ -27,16 +27,16 @@ logger = get_logger()
 def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dict[str, str]:
     namespace = get_current_namespace()
 
-    if not(is_uuid(body.analysis_id) or is_uuid(body.project_id)):
-        logger.error(f"Received request to create analysis with ID {body.analysis_id} for project {body.project_id}")
-        raise HTTPException(status_code=400, detail="Analysis ID and Project ID must be valid UUIDs.")
-
     if isinstance(body, str):
         body = database.extract_analysis_body(body)
         if body is None:
             return {'status': "Analysis ID not found in database."}
         else:
             body = CreateAnalysis(**body)
+
+    if not(is_uuid(body.analysis_id) or is_uuid(body.project_id)):
+        logger.error(f"Received request to create analysis with ID {body.analysis_id} for project {body.project_id}")
+        raise HTTPException(status_code=400, detail="Analysis ID and Project ID must be valid UUIDs.")
 
     create_harbor_secret(body.registry_url, body.registry_user, body.registry_password, namespace=namespace)
 
@@ -245,7 +245,7 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
         for selector_arg in selector_args:
             resources = find_k8s_resources(res, 'label', selector_arg, namespace=namespace)
             zombie_resources = [r for r in resources
-                                if (resource_name_to_analysis(r, max_r_split) not in known_analysis_ids) and (r is not None)]
+                                if (r is not None) and (resource_name_to_analysis(r, max_r_split) not in known_analysis_ids)]
             for z in zombie_resources:
                 delete_k8s_resource(z, res, namespace=namespace)
             result_str += f"Deleted {len(zombie_resources)} zombie " + \
