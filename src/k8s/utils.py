@@ -42,33 +42,29 @@ def find_k8s_resources(resource_type: str,
         kwargs[f'{selector_type}_selector'] = selector_arg
 
     if resource_type == 'deployment':
-        resources = list(client.AppsV1Api().list_namespaced_deployment(**kwargs))
+        resources = client.AppsV1Api().list_namespaced_deployment(**kwargs)
     elif resource_type == 'networkpolicy':
-        resources = list(client.NetworkingV1Api().list_namespaced_network_policy(**kwargs))
+        resources = client.NetworkingV1Api().list_namespaced_network_policy(**kwargs)
     elif resource_type in ['pod', 'service', 'configmap']:
         core_client = client.CoreV1Api()
         if resource_type == 'pod':
-            resources = list(core_client.list_namespaced_pod(**kwargs))
+            resources = core_client.list_namespaced_pod(**kwargs)
         elif resource_type == 'service':
-            resources = list(core_client.list_namespaced_service(**kwargs))
+            resources = core_client.list_namespaced_service(**kwargs)
         elif resource_type == 'configmap':
-            resources = list(core_client.list_namespaced_config_map(**kwargs))
+            resources = core_client.list_namespaced_config_map(**kwargs)
         else:
             raise RuntimeError("Undefined resource")
     elif resource_type == 'job':
-        resources = list(client.BatchV1Api().list_namespaced_job(**kwargs))
+        resources = client.BatchV1Api().list_namespaced_job(**kwargs)
     else:
         raise ValueError(f"Uncaptured resource type discovered! Message the Devs... (found={resource_type})")
-    print(f"Found {len(resources)} {resource_type}(s) with {selector_type}={selector_arg} in namespace {namespace}")
-    if not resources:
+    if not resources.items:
         return [None]
-    else:
-        resource_names = [resource.metadata.name for resource in resources.items]
-        if manual_name_selector is not None:
-            resource_names = [name for name in resource_names if manual_name_selector in name]
-            return resource_names
-        else:
-            return resource_names
+    resource_names = [resource.metadata.name for resource in resources.items]
+    if manual_name_selector is not None:
+        resource_names = [name for name in resource_names if manual_name_selector in name]
+    return resource_names
 
 
 def delete_k8s_resource(name: str, resource_type: str, namespace: str = 'default') -> None:
