@@ -44,13 +44,27 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
     # Enter lifecycle loop
     while True:
         if hub_client is None:
-            hub_client = init_hub_client_with_client(client_id,
-                                                    client_secret,
-                                                    hub_url_core,
-                                                    hub_auth,
-                                                    http_proxy,
-                                                    https_proxy)
-            node_id = get_node_id_by_client(hub_client, client_id)
+            node_id = None
+            client_params = (client_id,
+                             client_secret,
+                             hub_url_core,
+                             hub_auth,
+                             http_proxy,
+                             https_proxy)
+            if all(p is not None for p in client_params):
+                hub_client = init_hub_client_with_client(*client_params)
+            else:
+                logger.error(f"One or more hub client initialization parameters are None.\n"
+                             f"Check values file for given parameters:\n"
+                             f"\t* HUB_CLIENT_ID={client_id}{'' if client_id is not None else ' <- review this'}\n"
+                             f"\t* HUB_CLIENT_SECRET={client_secret}{'' if client_secret is not None else ' <- review this'}\n"
+                             f"\t* HUB_URL_CORE={hub_url_core}{'' if hub_url_core is not None else ' <- review this'}\n"
+                             f"\t* HUB_URL_AUTH={hub_auth}{'' if hub_auth is not None else ' <- review this'}\n"
+                             f"\t* PO_HTTP_PROXY={http_proxy}{'' if http_proxy is not None else ' <- review this'}\n"
+                             f"\t* PO_HTTPS_PROXY={https_proxy}{'' if https_proxy is not None else ' <- review this'}")
+                raise ValueError("One or more hub client initialization parameters are None.")
+            if all(p is not None for p in (hub_client, client_id)):
+                node_id = get_node_id_by_client(hub_client, client_id)
             # Catch unresponsive hub client
             if node_id is None:
                 logger.action("Resetting hub client...")

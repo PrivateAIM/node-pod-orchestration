@@ -16,6 +16,7 @@ import flame_hub
 
 from src.status.constants import AnalysisStatus
 from src.utils.po_logging import get_logger
+from src.utils.other import extract_hub_envs
 
 
 logger = get_logger()
@@ -33,7 +34,7 @@ def init_hub_client_with_client(client_id: str,
     if http_proxy and https_proxy:
         proxies = {
             "http://": HTTPTransport(proxy=http_proxy),
-            "https://":  HTTPTransport(proxy=https_proxy, verify=ssl_ctx)
+            "https://": HTTPTransport(proxy=https_proxy, verify=ssl_ctx)
         }
     try:
 
@@ -47,7 +48,7 @@ def init_hub_client_with_client(client_id: str,
         logger.action("Hub client init successful")
     except Exception as e:
         hub_client = None
-        logger.error(f"Failed to  authenticate with hub python client library: {repr(e)}")
+        logger.error(f"Failed to authenticate with hub python client library: {repr(e)}")
     return hub_client
 
 
@@ -128,12 +129,7 @@ def init_hub_client_and_update_hub_status_with_client(analysis_id: str, status: 
     """
     Create a hub client for the analysis and update the current status.
     """
-    client_id, client_secret, hub_url_core, hub_auth, http_proxy, https_proxy = (os.getenv('HUB_CLIENT_ID'),
-                                                                                 os.getenv('HUB_CLIENT_SECRET'),
-                                                                                 os.getenv('HUB_URL_CORE'),
-                                                                                 os.getenv('HUB_URL_AUTH'),
-                                                                                 os.getenv('PO_HTTP_PROXY'),
-                                                                                 os.getenv('PO_HTTPS_PROXY'))
+    client_id, client_secret, hub_url_core, hub_auth, _, http_proxy, https_proxy = extract_hub_envs()
     hub_client = init_hub_client_with_client(client_id, client_secret, hub_url_core, hub_auth, http_proxy, https_proxy)
     if hub_client is not None:
         node_id = get_node_id_by_client(hub_client, client_id)
