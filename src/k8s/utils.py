@@ -10,10 +10,19 @@ logger = get_logger()
 
 
 def load_cluster_config():
+    """Load the in-cluster Kubernetes configuration for the official client."""
     config.load_incluster_config()
 
 
 def get_current_namespace() -> str:
+    """Return the namespace this pod is running in.
+
+    Reads the namespace from the service account token mount; falls back to
+    ``'default'`` if the file is missing (e.g. outside the cluster).
+
+    Returns:
+        The current namespace.
+    """
     namespace_file = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
     try:
         with open(namespace_file, 'r') as file:
@@ -29,6 +38,25 @@ def find_k8s_resources(resource_type: str,
                        selector_arg: Optional[str] = None,
                        manual_name_selector: Optional[str] = None,
                        namespace: str = "default") -> list[Optional[str]]:
+    """List names of Kubernetes resources of a given type, optionally filtered.
+
+    Args:
+        resource_type: One of ``deployment``, ``pod``, ``service``,
+            ``networkpolicy``, ``configmap``, or ``job``.
+        selector_type: Whether ``selector_arg`` is a ``label`` or ``field``
+            selector.
+        selector_arg: Selector expression (required if ``selector_type`` is set).
+        manual_name_selector: Optional substring that resource names must
+            contain to be included.
+        namespace: Namespace to search in.
+
+    Returns:
+        List of matching resource names. When no resources are found, returns
+        ``[None]`` (historical quirk preserved by callers).
+
+    Raises:
+        ValueError: On an unknown ``resource_type`` or missing ``selector_arg``.
+    """
     if resource_type not in ['deployment', 'pod', 'service', 'networkpolicy', 'configmap', 'job']:
         raise ValueError("For k8s resource search: resource_type must be one of 'deployment', 'pod', 'service', "
                          "'networkpolicy', 'configmap', or 'job")
@@ -68,11 +96,18 @@ def find_k8s_resources(resource_type: str,
 
 
 def delete_k8s_resource(name: str, resource_type: str, namespace: str = 'default') -> None:
-    """
-    Deletes a Kubernetes resource by name and type.
-    :param name: Name of the resource to delete.
-    :param resource_type: Type of the resource (e.g., 'deployment', 'service', 'pod', 'configmap', 'job').
-    :param namespace: Namespace in which the resource exists.
+    """Delete a Kubernetes resource by name and type.
+
+    ``Not Found`` errors are swallowed silently; other API errors are logged.
+
+    Args:
+        name: Name of the resource to delete.
+        resource_type: One of ``deployment``, ``service``, ``pod``,
+            ``configmap``, ``networkpolicy``, or ``job``.
+        namespace: Namespace the resource lives in.
+
+    Raises:
+        ValueError: If ``resource_type`` is not supported.
     """
     logger.action(f"Deleting resource: {name} of type {resource_type} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     if resource_type == 'deployment':

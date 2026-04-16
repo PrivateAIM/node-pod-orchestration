@@ -28,6 +28,22 @@ def init_hub_client_with_client(client_id: str,
                                 hub_auth: str,
                                 http_proxy: str,
                                 https_proxy: str) -> Optional[flame_hub.CoreClient]:
+    """Authenticate and build a :class:`flame_hub.CoreClient` talking to the FLAME Hub.
+
+    Honors the ``PO_HTTP_PROXY`` / ``PO_HTTPS_PROXY`` and ``EXTRA_CA_CERTS``
+    environment variables via :func:`get_ssl_context`.
+
+    Args:
+        client_id: OAuth2 client id for the node.
+        client_secret: OAuth2 client secret for the node.
+        hub_url_core: Base URL of the Hub core API.
+        hub_auth: Base URL of the Hub auth service.
+        http_proxy: HTTP proxy URL (may be empty/None).
+        https_proxy: HTTPS proxy URL (may be empty/None).
+
+    Returns:
+        An initialized Hub core client, or ``None`` on authentication failure.
+    """
     # Attempt to init hub client
     proxies = None
     ssl_ctx = get_ssl_context()
@@ -54,7 +70,12 @@ def init_hub_client_with_client(client_id: str,
 
 @lru_cache
 def get_ssl_context() -> ssl.SSLContext:
-    """Check if there are additional certificates present and if so, load them."""
+    """Return a cached SSL context that trusts the system store plus ``EXTRA_CA_CERTS``.
+
+    Returns:
+        A :class:`truststore.SSLContext` loaded with the system certificate
+        store and, if present, the CA bundle pointed to by ``EXTRA_CA_CERTS``.
+    """
     cert_path = os.getenv('EXTRA_CA_CERTS')
     ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     if cert_path and Path(cert_path).exists():
@@ -63,6 +84,15 @@ def get_ssl_context() -> ssl.SSLContext:
 
 
 def get_node_id_by_client(hub_client: flame_hub.CoreClient, client_id: str) -> Optional[str]:
+    """Look up the Hub node id associated with an OAuth2 client id.
+
+    Args:
+        hub_client: Initialized Hub core client.
+        client_id: OAuth2 client id of this node.
+
+    Returns:
+        The node's UUID as a string, or ``None`` on failure.
+    """
     try:
         node_id_object = hub_client.find_nodes(filter={'client_id': client_id})[0]
     except (HTTPStatusError, JSONDecodeError, ConnectTimeout, flame_hub._exceptions.HubAPIError, AttributeError) as e:
@@ -72,6 +102,16 @@ def get_node_id_by_client(hub_client: flame_hub.CoreClient, client_id: str) -> O
 
 
 def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, node_id_object_id: str) -> Optional[str]:
+    """Look up the Hub analysis-node id for a (analysis, node) pair.
+
+    Args:
+        hub_client: Initialized Hub core client.
+        analysis_id: Analysis id to filter by.
+        node_id_object_id: Hub node id (see :func:`get_node_id_by_client`).
+
+    Returns:
+        The analysis-node UUID as a string, or ``None`` if none exists.
+    """
     try:
         node_analyzes = hub_client.find_analysis_nodes(filter={'analysis_id': analysis_id,
                                                                'node_id': node_id_object_id})
@@ -91,8 +131,16 @@ def update_hub_status(hub_client: flame_hub.CoreClient,
                       node_analysis_id: str,
                       run_status: str,
                       run_progress: Optional[int] = None) -> None:
-    """
-    Update the status of the analysis in the hub.
+    """Update the execution status (and optionally progress) of an analysis-node in the Hub.
+
+    ``STUCK`` is normalized to ``FAILED`` since the Hub does not model a
+    stuck status.
+
+    Args:
+        hub_client: Initialized Hub core client.
+        node_analysis_id: Hub analysis-node id to update.
+        run_status: New execution status string.
+        run_progress: Optional execution progress (0-100).
     """
     try:
         if run_status == AnalysisStatus.STUCK.value:
@@ -106,6 +154,16 @@ def update_hub_status(hub_client: flame_hub.CoreClient,
 
 
 def get_analysis_node_statuses(hub_client: flame_hub.CoreClient, analysis_id: str) -> Optional[dict[str, str]]:
+    """Return the execution status of every node participating in an analysis.
+
+    Args:
+        hub_client: Initialized Hub core client.
+        analysis_id: Analysis to query.
+
+    Returns:
+        Mapping ``{node_analysis_id: execution_status}``, or ``None`` on
+        lookup failure.
+    """
     try:
         node_analyzes = hub_client.find_analysis_nodes(filter={'analysis_id': analysis_id})
     except (HTTPStatusError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
@@ -120,14 +178,33 @@ def get_analysis_node_statuses(hub_client: flame_hub.CoreClient, analysis_id: st
 def get_partner_node_statuses(hub_client: flame_hub.CoreClient,
                               analysis_id: str,
                               node_analysis_id: str) -> Optional[dict[str, str]]:
+    """Return :func:`get_analysis_node_statuses` with the local node filtered out.
+
+    Args:
+        hub_client: Initialized Hub core client.
+        analysis_id: Analysis to query.
+        node_analysis_id: Local node's analysis-node id, excluded from the
+            result.
+
+    Returns:
+        Mapping ``{partner_node_analysis_id: execution_status}``, or ``None``
+        on lookup failure.
+    """
     analysis_node_statuses = get_analysis_node_statuses(hub_client, analysis_id)
     return {k : v for k, v in analysis_node_statuses.items() if k != node_analysis_id} \
         if analysis_node_statuses is not None else None
 
 
 def init_hub_client_and_update_hub_status_with_client(analysis_id: str, status: str) -> None:
-    """
-    Create a hub client for the analysis and update the current status.
+    """One-shot convenience that (re)builds a Hub client and pushes a status update.
+
+    Used by API endpoints that do not hold a long-lived Hub client. Logs and
+    returns silently when any lookup in the chain (client, node id, analysis
+    node id) fails.
+
+    Args:
+        analysis_id: Analysis whose Hub status should be updated.
+        status: New execution status string.
     """
     client_id, client_secret, hub_url_core, hub_auth, _, http_proxy, https_proxy = extract_hub_envs()
     hub_client = init_hub_client_with_client(client_id, client_secret, hub_url_core, hub_auth, http_proxy, https_proxy)

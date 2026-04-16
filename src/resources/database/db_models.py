@@ -5,16 +5,21 @@ from sqlalchemy.ext.declarative import as_declarative, declared_attr
 
 @as_declarative()
 class Base:
+    """SQLAlchemy declarative base with an auto-generated ``__tablename__``."""
+
     id: Any
     __name__: str
 
     # Generate __tablename__ automatically
     @declared_attr
     def __tablename__(cls) -> str:
+        """Derive the SQL table name from the lowercased class name."""
         return cls.__name__.lower()
 
 
 class AnalysisDB(Base):
+    """ORM model tracking the current state of an analysis deployment."""
+
     __tablename__ = "analysis"
     id = Column(Integer, primary_key=True, index=True)
     deployment_name = Column(String, unique=True, index=True)
@@ -36,6 +41,8 @@ class AnalysisDB(Base):
 
 
 class ArchiveDB(Base):
+    """ORM model mirroring :class:`AnalysisDB` for completed analyses kept for history."""
+
     __tablename__ = "archive"
     id = Column(Integer, primary_key=True, index=True)
     deployment_name = Column(String, unique=True, index=True)

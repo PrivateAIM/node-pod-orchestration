@@ -17,6 +17,12 @@ logger = get_logger()
 
 
 def main():
+    """Entry point for the Pod Orchestration service.
+
+    Loads the in-cluster Kubernetes configuration, initializes the database,
+    spawns the FastAPI server in a background thread, and starts the blocking
+    status monitoring loop on the main thread.
+    """
     # load cluster config
     load_cluster_config()
 
@@ -34,6 +40,12 @@ def main():
 
 
 def start_po_api(database: Database, namespace: str):
+    """Instantiate and run the Pod Orchestration FastAPI server.
+
+    Args:
+        database: Initialized database wrapper used by the API for persistence.
+        namespace: Kubernetes namespace the API will operate within.
+    """
     PodOrchestrationAPI(database, namespace)
 
 

@@ -24,6 +24,22 @@ def create_harbor_secret(host_address: str,
                          password: str,
                          name: str = 'flame-harbor-credentials',
                          namespace: str = 'default') -> None:
+    """Create (or recreate) the dockerconfigjson secret used to pull analysis images.
+
+    If a secret with the same name already exists it is deleted and recreated
+    to ensure the credentials are up to date.
+
+    Args:
+        host_address: Harbor registry hostname (e.g. ``harbor.example.com``).
+        user: Registry username.
+        password: Registry password.
+        name: Name of the Kubernetes secret to create.
+        namespace: Namespace in which to create the secret.
+
+    Raises:
+        Exception: If the conflict cannot be resolved or an unexpected API
+            error occurs.
+    """
     core_client = client.CoreV1Api()
     secret_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
     secret = client.V1Secret(metadata=secret_metadata,
@@ -58,6 +74,22 @@ def create_analysis_deployment(name: str,
                                image: str,
                                env: Optional[dict[str, str]] = None,
                                namespace: str = 'default') -> list[str]:
+    """Deploy an analysis pod along with its nginx sidecar, service, and network policy.
+
+    Creates the analysis ``Deployment`` using the Harbor pull secret, exposes
+    it via a ``Service``, and then provisions the companion nginx deployment
+    that reverse-proxies egress to node-local services.
+
+    Args:
+        name: Deployment name (typically ``analysis-{analysis_id}-{restart_counter}``).
+        image: Fully qualified container image reference.
+        env: Optional environment variables to inject into the analysis
+            container.
+        namespace: Namespace in which to create the resources.
+
+    Returns:
+        List of pod names that belong to the new analysis deployment.
+    """
     app_client = client.AppsV1Api()
     containers = []
 
@@ -96,6 +128,16 @@ def create_analysis_deployment(name: str,
 
 
 def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
+    """Tear down an analysis and its companion nginx resources.
+
+    Deletes both the analysis and ``nginx-{name}`` deployments with their
+    services, as well as the associated network policy and nginx ConfigMap.
+    Missing resources are logged and ignored.
+
+    Args:
+        deployment_name: Name of the analysis deployment to remove.
+        namespace: Namespace the resources live in.
+    """
     logger.action(f"Deleting deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     app_client = client.AppsV1Api()
     for name in [deployment_name, f'nginx-{deployment_name}']:
@@ -128,12 +170,18 @@ def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
 def get_analysis_logs(deployment_names: dict[str, str],
                       database: Database,
                       namespace: str = 'default') -> dict[str, dict[str, list[str]]]:
-    """
-    get logs for both the analysis and nginx deployment
-    :param deployment_names:
-    :param database:
-    :param namespace:
-    :return:
+    """Collect pod logs for the analysis and nginx deployments.
+
+    Args:
+        deployment_names: Mapping ``{analysis_id: deployment_name}`` to fetch
+            logs for.
+        database: Database wrapper used to look up recorded pod ids so that
+            only pods belonging to the tracked deployment are read.
+        namespace: Namespace the deployments live in.
+
+    Returns:
+        Nested mapping ``{'analysis': {analysis_id: [log, ...]},
+        'nginx': {analysis_id: [log, ...]}}``.
     """
     return {'analysis': {analysis_id: _get_logs(name=deployment_name,
                                                 pod_ids=database.get_deployment_pod_ids(deployment_name),
@@ -146,6 +194,16 @@ def get_analysis_logs(deployment_names: dict[str, str],
 
 
 def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional[dict[str, dict[str, str]]]:
+    """Return readiness and (if not ready) failure details for each pod in a deployment.
+
+    Args:
+        deployment_name: Value of the ``app`` label selecting the deployment.
+        namespace: Namespace to search in.
+
+    Returns:
+        Mapping ``{pod_name: {'ready': bool, 'reason': str, 'message': str}}``,
+        or ``None`` when no pods or no container statuses are available.
+    """
     core_client = client.CoreV1Api()
 
     # get pods in deployment
@@ -187,6 +245,23 @@ def _create_analysis_nginx_deployment(analysis_name: str,
                                       analysis_service_name: str,
                                       analysis_env: Optional[dict[str, str]] = None,
                                       namespace: str = 'default') -> tuple[str, str]:
+    """Deploy the nginx reverse-proxy sidecar for an analysis.
+
+    Builds the nginx ConfigMap, starts the ``nginx-{analysis_name}`` deployment
+    with a liveness probe on ``/healthz``, creates its service, and installs
+    the network policy locking egress/ingress to the analysis pod.
+
+    Args:
+        analysis_name: Name of the analysis deployment this nginx sidecar fronts.
+        analysis_service_name: Service name of the analysis deployment used as
+            the nginx upstream.
+        analysis_env: Analysis config (must include ``ANALYSIS_ID`` and
+            ``PROJECT_ID``) used to template the nginx config.
+        namespace: Namespace in which to create the resources.
+
+    Returns:
+        Tuple ``(nginx_deployment_name, nginx_service_name)``.
+    """
     app_client = client.AppsV1Api()
     containers = []
     nginx_name = f"nginx-{analysis_name}"
@@ -258,6 +333,29 @@ def _create_nginx_config_map(analysis_name: str,
                              nginx_name: str,
                              analysis_env: Optional[dict[str, str]] = None,
                              namespace: str = 'default') -> str:
+    """Build and create the nginx ConfigMap scoped to a single analysis.
+
+    Discovers the message broker, pod orchestration, hub adapter, kong, and
+    storage services at runtime, waits until each of their pods has an IP, and
+    renders an ``nginx.conf`` that whitelists the analysis pod for egress and
+    the message broker / pod orchestrator for ingress.
+
+    Args:
+        analysis_name: Name of the analysis deployment.
+        analysis_service_name: Upstream service for ``/analysis`` ingress.
+        nginx_name: Name of the nginx deployment (used to prefix the config
+            map name).
+        analysis_env: Analysis config containing ``ANALYSIS_ID`` and
+            ``PROJECT_ID`` used in location matches.
+        namespace: Namespace in which to create the ConfigMap.
+
+    Returns:
+        Name of the created ConfigMap (``{nginx_name}-config``).
+
+    Raises:
+        ValueError: If ``analysis_env`` is ``None`` or the pod orchestration
+            pod cannot be found.
+    """
     if analysis_env is None:
         logger.error(f"Error creating an nginx failed since no analysis_env containing analysis and poject id was provided.")
         raise ValueError(f"Error creating an nginx failed since no analysis_env containing analysis and poject id was provided.")
@@ -450,6 +548,18 @@ def _create_service(name: str,
                     target_ports: list[int],
                     meta_data_labels: dict[str, str] = None,
                     namespace: str = 'default') -> str:
+    """Create a ClusterIP service selecting pods by the ``app={name}`` label.
+
+    Args:
+        name: Service and selector name.
+        ports: Service-side ports.
+        target_ports: Matching container-side ports (zipped with ``ports``).
+        meta_data_labels: Optional metadata labels; defaults to ``{'app': name}``.
+        namespace: Namespace in which to create the service.
+
+    Returns:
+        The service name (equal to ``name``).
+    """
     if meta_data_labels is None:
         meta_data_labels = {'app': name}
 
@@ -466,6 +576,16 @@ def _create_service(name: str,
 
 
 def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespace: str = 'default') -> None:
+    """Install the network policy that isolates an analysis pod.
+
+    Allows egress only to the nginx sidecar and kube-dns, and ingress only
+    from the nginx sidecar.
+
+    Args:
+        analysis_name: Target analysis deployment (pod selector).
+        nginx_name: Companion nginx deployment name used in the peer selectors.
+        namespace: Namespace in which to create the policy.
+    """
     network_client = client.NetworkingV1Api()
 
     # egress to nginx and kube-dns pod (kube dns' namespace has to be specified)
@@ -505,11 +625,30 @@ def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespa
 
 
 def _delete_service(name: str, namespace: str = 'default') -> None:
+    """Delete a Kubernetes service by name.
+
+    Args:
+        name: Service name.
+        namespace: Namespace the service lives in.
+    """
     core_client = client.CoreV1Api()
     core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace)
 
 
 def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = 'default') -> list[str]:
+    """Retrieve and sanitize logs for the pods matching ``app={name}``.
+
+    Filters out INFO lines and routine health/webhook access lines, and strips
+    non-printable characters.
+
+    Args:
+        name: Value of the pods' ``app`` label.
+        pod_ids: Optional allowlist; pods not in this list are skipped.
+        namespace: Namespace to search in.
+
+    Returns:
+        One sanitized log string per matched pod.
+    """
     core_client = client.CoreV1Api()
     # get pods in deployment
     pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name}')
@@ -535,6 +674,15 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
 
 
 def _get_pods(name: str, namespace: str = 'default') -> list[str]:
+    """Return pod names matching the ``app={name}`` label selector.
+
+    Args:
+        name: Value of the pods' ``app`` label.
+        namespace: Namespace to search in.
+
+    Returns:
+        List of matching pod names.
+    """
     core_client = client.CoreV1Api()
     return [pod.metadata.name
             for pod in core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name}').items]

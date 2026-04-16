@@ -25,6 +25,25 @@ logger = get_logger()
 
 
 def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dict[str, str]:
+    """Create and start a new analysis deployment.
+
+    Validates the UUIDs, provisions the Harbor pull secret, constructs the
+    :class:`Analysis` model, deploys it, and pushes the ``STARTED`` status to
+    the FLAME Hub.
+
+    Args:
+        body: Either a :class:`CreateAnalysis` payload or an analysis id used
+            to rebuild the payload from the database (restart case).
+        database: Database wrapper used for persistence.
+
+    Returns:
+        Mapping ``{analysis_id: status}`` for the newly started deployment.
+        When the analysis id cannot be resolved from the database, returns
+        ``{'status': 'Analysis ID not found in database.'}``.
+
+    Raises:
+        HTTPException: 400 if ``analysis_id`` or ``project_id`` is not a UUID.
+    """
     namespace = get_current_namespace()
 
     if isinstance(body, str):
@@ -61,11 +80,18 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dic
 
 
 def retrieve_history(analysis_id_str: str, database: Database) -> dict[str, dict[str, list[str]]]:
-    """
-    Retrieve the history of logs for a given analysis
-    :param analysis_id_str:
-    :param database:
-    :return:
+    """Return the persisted analysis and nginx logs for terminated analyses.
+
+    Only deployments in ``STOPPED``, ``EXECUTED``, or ``FAILED`` are included.
+    The stored log column is parsed back into a dictionary via ``ast.literal_eval``.
+
+    Args:
+        analysis_id_str: Specific analysis id or the literal string ``"all"``.
+        database: Database wrapper used for the lookup.
+
+    Returns:
+        Nested mapping ``{'analysis': {analysis_id: [...]},
+        'nginx': {analysis_id: [...]}}``.
     """
     if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
@@ -92,6 +118,16 @@ def retrieve_history(analysis_id_str: str, database: Database) -> dict[str, dict
 
 
 def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[str, list[str]]]:
+    """Return live pod logs for analyses currently in ``EXECUTING``.
+
+    Args:
+        analysis_id_str: Specific analysis id or the literal string ``"all"``.
+        database: Database wrapper used to resolve deployment names.
+
+    Returns:
+        Nested mapping ``{'analysis': {...}, 'nginx': {...}}`` returned by
+        :func:`get_analysis_logs`.
+    """
     if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
@@ -108,6 +144,15 @@ def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[st
 
 
 def get_status_and_progress(analysis_id_str: str, database: Database) -> dict[str, dict[str, str]]:
+    """Return the latest status and progress for one or all analyses.
+
+    Args:
+        analysis_id_str: Specific analysis id or the literal string ``"all"``.
+        database: Database wrapper used for the lookup.
+
+    Returns:
+        Mapping ``{analysis_id: {'status': str, 'progress': int}}``.
+    """
     if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
@@ -124,6 +169,15 @@ def get_status_and_progress(analysis_id_str: str, database: Database) -> dict[st
 
 
 def get_pods(analysis_id_str: str, database: Database) -> dict[str, list[str]]:
+    """Return the recorded pod ids for one or all analyses.
+
+    Args:
+        analysis_id_str: Specific analysis id or the literal string ``"all"``.
+        database: Database wrapper used for the lookup.
+
+    Returns:
+        Mapping ``{analysis_id: [pod_id, ...]}``.
+    """
     if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
@@ -132,6 +186,24 @@ def get_pods(analysis_id_str: str, database: Database) -> dict[str, list[str]]:
 
 
 def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
+    """Stop one or all analyses, persisting logs and forwarding status to the Hub.
+
+    For each analysis:
+
+    * snapshots the current logs into the DB (so they are still retrievable
+      via ``/po/history``);
+    * deletes the Kubernetes deployment;
+    * preserves a terminal status (``FAILED``/``EXECUTED``/``STARTED``) if one
+      is already recorded, otherwise transitions to ``STOPPED``;
+    * pushes the final status to the FLAME Hub.
+
+    Args:
+        analysis_id_str: Specific analysis id or the literal string ``"all"``.
+        database: Database wrapper used for persistence.
+
+    Returns:
+        Mapping ``{analysis_id: final_status}``.
+    """
     if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
@@ -160,6 +232,18 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
 
 
 def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]:
+    """Stop and permanently remove one or all analyses.
+
+    In addition to :func:`stop_analysis`, this deletes the matching Keycloak
+    client and removes the analysis rows from the database.
+
+    Args:
+        analysis_id_str: Specific analysis id or the literal string ``"all"``.
+        database: Database wrapper used for persistence.
+
+    Returns:
+        Mapping ``{analysis_id: None}`` acknowledging the deletions.
+    """
     if analysis_id_str == 'all':
         analysis_ids = database.get_analysis_ids()
     else:
@@ -180,6 +264,11 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]
 
 
 def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
+    """Stop and restart an analysis to recover from a stuck/slow state.
+
+    Waits 10 seconds between stop and recreate to let Kubernetes settle, then
+    prunes historical deployment rows so only the latest one remains.
+    """
     if database.get_latest_deployment(analysis_id) is not None:
         stop_analysis(analysis_id, database)
         time.sleep(10)  # wait for k8s to update status
@@ -190,6 +279,26 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
 def cleanup(cleanup_type: str,
             database: Database,
             namespace: str = 'default') -> dict[str, str]:
+    """Run one or more targeted cleanup passes.
+
+    Supported selectors (comma-separated allowed):
+
+    * ``all`` — resets the database and reinitializes message broker, storage
+      service, and Keycloak clients.
+    * ``analyzes`` — resets the analysis database.
+    * ``services`` / ``mb`` / ``rs`` — restart FLAME helper pods.
+    * ``keycloak`` — delete Keycloak clients without a matching analysis.
+
+    :func:`clean_up_the_rest` is always appended under the ``zombies`` key.
+
+    Args:
+        cleanup_type: Selector or comma-separated selectors.
+        database: Database wrapper used for persistence.
+        namespace: Namespace to search in.
+
+    Returns:
+        Mapping ``{selector: summary_string}``.
+    """
     cleanup_types = cleanup_type.split(',') if ',' in cleanup_type else [cleanup_type]
 
     response_content = {}
@@ -234,6 +343,20 @@ def cleanup(cleanup_type: str,
 
 
 def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
+    """Delete orphaned Kubernetes resources whose analysis is no longer tracked.
+
+    Iterates over deployments, pods, services, network policies, and config
+    maps labelled as FLAME analysis resources, and removes any whose analysis
+    id is not present in the database.
+
+    Args:
+        database: Database wrapper used to look up the known analysis ids.
+        namespace: Namespace to search in.
+
+    Returns:
+        A human-readable newline-separated summary counting the zombies
+        deleted per resource type.
+    """
     known_analysis_ids = database.get_analysis_ids()
 
     result_str = ""
@@ -254,6 +377,21 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
 
 
 def stream_logs(log_entity: CreateLogEntity, node_id: str, enable_hub_logging: bool, database: Database, hub_core_client: CoreClient) -> None:
+    """Persist a log line and mirror status/progress into the FLAME Hub.
+
+    * Appends the serialized log to the analysis row in the database.
+    * If ``enable_hub_logging`` is set, pushes the log to the Hub.
+    * If the reported progress is newer than what is stored, updates both the
+      DB progress and the Hub status+progress; otherwise only the Hub status
+      is refreshed.
+
+    Args:
+        log_entity: Structured log body posted by the analysis.
+        node_id: This node's id in the FLAME Hub.
+        enable_hub_logging: Whether to forward logs to the Hub.
+        database: Database wrapper used for persistence.
+        hub_core_client: Initialized Hub core client.
+    """
     try:
         database.update_analysis_log(log_entity.analysis_id, str(log_entity.to_log_entity()))
     except IndexError as e:

@@ -30,10 +30,21 @@ logger = get_logger()
 
 
 def status_loop(database: Database, status_loop_interval: int) -> None:
-    """
-    Send the status of the analysis to the HUB, kill deployment if analysis finished
+    """Run the blocking background loop that reconciles analyses with the Hub.
 
-    :return:
+    On each iteration the loop:
+
+    * (re)initializes the Hub client if needed;
+    * iterates every running analysis, fetches its node-analysis id and the
+      partner node statuses;
+    * queries the internal analysis health endpoint, decides whether the
+      analysis is stuck, newly running, or finishing, and applies the
+      matching transition (restart, status update, or deletion);
+    * submits the final Hub status for the iteration.
+
+    Args:
+        database: Database wrapper used for all persistence.
+        status_loop_interval: Seconds between iterations.
     """
     hub_client = None
     node_id = None
@@ -156,6 +167,18 @@ def inform_analysis_of_partner_statuses(database: Database,
                                         hub_client: flame_hub.CoreClient,
                                         analysis_id: str,
                                         node_analysis_id: str) -> Optional[dict[str, str]]:
+    """Push partner-node statuses into the local analysis' ``/partner_status`` endpoint.
+
+    Args:
+        database: Database wrapper used to look up the deployment name.
+        hub_client: Initialized Hub core client.
+        analysis_id: Analysis to update.
+        node_analysis_id: The local node's analysis id in the Hub.
+
+    Returns:
+        The analysis response parsed as JSON, or ``None`` when the analysis
+        API is not (yet) reachable.
+    """
     node_statuses = get_partner_node_statuses(hub_client, analysis_id, node_analysis_id)
     deployment_name = database.get_latest_deployment(analysis_id).deployment_name
     client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}")
@@ -177,6 +200,17 @@ def inform_analysis_of_partner_statuses(database: Database,
 
 
 def _get_analysis_status(analysis_id: str, database: Database) -> Optional[dict[str, str]]:
+    """Combine DB and internal status for an analysis and pick the next action.
+
+    Args:
+        analysis_id: Analysis to inspect.
+        database: Database wrapper used for persistence.
+
+    Returns:
+        Dict with ``analysis_id``, ``db_status``, ``int_status``, and
+        ``status_action`` (one of ``unstuck``, ``running``, ``finishing``, or
+        ``None``). Returns ``None`` when the analysis has no deployment.
+    """
     analysis = database.get_latest_deployment(analysis_id)
     if analysis is not None:
         db_status = analysis.status
@@ -195,6 +229,11 @@ def _get_analysis_status(analysis_id: str, database: Database) -> Optional[dict[
 
 
 def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
+    """Map the (db_status, int_status) pair to a reconciliation action.
+
+    Returns one of ``'unstuck'``, ``'running'``, ``'finishing'``, or ``None``
+    when no action is needed.
+    """
     is_stuck = int_status == AnalysisStatus.STUCK.value
     is_slow = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.FAILED.value]))
     newly_running = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.EXECUTING.value]))
@@ -214,6 +253,20 @@ def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
 
 
 def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> str:
+    """Poll the analysis ``/healthz`` endpoint and derive the internal status.
+
+    Retries on connection errors until ``_INTERNAL_STATUS_TIMEOUT`` is hit, at
+    which point ``FAILED`` is returned. Also refreshes the Keycloak token
+    when the analysis reports it is close to expiry.
+
+    Args:
+        deployment_name: Name of the analysis deployment (used to resolve
+            the nginx sidecar URL).
+        analysis_id: Analysis id used to mint a refreshed Keycloak token.
+
+    Returns:
+        One of ``EXECUTED``, ``EXECUTING``, ``STUCK``, or ``FAILED``.
+    """
     # Attempt to retrieve internal analysis status via health endpoint
     start_time = time.time()
     client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}")
@@ -257,9 +310,17 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
 
 
 def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_remaining_time: int) -> None:
-    """
-    Refresh the keycloak token
-    :return:
+    """Push a fresh Keycloak token to the analysis if the current one is near expiry.
+
+    Refresh is triggered when the remaining lifetime is less than two status
+    loop intervals plus one second.
+
+    Args:
+        deployment_name: Name of the analysis deployment (used to resolve
+            the nginx sidecar URL).
+        analysis_id: Analysis id used to mint a new Keycloak token.
+        token_remaining_time: Remaining token lifetime in seconds as reported
+            by the analysis health endpoint.
     """
     if token_remaining_time < (int(os.getenv('STATUS_LOOP_INTERVAL', '10')) * 2 + 1):
         keycloak_token = get_keycloak_token(analysis_id)
@@ -279,6 +340,15 @@ def _fix_stuck_status(database: Database,
                       node_id: str,
                       enable_hub_logging: bool,
                       hub_client: flame_hub.CoreClient) -> None:
+    """Restart a stuck/slow analysis or mark it failed once ``_MAX_RESTARTS`` is hit.
+
+    Args:
+        database: Database wrapper used for persistence.
+        analysis_status: Status dict produced by :func:`_get_analysis_status`.
+        node_id: This node's id in the FLAME Hub.
+        enable_hub_logging: Whether to forward the error log to the Hub.
+        hub_client: Initialized Hub core client.
+    """
     analysis = database.get_latest_deployment(analysis_status['analysis_id'])
     if analysis is not None:
         is_slow = ((analysis_status['db_status'] in [AnalysisStatus.STARTED.value]) and
@@ -299,6 +369,21 @@ def _stream_stuck_logs(analysis: AnalysisDB,
                        database: Database,
                        hub_client: flame_hub.CoreClient,
                        is_slow: bool) -> None:
+    """Emit a startup-error log matching the observed failure mode.
+
+    When ``is_slow`` is ``True``, the pod status is inspected to distinguish
+    a ``slow`` deployment from a ``k8s`` error; otherwise a ``stuck`` log is
+    streamed.
+
+    Args:
+        analysis: The deployment row being diagnosed.
+        node_id: This node's id in the FLAME Hub.
+        enable_hub_logging: Whether to forward the log to the Hub.
+        database: Database wrapper used for persistence.
+        hub_client: Initialized Hub core client.
+        is_slow: Whether the analysis is classified as slow/failed rather
+            than stuck.
+    """
     # If is_slow=True differentiate between slow, or kubernetes_error state, else assume stuck state
     is_k8s_related = False
     if is_slow:
@@ -327,12 +412,19 @@ def _stream_stuck_logs(analysis: AnalysisDB,
 
 
 def _update_running_status(database: Database, analysis_status: dict[str, str]) -> None:
+    """Transition the latest deployment from ``STARTED`` to ``EXECUTING`` in the DB."""
     analysis = database.get_latest_deployment(analysis_status['analysis_id'])
     if analysis is not None:
         database.update_deployment_status(analysis.deployment_name, AnalysisStatus.EXECUTING.value)
 
 
 def _update_finished_status(database: Database, analysis_status: dict[str, str]) -> None:
+    """Record the final internal status and either delete or stop the analysis.
+
+    ``EXECUTED`` triggers a full delete (removing the analysis row and
+    Keycloak client); anything else triggers a stop that retains the row for
+    history.
+    """
     analysis = database.get_latest_deployment(analysis_status['analysis_id'])
     if analysis is not None:
         database.update_deployment_status(analysis.deployment_name, analysis_status['int_status'])
@@ -347,6 +439,14 @@ def _update_finished_status(database: Database, analysis_status: dict[str, str])
 def _set_analysis_hub_status(hub_client: flame_hub.CoreClient,
                              node_analysis_id: str,
                              analysis_status: dict[str, str]) -> str:
+    """Push the reconciled status to the Hub and return what was submitted.
+
+    Prefers a terminal DB status, otherwise trusts the internal status when
+    it is executing/executed/failed, otherwise falls back to the DB status.
+
+    Returns:
+        The status string that was forwarded to the Hub.
+    """
     if analysis_status['db_status'] in [AnalysisStatus.FAILED.value,
                                         AnalysisStatus.EXECUTED.value]:
         analysis_hub_status = analysis_status['db_status']

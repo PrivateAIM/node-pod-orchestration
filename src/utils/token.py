@@ -12,12 +12,32 @@ _KEYCLOAK_REALM = os.getenv('KEYCLOAK_REALM')
 
 
 def create_analysis_tokens(kong_token: str, analysis_id: str) -> dict[str, str]:
+    """Assemble the token env dict injected into the analysis container.
+
+    Args:
+        kong_token: Opaque Kong token minted for the analysis by the node.
+        analysis_id: Analysis id used as the Keycloak client id.
+
+    Returns:
+        Dict with ``DATA_SOURCE_TOKEN`` (the Kong token) and
+        ``KEYCLOAK_TOKEN`` (a freshly minted service-account token).
+    """
     tokens = {'DATA_SOURCE_TOKEN': kong_token,
               'KEYCLOAK_TOKEN': get_keycloak_token(analysis_id)}
     return tokens
 
 
 def get_keycloak_token(analysis_id: str) -> Optional[str]:
+    """Obtain a client-credentials access token for an analysis's Keycloak client.
+
+    Creates the Keycloak client on demand if it does not already exist.
+
+    Args:
+        analysis_id: Analysis id used as the Keycloak client id.
+
+    Returns:
+        The access token, or ``None`` on HTTP failure.
+    """
     client_secret = _get_keycloak_client_secret(analysis_id)
 
     keycloak_url = f"{_KEYCLOAK_URL}/realms/flame/protocol/openid-connect/token"
@@ -37,6 +57,7 @@ def get_keycloak_token(analysis_id: str) -> Optional[str]:
 
 
 def _get_keycloak_client_secret(analysis_id: str) -> str:
+    """Return the client secret for an analysis, creating the client if needed."""
     admin_token = _get_keycloak_admin_token()
 
     if not _keycloak_client_exists(analysis_id, admin_token):
@@ -54,6 +75,7 @@ def _get_keycloak_client_secret(analysis_id: str) -> str:
 
 
 def _get_keycloak_admin_token() -> str:
+    """Mint an admin access token using the ``RESULT_CLIENT_*`` service account."""
     keycloak_admin_client_id = os.getenv('RESULT_CLIENT_ID')
     keycloak_admin_client_secret = os.getenv('RESULT_CLIENT_SECRET')
 
@@ -71,6 +93,7 @@ def _get_keycloak_admin_token() -> str:
 
 
 def _keycloak_client_exists(analysis_id: str, admin_token: str) -> bool:
+    """Return True if a Keycloak client with the given ``analysis_id`` exists."""
     url_get_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients?clientId={analysis_id}"
     headers = {'Authorization': f"Bearer {admin_token}"}
 
@@ -81,6 +104,7 @@ def _keycloak_client_exists(analysis_id: str, admin_token: str) -> bool:
 
 
 def _create_keycloak_client(admin_token: str, analysis_id: str) -> None:
+    """Create a service-account Keycloak client named ``flame-{analysis_id}``."""
     url_create_client = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients"
     headers = {'Authorization': f"Bearer {admin_token}",
                'Content-Type': "application/json"}
@@ -92,6 +116,7 @@ def _create_keycloak_client(admin_token: str, analysis_id: str) -> None:
     response.raise_for_status()
 
 def _get_all_keycloak_clients() -> list[dict]:
+    """Return every Keycloak client in the configured realm as raw JSON dicts."""
     admin_token = _get_keycloak_admin_token()
     url_get_clients = f"{_KEYCLOAK_URL}/admin/realms/{_KEYCLOAK_REALM}/clients"
     headers = {'Authorization': f"Bearer {admin_token}"}
@@ -102,6 +127,10 @@ def _get_all_keycloak_clients() -> list[dict]:
     return response.json()
 
 def delete_keycloak_client(analysis_id: str) -> None:
+    """Delete the Keycloak client associated with an analysis.
+
+    Logs and returns silently if the client cannot be located.
+    """
     admin_token = _get_keycloak_admin_token()
 
     # get client uuid
