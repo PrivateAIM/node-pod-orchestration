@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "Node-Pod-Orchestration"
-version = "0.4.0.1"
+version = "0.5.0"
 description = ""
 authors = ["Alexander Röhl <alexander.roehl@uni-tuebingen.de>", "David Hieber <david.hieber@uni-tuebingen.de>"]
 license = "Apache 2.0"
@@ -9,23 +9,24 @@ packages = [{ include = "src" }]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
-kubernetes = "^28.1.0"
-fastapi = "^0.109.0"
-uvicorn = "^0.27.0"
+kubernetes = "^35.0.0"
+fastapi = "^0.135.3"
+uvicorn = "^0.44.0"
 docker = "^7.0.0"
 psycopg2-binary = "^2.9.9"
 sqlalchemy = "^2.0.26"
 PyJWT = "^2.10.1"
-python-dotenv = "^0.21.0"
+python-dotenv = "^1.2.2"
 kong-admin-client = {git = "https://github.com/PrivateAIM/kong-admin-python-client.git"}
 flame-hub-client = "^0.2.13"
-cryptography="^44.0.3"
+cryptography="^46.0.7"
 truststore = "^0.10.4"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.4.3"
-ruff = "^0.1.8"
-pre-commit = "^3.6.0"
+pytest = "^9.0.3"
+ruff = "^0.15.10"
+pre-commit = "^4.5.1"
+coverage = "^7.13.5"
 
 [build-system]
 requires = ["poetry-core"]

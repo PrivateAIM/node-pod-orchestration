@@ -3,12 +3,26 @@ from typing import Literal, Optional, Union
 
 from kubernetes import config, client
 
+from src.utils.po_logging import get_logger
+
+
+logger = get_logger()
+
 
 def load_cluster_config():
+    """Load the in-cluster Kubernetes configuration for the official client."""
     config.load_incluster_config()
 
 
 def get_current_namespace() -> str:
+    """Return the namespace this pod is running in.
+
+    Reads the namespace from the service account token mount; falls back to
+    ``'default'`` if the file is missing (e.g. outside the cluster).
+
+    Returns:
+        The current namespace.
+    """
     namespace_file = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
     try:
         with open(namespace_file, 'r') as file:
@@ -23,7 +37,26 @@ def find_k8s_resources(resource_type: str,
                        selector_type: Optional[Literal['label', 'field']] = None,
                        selector_arg: Optional[str] = None,
                        manual_name_selector: Optional[str] = None,
-                       namespace: str = "default") -> Optional[Union[str, list[str]]]:
+                       namespace: str = "default") -> list[Optional[str]]:
+    """List names of Kubernetes resources of a given type, optionally filtered.
+
+    Args:
+        resource_type: One of ``deployment``, ``pod``, ``service``,
+            ``networkpolicy``, ``configmap``, or ``job``.
+        selector_type: Whether ``selector_arg`` is a ``label`` or ``field``
+            selector.
+        selector_arg: Selector expression (required if ``selector_type`` is set).
+        manual_name_selector: Optional substring that resource names must
+            contain to be included.
+        namespace: Namespace to search in.
+
+    Returns:
+        List of matching resource names. When no resources are found, returns
+        ``[None]`` (historical quirk preserved by callers).
+
+    Raises:
+        ValueError: On an unknown ``resource_type`` or missing ``selector_arg``.
+    """
     if resource_type not in ['deployment', 'pod', 'service', 'networkpolicy', 'configmap', 'job']:
         raise ValueError("For k8s resource search: resource_type must be one of 'deployment', 'pod', 'service', "
                          "'networkpolicy', 'configmap', or 'job")
@@ -33,7 +66,7 @@ def find_k8s_resources(resource_type: str,
         raise ValueError("For k8s resource search: if given a resource_type, selector_arg must not be None")
 
     kwargs = {'namespace': namespace}
-    if selector_type:
+    if (selector_type is not None) and isinstance(selector_arg, str):
         kwargs[f'{selector_type}_selector'] = selector_arg
 
     if resource_type == 'deployment':
@@ -48,77 +81,76 @@ def find_k8s_resources(resource_type: str,
             resources = core_client.list_namespaced_service(**kwargs)
         elif resource_type == 'configmap':
             resources = core_client.list_namespaced_config_map(**kwargs)
+        else:
+            raise RuntimeError("Undefined resource")
     elif resource_type == 'job':
         resources = client.BatchV1Api().list_namespaced_job(**kwargs)
     else:
         raise ValueError(f"Uncaptured resource type discovered! Message the Devs... (found={resource_type})")
-
-    if not resources:
-        return None
-    else:
-        resource_names = [resource.metadata.name for resource in resources.items]
-        if len(resource_names) > 1:
-            if manual_name_selector is not None:
-                resource_names = [name for name in resource_names if manual_name_selector in name]
-                return resource_names if len(resource_names) > 1 else resource_names[0]
-            else:
-                return resource_names
-        else:
-            if len(resource_names) == 1:
-                return resource_names[0]
-            else:
-                return None
+    if not resources.items:
+        return [None]
+    resource_names = [resource.metadata.name for resource in resources.items]
+    if manual_name_selector is not None:
+        resource_names = [name for name in resource_names if manual_name_selector in name]
+    return resource_names
 
 
 def delete_k8s_resource(name: str, resource_type: str, namespace: str = 'default') -> None:
+    """Delete a Kubernetes resource by name and type.
+
+    ``Not Found`` errors are swallowed silently; other API errors are logged.
+
+    Args:
+        name: Name of the resource to delete.
+        resource_type: One of ``deployment``, ``service``, ``pod``,
+            ``configmap``, ``networkpolicy``, or ``job``.
+        namespace: Namespace the resource lives in.
+
+    Raises:
+        ValueError: If ``resource_type`` is not supported.
     """
-    Deletes a Kubernetes resource by name and type.
-    :param name: Name of the resource to delete.
-    :param resource_type: Type of the resource (e.g., 'deployment', 'service', 'pod', 'configmap', 'job').
-    :param namespace: Namespace in which the resource exists.
-    """
-    print(f"PO ACTION - Deleting resource: {name} of type {resource_type} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.action(f"Deleting resource: {name} of type {resource_type} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     if resource_type == 'deployment':
         try:
             app_client = client.AppsV1Api()
             app_client.delete_namespaced_deployment(name=name, namespace=namespace, propagation_policy='Foreground')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} deployment")
+                logger.error(f"Not Found {name} deployment")
     elif resource_type == 'service':
         try:
             core_client = client.CoreV1Api()
             core_client.delete_namespaced_service(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} service")
+                logger.error(f"Not Found {name} service")
     elif resource_type == 'pod':
         try:
             core_client = client.CoreV1Api()
             core_client.delete_namespaced_pod(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} pod")
+                logger.error(f"Not Found {name} pod")
     elif resource_type == 'configmap':
         try:
             core_client = client.CoreV1Api()
             core_client.delete_namespaced_config_map(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} configmap")
+                logger.error(f"Not Found {name} configmap")
     elif resource_type == 'networkpolicy':
         try:
             network_client = client.NetworkingV1Api()
             network_client.delete_namespaced_network_policy(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} networkpolicy")
+                logger.error(f"Not Found {name} networkpolicy")
     elif resource_type == 'job':
         try:
             batch_client = client.BatchV1Api()
             batch_client.delete_namespaced_job(name=name, namespace=namespace, propagation_policy='Foreground')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
-                print(f"Error: Not Found {name} job")
+                logger.error(f"Not Found {name} job")
     else:
         raise ValueError(f"Unsupported resource type: {resource_type}")

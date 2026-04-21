@@ -1,9 +1,21 @@
-from httpx import AsyncClient
-import asyncio
+from typing import Optional, Union
 import os
+import uuid
 
 
-def extract_hub_envs() -> tuple[str, str, str, str, bool, str, str]:
+def extract_hub_envs() -> tuple[Optional[str],
+                                Optional[str],
+                                Optional[str],
+                                Optional[str],
+                                bool,
+                                Optional[str],
+                                Optional[str]]:
+    """Read the FLAME-Hub related environment variables into a tuple.
+
+    Returns:
+        Tuple ``(client_id, client_secret, hub_url_core, hub_url_auth,
+        hub_logging_enabled, http_proxy, https_proxy)``.
+    """
     return (os.getenv('HUB_CLIENT_ID'),
             os.getenv('HUB_CLIENT_SECRET'),
             os.getenv('HUB_URL_CORE'),
@@ -14,26 +26,50 @@ def extract_hub_envs() -> tuple[str, str, str, str, bool, str, str]:
 
 
 def resource_name_to_analysis(deployment_name: str, max_r_split: int = 1) -> str:
+    """Extract the analysis id from a FLAME analysis resource name.
+
+    Resource names follow the ``analysis-{analysis_id}-{restart_counter}``
+    pattern (with an optional ``nginx-`` prefix and pod hash suffix); this
+    helper strips those and returns the analysis id.
+
+    Args:
+        deployment_name: Kubernetes resource name.
+        max_r_split: Number of trailing ``-``-separated segments to drop.
+
+    Returns:
+        The analysis id portion of the name.
+    """
     return deployment_name.split("analysis-")[-1].rsplit('-', max_r_split)[0]
 
 
-def get_project_data_source(keycloak_token, project_id, hub_adapter_service_name, namespace="default") -> dict:
+def is_uuid(test_str: Union[str, uuid.UUID], version: int = 4):
+    """Return True if ``test_str`` parses as a UUID of the given version.
+
+    Args:
+        test_str: String or UUID to validate.
+        version: UUID version to require (defaults to 4).
+
+    Returns:
+        ``True`` if ``test_str`` is a syntactically valid UUID; otherwise
+        ``False``.
     """
-    Get data sources for a project from the node hub adapter service using the keycloak token
+    try:
+        uuid.UUID(str(test_str), version=version)
+        return len(rreplace(str(test_str), '-', '', 4)) == 32
+    except ValueError:
+        return False
 
-    :param keycloak_token:
-    :param project_id:
-    :param hub_adapter_service_name:
-    :param namespace:
-    :return:
+
+def rreplace(string: str, replaced_str: str, replacement_str: str, count: int):
+    """Replace up to ``count`` occurrences of ``replaced_str`` starting from the right.
+
+    Args:
+        string: The input string.
+        replaced_str: Substring to replace.
+        replacement_str: Substring to insert in its place.
+        count: Maximum number of rightmost occurrences to replace.
+
+    Returns:
+        The resulting string.
     """
-    client = AsyncClient(base_url=f"http://{hub_adapter_service_name}:5000",
-                         headers={'Authorization': f"Bearer {keycloak_token}",
-                                  'accept': "application/json"})
-    return asyncio.run(call_sources(client, project_id))
-
-
-async def call_sources(client, project_id) -> list[dict[str, str]]:
-    response = await client.get(f"/kong/datastore?project_id={project_id}")
-    response.raise_for_status()
-    return response.json()
+    return str(replacement_str).join(str(string).rsplit(str(replaced_str), int(count)))

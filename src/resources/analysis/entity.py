@@ -11,6 +11,13 @@ from src.status.constants import AnalysisStatus
 
 
 class Analysis(BaseModel):
+    """Runtime model describing a single analysis deployment.
+
+    Combines the user-supplied creation payload with runtime-derived fields
+    (deployment name, Keycloak/Kong tokens, pod ids, current status) and
+    exposes ``start`` / ``stop`` helpers that drive the Kubernetes resources.
+    """
+
     analysis_id: str
     project_id: str
     registry_url: str
@@ -30,6 +37,16 @@ class Analysis(BaseModel):
     pod_ids: Optional[list[str]] = None
 
     def start(self, database: Database, namespace: str = 'default') -> None:
+        """Deploy the analysis on Kubernetes and persist it in the database.
+
+        Generates the deployment name, mints the Kong and Keycloak tokens,
+        assembles the analysis env, creates the Kubernetes resources, and then
+        writes an ``AnalysisDB`` row tracking the new deployment.
+
+        Args:
+            database: Database wrapper used to persist the new deployment.
+            namespace: Namespace the Kubernetes resources are created in.
+        """
         self.status = AnalysisStatus.STARTED.value
         self.deployment_name = "analysis-" + self.analysis_id + "-" + str(self.restart_counter)
         self.tokens = create_analysis_tokens(kong_token=self.kong_token, analysis_id=self.analysis_id)
@@ -48,6 +65,7 @@ class Analysis(BaseModel):
                                  project_id=self.project_id,
                                  pod_ids=self.pod_ids,
                                  status=self.status,
+                                 log=self.log,
                                  registry_url=self.registry_url,
                                  image_url=self.image_url,
                                  registry_user=self.registry_user,
@@ -61,6 +79,13 @@ class Analysis(BaseModel):
              database: Database,
              log: Optional[str] = None,
              status: str = AnalysisStatus.STOPPED.value) -> None:
+        """Tear down the Kubernetes deployment and update the database row.
+
+        Args:
+            database: Database wrapper used to persist the final status/log.
+            log: Optional log snapshot to persist before deletion.
+            status: Terminal status to record (defaults to ``STOPPED``).
+        """
         if log is not None:
             self.log = log
         self.status = status
@@ -72,6 +97,10 @@ class Analysis(BaseModel):
 
 
 def read_db_analysis(analysis: AnalysisDB) -> Analysis:
+    """Convert a persisted :class:`AnalysisDB` row into a runtime :class:`Analysis`.
+
+    Decodes the JSON-encoded ``pod_ids`` column back into a Python list.
+    """
     return Analysis(analysis_id=analysis.analysis_id,
                     deployment_name=analysis.deployment_name,
                     project_id=analysis.project_id,
@@ -89,12 +118,14 @@ def read_db_analysis(analysis: AnalysisDB) -> Analysis:
 
 
 class CreateAnalysis(BaseModel):
-    analysis_id: str = 'analysis_id'
-    project_id: str = 'project_id'
-    registry_url: str = 'harbor.privateaim'
-    image_url: str = 'harbor.privateaim/node_id/analysis_id'
-    registry_user: str = 'robot_user'
-    registry_password: str = 'default_pw'
-    kong_token: str = 'default_kong_token'
+    """Request body accepted by ``POST /po/`` to create a new analysis."""
+
+    analysis_id: str
+    project_id: str
+    registry_url: str
+    image_url: str
+    registry_user: str
+    registry_password: str
+    kong_token: str
     restart_counter: int = 0
     progress: int = 0
