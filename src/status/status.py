@@ -234,13 +234,13 @@ def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
     Returns one of ``'unstuck'``, ``'running'``, ``'finishing'``, or ``None``
     when no action is needed.
     """
-    is_stuck = int_status == AnalysisStatus.STUCK.value
-    is_slow = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.FAILED.value]))
-    newly_running = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.EXECUTING.value]))
-    speedy_finished = ((db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.EXECUTED.value]))
+    is_stuck = (db_status not in [AnalysisStatus.FAILED.value]) and (int_status in [AnalysisStatus.STUCK.value])
+    is_slow = (db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.FAILED.value])
+    newly_running = (db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.EXECUTING.value])
+    speedy_finished = (db_status in [AnalysisStatus.STARTED.value]) and (int_status in [AnalysisStatus.EXECUTED.value])
     newly_ended = ((db_status in [AnalysisStatus.EXECUTING.value, AnalysisStatus.FAILED.value])
                    and (int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]))
-    firmly_stuck = ((db_status in [AnalysisStatus.FAILED.value]) and (int_status in [AnalysisStatus.STUCK.value]))
+    firmly_stuck = (db_status in [AnalysisStatus.FAILED.value]) and (int_status in [AnalysisStatus.STUCK.value])
     was_stopped = int_status == AnalysisStatus.STOPPED.value
     if is_stuck or is_slow:
         return 'unstuck'
