@@ -2,6 +2,8 @@ import uvicorn
 import os
 import threading
 from fastapi import APIRouter, FastAPI, Depends, HTTPException
+
+from src.status.health import loop_health
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -441,14 +443,23 @@ class PodOrchestrationAPI:
     def health_call(self):
         """``GET /po/healthz`` — unauthenticated liveness probe.
 
+        Fails when either the main thread has died or the status loop has
+        not completed a full iteration within 3x the configured interval
+        (defaulting to 10s when unset). The latter catches cases where the
+        thread is technically alive but the loop is wedged.
+
         Returns:
-            ``{'status': 'ok'}`` when the main thread is alive.
+            ``{'status': 'ok'}`` on success.
 
         Raises:
-            RuntimeError: If the main thread has died.
+            RuntimeError: If liveness checks fail.
         """
-        main_alive = threading.main_thread().is_alive()
-        if not main_alive:
+        if not threading.main_thread().is_alive():
             raise RuntimeError("Main thread is not alive.")
-        else:
-            return {'status': "ok"}
+
+        interval = int(os.getenv('STATUS_LOOP_INTERVAL', '10'))
+        elapsed = loop_health.seconds_since_last_iteration()
+        if elapsed is not None and elapsed > interval * 3:
+            raise RuntimeError(f"Status loop has not completed an iteration in {elapsed:.1f}s "
+                               f"(threshold: {interval * 3}s).")
+        return {'status': "ok"}

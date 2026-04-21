@@ -20,6 +20,7 @@ from src.resources.utils import (unstuck_analysis_deployments,
                                  delete_analysis,
                                  stream_logs)
 from src.status.constants import AnalysisStatus
+from src.status.health import loop_health, _MAX_CONSECUTIVE_ANALYSIS_FAILURES
 from src.utils.other import extract_hub_envs
 from src.utils.token import get_keycloak_token
 from src.status.constants import _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
@@ -83,83 +84,121 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                 time.sleep(status_loop_interval)
                 continue
         else:
-            # If running analyzes exist, enter status loop
-            running_analyzes = [analysis_id for analysis_id in database.get_analysis_ids()
-                                if database.analysis_is_running(analysis_id)]
-            logger.action(f"Checking for running analyzes...{running_analyzes}")
-            if running_analyzes:
-                hub_client_issues = 0
+            try:
+                running_analyzes = [analysis_id for analysis_id in database.get_analysis_ids()
+                                    if database.analysis_is_running(analysis_id)]
+                logger.action(f"Checking for running analyzes...{running_analyzes}")
                 for analysis_id in running_analyzes:
-                    logger.status_loop(f"Current analysis id: {analysis_id}")
-                    # Get node analysis id
-                    if analysis_id not in node_analysis_ids.keys():
-                        node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
-                        if node_analysis_id is not None:
-                            node_analysis_ids[analysis_id] = node_analysis_id
-                        else:
-                            logger.warning(f"Retrieving node_analysis id for malformed analysis returned None "
-                                           f"(analysis_id={analysis_id})... Skipping")
-                            hub_client_issues += 1
-                            continue
-                    else:
-                        node_analysis_id = node_analysis_ids[analysis_id]
-
-                    # If node analysis id found
-                    logger.info(f"\tNode analysis id: {node_analysis_id}")
-                    if node_analysis_id is not None:
-                        try:
-                            # Inform local analysis of partner node statuses
-                            _ = inform_analysis_of_partner_statuses(database,
-                                                                    hub_client,
-                                                                    analysis_id,
-                                                                    node_analysis_id)
-                        except Exception as e:
-                            logger.status_loop(f"Error when attempting to access partner_status endpoint of "
-                                               f"{analysis_id} ({repr(e)})")
-
-                        # Retrieve analysis status (skip iteration if analysis is not deployed)
-                        analysis_status = _get_analysis_status(analysis_id, database)
-                        if analysis_status is None:
-                            continue
-                        logger.debug(f"Database status: {analysis_status['db_status']}")
-                        logger.debug(f"Internal status: {analysis_status['int_status']}")
-
-                        # Fix stuck analyzes
-                        if analysis_status['status_action'] == 'unstuck':
-                            logger.info(f"Unstuck analysis with internal status: {analysis_status['int_status']}")
-                            _fix_stuck_status(database, analysis_status, node_id, enable_hub_logging, hub_client)
-                            # Update analysis status (skip iteration if analysis is not deployed)
-                            analysis_status = _get_analysis_status(analysis_id, database)
-                            if analysis_status is None:
-                                continue
-
-                        # Update created to running status
-                        if analysis_status['status_action'] == 'running':
-                            logger.info(f"Update created-to-running database status: {analysis_status['db_status']}")
-                            _update_running_status(database, analysis_status)
-                            # Update analysis status (skip iteration if analysis is not deployed)
-                            analysis_status = _get_analysis_status(analysis_id, database)
-                            if analysis_status is None:
-                                continue
-
-                        # Update running to finished status
-                        if analysis_status['status_action'] == 'finishing':
-                            logger.info(f"Update running-to-finished database status: {analysis_status['db_status']}")
-                            _update_finished_status(database, analysis_status)
-                            # Update analysis status (skip iteration if analysis is not deployed)
-                            analysis_status = _get_analysis_status(analysis_id, database)
-                            if analysis_status is None:
-                                continue
-
-                        # Submit analysis_status to hub
-                        analysis_hub_status = _set_analysis_hub_status(hub_client, node_analysis_id, analysis_status)
-                        logger.info(f"Set Hub analysis status with node_analysis={node_analysis_id}, "
-                                    f"db_status={analysis_status['db_status']}, "
-                                    f"internal_status={analysis_status['int_status']} "
-                                    f"to {analysis_hub_status}")
+                    _reconcile_analysis(analysis_id,
+                                        database,
+                                        hub_client,
+                                        node_id,
+                                        node_analysis_ids,
+                                        enable_hub_logging)
+                loop_health.mark_iteration_complete()
+            except Exception as e:
+                logger.exception(f"Unhandled exception in status loop iteration: {repr(e)}",
+                                 extra={"phase": "iteration"})
 
             time.sleep(status_loop_interval)
             logger.status_loop(f"Iteration completed. Sleeping for {status_loop_interval} seconds.")
+
+
+def _reconcile_analysis(analysis_id: str,
+                        database: Database,
+                        hub_client: flame_hub.CoreClient,
+                        node_id: str,
+                        node_analysis_ids: dict,
+                        enable_hub_logging: bool) -> None:
+    """Run one status-loop tick for a single analysis, isolated from others.
+
+    Any exception is caught, logged with structured fields, and counted
+    against the analysis' consecutive-failure tally. Once the tally exceeds
+    ``_MAX_CONSECUTIVE_ANALYSIS_FAILURES`` the latest deployment is forced to
+    ``FAILED`` so the loop stops retrying a broken analysis indefinitely.
+    """
+    logger.status_loop(f"Current analysis id: {analysis_id}",
+                       extra={"analysis_id": analysis_id})
+    try:
+        if analysis_id not in node_analysis_ids:
+            node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
+            if node_analysis_id is None:
+                logger.warning(f"Retrieving node_analysis id for malformed analysis returned None "
+                               f"(analysis_id={analysis_id})... Skipping",
+                               extra={"analysis_id": analysis_id, "phase": "node_analysis_id"})
+                return
+            node_analysis_ids[analysis_id] = node_analysis_id
+        else:
+            node_analysis_id = node_analysis_ids[analysis_id]
+
+        logger.info(f"\tNode analysis id: {node_analysis_id}",
+                    extra={"analysis_id": analysis_id})
+
+        try:
+            inform_analysis_of_partner_statuses(database, hub_client, analysis_id, node_analysis_id)
+        except Exception as e:
+            logger.status_loop(f"Error when attempting to access partner_status endpoint of "
+                               f"{analysis_id} ({repr(e)})",
+                               extra={"analysis_id": analysis_id, "phase": "partner_status"})
+
+        analysis_status = _get_analysis_status(analysis_id, database)
+        if analysis_status is None:
+            return
+        logger.debug(f"Database status: {analysis_status['db_status']}")
+        logger.debug(f"Internal status: {analysis_status['int_status']}")
+
+        if analysis_status['status_action'] == 'unstuck':
+            logger.info(f"Unstuck analysis with internal status: {analysis_status['int_status']}",
+                        extra={"analysis_id": analysis_id, "phase": "unstuck"})
+            _fix_stuck_status(database, analysis_status, node_id, enable_hub_logging, hub_client)
+            analysis_status = _get_analysis_status(analysis_id, database)
+            if analysis_status is None:
+                return
+
+        if analysis_status['status_action'] == 'running':
+            logger.info(f"Update created-to-running database status: {analysis_status['db_status']}",
+                        extra={"analysis_id": analysis_id, "phase": "running"})
+            _update_running_status(database, analysis_status)
+            analysis_status = _get_analysis_status(analysis_id, database)
+            if analysis_status is None:
+                return
+
+        if analysis_status['status_action'] == 'finishing':
+            logger.info(f"Update running-to-finished database status: {analysis_status['db_status']}",
+                        extra={"analysis_id": analysis_id, "phase": "finishing"})
+            _update_finished_status(database, analysis_status)
+            analysis_status = _get_analysis_status(analysis_id, database)
+            if analysis_status is None:
+                return
+
+        analysis_hub_status = _set_analysis_hub_status(hub_client, node_analysis_id, analysis_status)
+        logger.info(f"Set Hub analysis status with node_analysis={node_analysis_id}, "
+                    f"db_status={analysis_status['db_status']}, "
+                    f"internal_status={analysis_status['int_status']} "
+                    f"to {analysis_hub_status}",
+                    extra={"analysis_id": analysis_id})
+
+        loop_health.reset_analysis(analysis_id)
+
+    except Exception as e:
+        failures = loop_health.record_analysis_failure(analysis_id)
+        logger.exception(f"Failed to reconcile analysis {analysis_id} "
+                         f"(consecutive_failures={failures}): {repr(e)}",
+                         extra={"analysis_id": analysis_id, "phase": "reconcile"})
+        if failures >= _MAX_CONSECUTIVE_ANALYSIS_FAILURES:
+            logger.error(f"Analysis {analysis_id} exceeded {_MAX_CONSECUTIVE_ANALYSIS_FAILURES} "
+                         f"consecutive loop failures; forcing status to FAILED to stop retries.",
+                         extra={"analysis_id": analysis_id, "phase": "give_up"})
+            try:
+                latest = database.get_latest_deployment(analysis_id)
+                if latest is not None:
+                    database.update_deployment_status(latest.deployment_name,
+                                                      status=AnalysisStatus.FAILED.value)
+            except Exception as inner:
+                logger.exception(f"Failed to mark {analysis_id} as FAILED after repeated errors: "
+                                 f"{repr(inner)}",
+                                 extra={"analysis_id": analysis_id, "phase": "give_up"})
+            loop_health.reset_analysis(analysis_id)
 
 
 

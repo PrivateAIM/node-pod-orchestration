@@ -239,17 +239,18 @@ class Database:
         self.update_analysis_status(analysis_id, status=AnalysisStatus.STOPPED.value)
 
     def extract_analysis_body(self, analysis_id: str) -> Optional[dict]:
-        """Return the subset of fields needed to recreate an analysis from the first stored deployment.
+        """Return the subset of fields needed to recreate an analysis from the latest stored deployment.
 
         Used when unstucking an analysis to rebuild a ``CreateAnalysis`` body.
+        Reads from the most recent deployment so the restart counter reflects
+        the latest state, not a stale one.
 
         Returns:
             Dict with registry/namespace/token fields and ``progress=0``, or
             ``None`` when the analysis is unknown.
         """
-        analysis = self.get_deployments(analysis_id)
-        if analysis:
-            analysis = analysis[0]
+        analysis = self.get_latest_deployment(analysis_id)
+        if analysis is not None:
             return {'analysis_id': analysis.analysis_id,
                     'project_id': analysis.project_id,
                     'registry_url': analysis.registry_url,

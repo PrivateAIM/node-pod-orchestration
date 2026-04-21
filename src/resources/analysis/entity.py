@@ -39,15 +39,15 @@ class Analysis(BaseModel):
     def start(self, database: Database, namespace: str = 'default') -> None:
         """Deploy the analysis on Kubernetes and persist it in the database.
 
-        Generates the deployment name, mints the Kong and Keycloak tokens,
-        assembles the analysis env, creates the Kubernetes resources, and then
-        writes an ``AnalysisDB`` row tracking the new deployment.
+        Reserves the DB row with ``STARTING`` status *before* creating K8s
+        resources so the restart counter is persisted even if the K8s call
+        fails. After a successful K8s create, the row is updated to
+        ``STARTED`` with the assigned pod ids.
 
         Args:
             database: Database wrapper used to persist the new deployment.
             namespace: Namespace the Kubernetes resources are created in.
         """
-        self.status = AnalysisStatus.STARTED.value
         self.deployment_name = "analysis-" + self.analysis_id + "-" + str(self.restart_counter)
         self.tokens = create_analysis_tokens(kong_token=self.kong_token, analysis_id=self.analysis_id)
         self.analysis_config = self.tokens
@@ -55,15 +55,12 @@ class Analysis(BaseModel):
         self.analysis_config['PROJECT_ID'] = self.project_id
         self.analysis_config['DEPLOYMENT_NAME'] = self.deployment_name
         self.namespace = namespace
-        self.pod_ids = create_analysis_deployment(name=self.deployment_name,
-                                                  image=self.image_url,
-                                                  env=self.analysis_config,
-                                                  namespace=namespace)
 
+        self.status = AnalysisStatus.STARTING.value
         database.create_analysis(analysis_id=self.analysis_id,
                                  deployment_name=self.deployment_name,
                                  project_id=self.project_id,
-                                 pod_ids=self.pod_ids,
+                                 pod_ids=None,
                                  status=self.status,
                                  log=self.log,
                                  registry_url=self.registry_url,
@@ -74,6 +71,16 @@ class Analysis(BaseModel):
                                  kong_token=self.kong_token,
                                  restart_counter=self.restart_counter,
                                  progress=self.progress)
+
+        self.pod_ids = create_analysis_deployment(name=self.deployment_name,
+                                                  image=self.image_url,
+                                                  env=self.analysis_config,
+                                                  namespace=namespace)
+
+        self.status = AnalysisStatus.STARTED.value
+        database.update_deployment(self.deployment_name,
+                                   pod_ids=json.dumps(self.pod_ids),
+                                   status=self.status)
 
     def stop(self,
              database: Database,

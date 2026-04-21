@@ -24,6 +24,11 @@ class JsonFormatter(logging.Formatter):
         if record.exc_info:
             log["error"] = self.formatException(record.exc_info)
 
+        for field in ("analysis_id", "deployment_name", "phase"):
+            value = getattr(record, field, None)
+            if value is not None:
+                log[field] = value
+
         return json.dumps(log, default=str)  # for non-serializable msgs
 
 
