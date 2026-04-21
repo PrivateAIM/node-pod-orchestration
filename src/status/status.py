@@ -427,7 +427,9 @@ def _update_finished_status(database: Database, analysis_status: dict[str, str])
     """
     analysis = database.get_latest_deployment(analysis_status['analysis_id'])
     if analysis is not None:
-        database.update_deployment_status(analysis.deployment_name, analysis_status['int_status'])
+        finished_status = analysis_status['int_status'] \
+            if analysis_status['int_status'] != AnalysisStatus.STUCK.value else AnalysisStatus.FAILED.value
+        database.update_deployment_status(analysis.deployment_name, finished_status)
         if analysis_status['int_status'] == AnalysisStatus.EXECUTED.value:
             logger.info("Delete deployment")
             delete_analysis(analysis_status['analysis_id'], database)  # delete analysis from database
