@@ -76,7 +76,7 @@ class CreateStartUpErrorLog(CreateLogEntity):
         elif error_type == "slow":
             log = (f"[flame -- POAPI: ANALYSISSTARTUPERROR -- "
                    f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
-                   f"Error: The analysis took to long during startup and was restarted "
+                   f"Error: The analysis took too long during startup and was restarted "
                    f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}")
         elif error_type == "k8s":
             log = (f"[flame -- POAPI: ANALYSISSTARTUPERROR -- "
