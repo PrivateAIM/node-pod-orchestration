@@ -101,6 +101,10 @@ def create_analysis_deployment(name: str,
                                    if env is not None else [])
     containers.append(container)
 
+    net_stats_container = _build_net_stats_container(name)
+    if net_stats_container is not None:
+        containers.append(net_stats_container)
+
     labels = {'app': name, 'component': "flame-analysis"}
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace, labels=labels)
     depl_pod_metadata = client.V1ObjectMeta(labels=labels)
@@ -241,40 +245,39 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
         return None
 
 
-def _build_net_stats_container() -> Optional[client.V1Container]:
+def _build_net_stats_container(analysis_name: str) -> Optional[client.V1Container]:
     """Build the net-stats sidecar container spec, or return None if disabled.
 
-    Controlled by the ``NET_STATS_ENABLED`` env var. Image and polling interval
-    are read from ``NET_STATS_IMAGE`` and ``NET_STATS_INTERVAL_SECONDS``.
+    Controlled by the ``NET_STATS_ENABLED`` env var. Image is read from
+    ``NET_STATS_IMAGE``. Emits a single cumulative log on SIGTERM.
     """
     if os.getenv('NET_STATS_ENABLED', '').lower() not in ('1', 'true'):
         return None
 
     _NET_STATS_SCRIPT = """\
-    prev_rx=0; prev_tx=0
-    while true; do
-      iface=$(grep -v -e lo -e 'Inter' -e 'face' /proc/net/dev | awk -F: '{print $1}' | tr -d ' ' | head -1)
-      if [ -n "$iface" ]; then
-        line=$(grep "${iface}:" /proc/net/dev | tr -s ' ')
-        rx=$(echo $line | cut -d' ' -f2)
-        tx=$(echo $line | cut -d' ' -f10)
-        if [ "$prev_rx" -gt 0 ]; then
-          delta_rx=$((rx - prev_rx))
-          delta_tx=$((tx - prev_tx))
-          printf '{"level":"info","message":"network_stats","bytes_in":%d,"bytes_out":%d,"interval_seconds":%d,"interface":"%s"}\\n' $delta_rx $delta_tx $INTERVAL "$iface"
-        fi
-        prev_rx=$rx; prev_tx=$tx
-      fi
-      sleep $INTERVAL
-    done
+    iface=$(grep -v -e lo -e 'Inter' -e 'face' /proc/net/dev | awk -F: '{print $1}' | tr -d ' ' | head -1)
+    line=$(grep "${iface}:" /proc/net/dev | tr -s ' ')
+    start_rx=$(echo $line | cut -d' ' -f2)
+    start_tx=$(echo $line | cut -d' ' -f10)
+
+    handle_term() {
+      line=$(grep "${iface}:" /proc/net/dev | tr -s ' ')
+      rx=$(echo $line | cut -d' ' -f2)
+      tx=$(echo $line | cut -d' ' -f10)
+      printf '{"level":"info","message":"network_stats","bytes_in":%d,"bytes_out":%d,"interface":"%s","event_name":"netstats.analysis.traffic"}\\n' $((rx - start_rx)) $((tx - start_tx)) "$iface"
+      sleep 5
+      exit 0
+    }
+    trap handle_term TERM INT
+
+    while true; do sleep 3600 & wait $!; done
     """
 
     return client.V1Container(
-        name='net-stats',
+        name=f'net-stats-{analysis_name}',
         image=os.getenv('NET_STATS_IMAGE', 'busybox:1.37'),
         image_pull_policy='IfNotPresent',
         command=['/bin/sh', '-c', _NET_STATS_SCRIPT],
-        env=[client.V1EnvVar(name='INTERVAL', value=os.getenv('NET_STATS_INTERVAL_SECONDS', '10'))],
     )
 
 
@@ -338,10 +341,6 @@ def _create_analysis_nginx_deployment(analysis_name: str,
                                    liveness_probe=liveness_probe,
                                    volume_mounts=[vol_mount])
     containers.append(container)
-
-    net_stats_container = _build_net_stats_container()
-    if net_stats_container is not None:
-        containers.append(net_stats_container)
 
     depl_metadata = client.V1ObjectMeta(name=nginx_name,
                                         namespace=namespace,
