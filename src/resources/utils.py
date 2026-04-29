@@ -271,9 +271,21 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
     """
     if database.get_latest_deployment(analysis_id) is not None:
         stop_analysis(analysis_id, database)
-        time.sleep(10)  # wait for k8s to update status
-        create_analysis(analysis_id, database)
-        database.delete_old_deployments_from_db(analysis_id)
+        success = False
+        for i in range(_MAX_UNSTUCK_REATTEMPTS):
+            try:
+                time.sleep(10)  # wait for k8s to update status
+                create_analysis(analysis_id, database)
+                database.delete_old_deployments_from_db(analysis_id)
+                success = True
+                break
+            except Exception as e:
+                logger.warning(f"Failed to stop analysis {analysis_id} ({repr(e)}) "
+                               f"-> Reattempting unstuck ({i + 1} of {_MAX_UNSTUCK_REATTEMPTS})")
+        if not success:
+            logger.error(f"Failed to unstuck analysis {analysis_id} after max reattempts.")
+            database.update_deployment_status(deployment.deployment_name, AnalysisStatus.FAILED.value)
+            stop_analysis(analysis_id, database)
 
 
 def cleanup(cleanup_type: str,

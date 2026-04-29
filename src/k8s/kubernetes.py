@@ -101,6 +101,10 @@ def create_analysis_deployment(name: str,
                                    if env is not None else [])
     containers.append(container)
 
+    net_stats_container = _build_net_stats_container(name)
+    if net_stats_container is not None:
+        containers.append(net_stats_container)
+
     labels = {'app': name, 'component': "flame-analysis"}
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace, labels=labels)
     depl_pod_metadata = client.V1ObjectMeta(labels=labels)
@@ -239,6 +243,42 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
             return None
     else:
         return None
+
+
+def _build_net_stats_container(analysis_name: str) -> Optional[client.V1Container]:
+    """Build the net-stats sidecar container spec, or return None if disabled.
+
+    Controlled by the ``NET_STATS_ENABLED`` env var. Image is read from
+    ``NET_STATS_IMAGE``. Emits a single cumulative log on SIGTERM.
+    """
+    if os.getenv('NET_STATS_ENABLED', '').lower() not in ('1', 'true'):
+        return None
+
+    _NET_STATS_SCRIPT = """\
+    iface=$(grep -v -e lo -e 'Inter' -e 'face' /proc/net/dev | awk -F: '{print $1}' | tr -d ' ' | head -1)
+    line=$(grep "${iface}:" /proc/net/dev | tr -s ' ')
+    start_rx=$(echo $line | cut -d' ' -f2)
+    start_tx=$(echo $line | cut -d' ' -f10)
+
+    handle_term() {
+      line=$(grep "${iface}:" /proc/net/dev | tr -s ' ')
+      rx=$(echo $line | cut -d' ' -f2)
+      tx=$(echo $line | cut -d' ' -f10)
+      printf '{"level":"info","message":"network_stats","bytes_in":%d,"bytes_out":%d,"interface":"%s","event_name":"netstats.analysis.traffic"}\\n' $((rx - start_rx)) $((tx - start_tx)) "$iface"
+      sleep 5
+      exit 0
+    }
+    trap handle_term TERM INT
+
+    while true; do sleep 3600 & wait $!; done
+    """
+
+    return client.V1Container(
+        name=f'net-stats-{analysis_name}',
+        image=os.getenv('NET_STATS_IMAGE', 'busybox:1.37'),
+        image_pull_policy='IfNotPresent',
+        command=['/bin/sh', '-c', _NET_STATS_SCRIPT],
+    )
 
 
 def _create_analysis_nginx_deployment(analysis_name: str,
