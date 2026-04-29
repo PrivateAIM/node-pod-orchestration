@@ -24,9 +24,6 @@ from src.utils.other import is_uuid
 logger = get_logger()
 
 
-_MAX_UNSTUCK_REATTEMPTS = 10
-
-
 def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dict[str, str]:
     """Create and start a new analysis deployment.
 
@@ -272,8 +269,7 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
     Waits 10 seconds between stop and recreate to let Kubernetes settle, then
     prunes historical deployment rows so only the latest one remains.
     """
-    deployment = database.get_latest_deployment(analysis_id)
-    if deployment is not None:
+    if database.get_latest_deployment(analysis_id) is not None:
         stop_analysis(analysis_id, database)
         success = False
         for i in range(_MAX_UNSTUCK_REATTEMPTS):
