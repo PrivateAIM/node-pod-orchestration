@@ -62,7 +62,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                              hub_auth,
                              http_proxy,
                              https_proxy)
-            if all(p is not None for p in client_params):
+            if None not in client_params:
                 hub_client = init_hub_client_with_client(*client_params)
             else:
                 logger.error(f"One or more hub client initialization parameters are None.\n"
@@ -74,7 +74,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                              f"\t* PO_HTTP_PROXY={http_proxy}{'' if http_proxy is not None else ' <- review this'}\n"
                              f"\t* PO_HTTPS_PROXY={https_proxy}{'' if https_proxy is not None else ' <- review this'}")
                 raise ValueError("One or more hub client initialization parameters are None.")
-            if all(p is not None for p in (hub_client, client_id)):
+            if None not in (hub_client, client_id):
                 node_id = get_node_id_by_client(hub_client, client_id)
             # Catch unresponsive hub client
             if node_id is None:
@@ -121,12 +121,9 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         analysis_status = _get_analysis_status(analysis_id, database)
                         if analysis_status is None:
                             continue
-                        logger.debug(f"Database status: {analysis_status['db_status']}")
-                        logger.debug(f"Internal status: {analysis_status['int_status']}")
 
                         # Fix stuck analyzes
                         if analysis_status['status_action'] == 'unstuck':
-                            logger.info(f"Unstuck analysis with internal status: {analysis_status['int_status']}")
                             _fix_stuck_status(database, analysis_status, node_id, enable_hub_logging, hub_client)
                             # Update analysis status (skip iteration if analysis is not deployed)
                             analysis_status = _get_analysis_status(analysis_id, database)
@@ -135,7 +132,6 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
 
                         # Update created to running status
                         if analysis_status['status_action'] == 'running':
-                            logger.info(f"Update created-to-running database status: {analysis_status['db_status']}")
                             _update_running_status(database, analysis_status)
                             # Update analysis status (skip iteration if analysis is not deployed)
                             analysis_status = _get_analysis_status(analysis_id, database)
@@ -144,7 +140,6 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
 
                         # Update running to finished status
                         if analysis_status['status_action'] == 'finishing':
-                            logger.info(f"Update running-to-finished database status: {analysis_status['db_status']}")
                             _update_finished_status(database, analysis_status)
                             # Update analysis status (skip iteration if analysis is not deployed)
                             analysis_status = _get_analysis_status(analysis_id, database)
@@ -220,10 +215,12 @@ def _get_analysis_status(analysis_id: str, database: Database) -> Optional[dict[
             int_status = AnalysisStatus.EXECUTED.value
         else:
             int_status = _get_internal_deployment_status(analysis.deployment_name, analysis_id)
+        status_action = _decide_status_action(analysis.status, int_status)
+        logger.status_loop(f"Calculating action: db_status={analysis.status}, int_status={int_status} -> status_action={status_action}")
         return {'analysis_id': analysis_id,
                 'db_status': analysis.status,
                 'int_status': int_status,
-                'status_action': _decide_status_action(analysis.status, int_status)}
+                'status_action': status_action}
     else:
         return None
 
@@ -397,7 +394,7 @@ def _stream_stuck_logs(analysis: AnalysisDB,
             if not ready:
                 is_k8s_related = True
                 logger.error(f"Deployment of analysis={analysis.analysis_id} failed (ready={ready}). "
-                               f"{reason}: {message}")
+                             f"{reason}: {message}")
 
     # Create and stream POAPIError logs or either slow, stuck, or kubernetes_error state to Hub
     stream_logs(CreateStartUpErrorLog(analysis.restart_counter,
@@ -427,8 +424,11 @@ def _update_finished_status(database: Database, analysis_status: dict[str, str])
     """
     analysis = database.get_latest_deployment(analysis_status['analysis_id'])
     if analysis is not None:
-        finished_status = analysis_status['int_status'] \
-            if analysis_status['int_status'] != AnalysisStatus.STUCK.value else AnalysisStatus.FAILED.value
+        if analysis_status['int_status'] == AnalysisStatus.STUCK.value:
+            finished_status = AnalysisStatus.FAILED.value
+        else:
+            finished_status = analysis_status['int_status']
+
         database.update_deployment_status(analysis.deployment_name, finished_status)
         if analysis_status['int_status'] == AnalysisStatus.EXECUTED.value:
             logger.info("Delete deployment")
