@@ -1,10 +1,6 @@
 import os
 from threading import Thread
-
 from dotenv import load_dotenv, find_dotenv
-# load env
-load_dotenv(find_dotenv())
-
 
 from src.resources.database.entity import Database
 from src.api.api import PodOrchestrationAPI
@@ -13,7 +9,12 @@ from src.status.status import status_loop
 from src.utils.po_logging import get_logger
 
 
+# connect logger
 logger = get_logger()
+# load cluster config
+load_cluster_config()
+# load env
+load_dotenv(find_dotenv())
 
 
 def main():
@@ -23,9 +24,6 @@ def main():
     spawns the FastAPI server in a background thread, and starts the blocking
     status monitoring loop on the main thread.
     """
-    # load cluster config
-    load_cluster_config()
-
     if not os.getenv('NGINX_IMAGE'):
         logger.warning("Environment variable 'NGINX_IMAGE' is not set, defaulting to 'nginx:1.29.8'.")
 
