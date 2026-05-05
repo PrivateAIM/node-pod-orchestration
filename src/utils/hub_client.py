@@ -53,7 +53,6 @@ def init_hub_client_with_client(client_id: str,
             "https://": HTTPTransport(proxy=https_proxy, verify=ssl_ctx)
         }
     try:
-
         _client = Client(base_url=hub_auth, mounts=proxies, verify=ssl_ctx)
         hub_client = flame_hub.auth.ClientAuth(client_id=client_id,
                                                client_secret=client_secret,
@@ -61,7 +60,6 @@ def init_hub_client_with_client(client_id: str,
 
         client = Client(base_url=hub_url_core, mounts=proxies, auth=hub_client, verify=ssl_ctx)
         hub_client = flame_hub.CoreClient(client=client)
-        logger.action("Hub client init successful")
     except Exception as e:
         hub_client = None
         logger.error(f"Failed to authenticate with hub python client library: {repr(e)}")
@@ -168,11 +166,14 @@ def get_analysis_node_statuses(hub_client: flame_hub.CoreClient, analysis_id: st
         node_analyzes = hub_client.find_analysis_nodes(filter={'analysis_id': analysis_id})
     except (HTTPStatusError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
         logger.error(f"Failed to retrieve node analyzes from hub python client: {repr(e)}")
-        return  None
+        return None
     analysis_node_statuses = {}
-    for node in node_analyzes:
-        analysis_node_statuses[str(node.id)] = node.execution_status
-    return analysis_node_statuses
+    if node_analyzes:
+        for node in node_analyzes:
+            analysis_node_statuses[str(node.id)] = node.execution_status
+        return analysis_node_statuses
+    else:
+        return None
 
 
 def get_partner_node_statuses(hub_client: flame_hub.CoreClient,

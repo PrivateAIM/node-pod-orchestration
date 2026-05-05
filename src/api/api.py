@@ -419,7 +419,11 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            return cleanup(cleanup_type, self.database, self.namespace)
+            self._set_node_id_and_hub_client(max_attempts=5)
+            return cleanup(cleanup_type,
+                           self.database,
+                           self.hub_client,
+                           self.namespace)
         except Exception as e:
             logger.error(f"Error cleaning up: {repr(e)}")
             raise HTTPException(status_code=500, detail=f"Error cleaning up (see po logs).")

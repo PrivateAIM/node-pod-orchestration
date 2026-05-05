@@ -15,7 +15,8 @@ from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
 from src.utils.hub_client import (init_hub_client_and_update_hub_status_with_client,
                                   update_hub_status,
-                                  get_node_analysis_id)
+                                  get_node_analysis_id,
+                                  get_analysis_node_statuses)
 from src.utils.other import resource_name_to_analysis
 from src.utils.po_logging import get_logger
 from src.utils.other import is_uuid
@@ -294,6 +295,7 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
 
 def cleanup(cleanup_type: str,
             database: Database,
+            hub_client: CoreClient,
             namespace: str = 'default') -> dict[str, str]:
     """Run one or more targeted cleanup passes.
 
@@ -310,6 +312,7 @@ def cleanup(cleanup_type: str,
     Args:
         cleanup_type: Selector or comma-separated selectors.
         database: Database wrapper used for persistence.
+        hub_client: FLAME Hub client.
         namespace: Namespace to search in.
 
     Returns:
@@ -354,11 +357,13 @@ def cleanup(cleanup_type: str,
         else:
             response_content[cleanup_type] = f"Unknown cleanup type: {cleanup_type} (known types: 'zombies', 'all', " +\
                                              "'analyzes', 'keycloak', 'services', 'mb', and 'rs')"
-    response_content['zombies'] = clean_up_the_rest(database, namespace)
+    response_content['zombies'] = clean_up_the_rest(database, hub_client, namespace)
     return response_content
 
 
-def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
+def clean_up_the_rest(database: Database,
+                      hub_client: CoreClient,
+                      namespace: str = 'default') -> str:
     """Delete orphaned Kubernetes resources whose analysis is no longer tracked.
 
     Iterates over deployments, pods, services, network policies, and config
@@ -367,6 +372,7 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
 
     Args:
         database: Database wrapper used to look up the known analysis ids.
+        hub_client: FLAME Hub client.
         namespace: Namespace to search in.
 
     Returns:
@@ -374,6 +380,14 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
         deleted per resource type.
     """
     known_analysis_ids = database.get_analysis_ids()
+    if hub_client is not None:
+        validated_analysis_ids = _validate_analyses_with_hub(known_analysis_ids, hub_client)
+        for id in known_analysis_ids:
+            if id not in validated_analysis_ids:
+                database.delete_analysis(id)
+        known_analysis_ids = validated_analysis_ids
+    else:
+        logger.warning(f"No Hub client found, skipping hub validation for zombie deletion.")
 
     result_str = ""
     for res, (selector_args, max_r_split) in {'deployment': (["component=flame-analysis", "component=flame-analysis-nginx"], 1),
@@ -392,7 +406,11 @@ def clean_up_the_rest(database: Database, namespace: str = 'default') -> str:
     return result_str
 
 
-def stream_logs(log_entity: CreateLogEntity, node_id: str, enable_hub_logging: bool, database: Database, hub_core_client: CoreClient) -> None:
+def stream_logs(log_entity: CreateLogEntity,
+                node_id: str,
+                enable_hub_logging: bool,
+                database: Database,
+                hub_core_client: CoreClient) -> None:
     """Persist a log line and mirror status/progress into the FLAME Hub.
 
     * Appends the serialized log to the analysis row in the database.
@@ -431,3 +449,11 @@ def stream_logs(log_entity: CreateLogEntity, node_id: str, enable_hub_logging: b
         update_hub_status(hub_core_client,
                           get_node_analysis_id(hub_core_client, log_entity.analysis_id, node_id),
                           run_status=log_entity.status)
+
+
+def _validate_analyses_with_hub(analysis_ids: list[str], hub_client: CoreClient) -> list[str]:
+    validated_ids = []
+    for analysis_id in analysis_ids:
+        if get_analysis_node_statuses(hub_client, analysis_id) is not None:
+            validated_ids.append(analysis_id)
+    return validated_ids
