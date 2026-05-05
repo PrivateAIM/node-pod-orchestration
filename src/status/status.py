@@ -451,10 +451,12 @@ def _set_analysis_hub_status(hub_client: flame_hub.CoreClient,
     """
     if analysis_status['db_status'] in [AnalysisStatus.STARTED.value,
                                         AnalysisStatus.FAILED.value,
+                                        AnalysisStatus.STOPPED.value,
                                         AnalysisStatus.EXECUTED.value]:
         analysis_hub_status = analysis_status['db_status']
     elif analysis_status['int_status'] in [AnalysisStatus.FAILED.value,
                                            AnalysisStatus.EXECUTED.value,
+                                           AnalysisStatus.STOPPED.value,
                                            AnalysisStatus.EXECUTING.value]:
         analysis_hub_status = analysis_status['int_status']
     else:
