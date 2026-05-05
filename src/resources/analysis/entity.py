@@ -8,6 +8,7 @@ from src.utils.token import create_analysis_tokens
 from src.resources.database.db_models import AnalysisDB
 from src.resources.database.entity import Database
 from src.status.constants import AnalysisStatus
+from src.utils.mb_client import delete_subscription
 
 
 class Analysis(BaseModel):
@@ -94,6 +95,8 @@ class Analysis(BaseModel):
         # Update the database
         database.update_deployment(self.deployment_name, status=self.status)
         database.update_deployment(self.deployment_name, log=self.log)
+        # end message-broker subscription
+        delete_subscription(self.analysis_id, self.tokens['KEYCLOAK_TOKEN'])
 
 
 def read_db_analysis(analysis: AnalysisDB) -> Analysis:
