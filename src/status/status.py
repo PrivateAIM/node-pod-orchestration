@@ -1,28 +1,27 @@
 import time
 import os
 from typing import Optional
-from httpx import Client, HTTPStatusError, ConnectError, ConnectTimeout
+from httpx import Client, HTTPStatusError, ConnectError, ConnectTimeout, TimeoutException
 
 import flame_hub
 
 from src.resources.log.entity import CreateStartUpErrorLog
 from src.k8s.kubernetes import PORTS, get_pod_status
+from src.k8s.utils import get_current_namespace
 from src.resources.database.entity import Database, AnalysisDB
-
-
+from src.resources.utils import (unstuck_analysis_deployments,
+                                 stop_analysis,
+                                 delete_analysis,
+                                 stream_logs,
+                                 clean_up_the_rest)
+from src.status.constants import AnalysisStatus, _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
 from src.utils.hub_client import (init_hub_client_with_client,
                                   get_node_id_by_client,
                                   get_node_analysis_id,
                                   get_partner_node_statuses,
                                   update_hub_status)
-from src.resources.utils import (unstuck_analysis_deployments,
-                                 stop_analysis,
-                                 delete_analysis,
-                                 stream_logs)
-from src.status.constants import AnalysisStatus
 from src.utils.other import extract_hub_envs
 from src.utils.token import get_keycloak_token
-from src.status.constants import _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
 from src.utils.po_logging import get_logger
 
 
@@ -188,7 +187,7 @@ def inform_analysis_of_partner_statuses(database: Database,
         logger.warning(f"Error whilst trying to access analysis partner_status endpoint: {repr(e)}")
     except ConnectError as e:
         logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {repr(e)}")
-    except ConnectTimeout as e:
+    except (TimeoutException, ConnectTimeout) as e:
         logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {repr(e)}")
     client.close()
     return None
@@ -277,7 +276,7 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
             logger.warning(f"Error whilst retrieving internal deployment status: {repr(e)}")
         except ConnectError as e:
             logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {repr(e)}")
-        except ConnectTimeout as e:
+        except (TimeoutException, ConnectTimeout)  as e:
             logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {repr(e)}")
         elapsed_time = time.time() - start_time
         if elapsed_time > _INTERNAL_STATUS_TIMEOUT:

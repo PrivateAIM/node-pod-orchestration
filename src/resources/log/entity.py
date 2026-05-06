@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from src.status.constants import _MAX_RESTARTS
+from src.status.constants import _MAX_RESTARTS, AnalysisStatus
 
 
 class LogEntity(BaseModel):
@@ -99,4 +99,8 @@ class AnalysisStoppedLog(CreateLogEntity):
         log = (f"[flame -- POAPI: ANALYSISSTOPPED -- "
                f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
                f"Info: The analysis was stopped either locally, or externally on another node.")
-        super().__init__(log=log, log_type="info", analysis_id=analysis_id, status="stopped", progress=0)
+        super().__init__(log=log,
+                         log_type="info",
+                         analysis_id=analysis_id,
+                         status=AnalysisStatus.STOPPED.value,
+                         progress=0)
