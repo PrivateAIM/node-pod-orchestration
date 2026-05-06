@@ -98,7 +98,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                         else:
                             logger.warning(f"Retrieving node_analysis id for malformed analysis returned None "
                                            f"(analysis_id={analysis_id})... Skipping")
-                            hub_client_issues += 1
+                            delete_analysis(analysis_id, database)
                             continue
                     else:
                         node_analysis_id = node_analysis_ids[analysis_id]
@@ -151,7 +151,13 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                     f"db_status={analysis_status['db_status']}, "
                                     f"internal_status={analysis_status['int_status']} "
                                     f"to {analysis_hub_status}")
+            # Clean up Zombies
+            result = clean_up_the_rest(database, hub_client, get_current_namespace())
+            if result:
+                logger.action(f"Cleaned up orphaned resources...\n{result}")
 
+            # Sleep at end of iteration
+            logger.status_loop(f"Iteration completed. Sleeping for {status_loop_interval} seconds.")
             time.sleep(status_loop_interval)
             logger.status_loop(f"Iteration completed. Sleeping for {status_loop_interval} seconds.")
 
