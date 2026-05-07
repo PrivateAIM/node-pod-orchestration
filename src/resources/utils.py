@@ -13,7 +13,7 @@ from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
 from src.k8s.utils import get_current_namespace, find_k8s_resources, delete_k8s_resource
 from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
-from src.utils.hub_client import (init_hub_client_and_update_hub_status_with_client,
+from src.utils.hub_client import (init_hub_client_and_update_hub_status,
                                   update_hub_status,
                                   get_node_analysis_id,
                                   get_analysis_node_statuses)
@@ -78,7 +78,7 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dic
     analysis.start(database=database, namespace=namespace)
 
     # update hub status
-    init_hub_client_and_update_hub_status_with_client(body.analysis_id, AnalysisStatus.STARTED.value)
+    init_hub_client_and_update_hub_status(body.analysis_id, AnalysisStatus.STARTED.value)
 
     return {body.analysis_id: analysis.status}
 
@@ -230,7 +230,7 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
             deployment.stop(database, log=log)
 
         # update hub status
-        init_hub_client_and_update_hub_status_with_client(analysis_id, deployment.status)
+        init_hub_client_and_update_hub_status(analysis_id, deployment.status)
 
     return {analysis_id: deployment.status for analysis_id, deployment in deployments.items()}
 

@@ -6,7 +6,7 @@ from fastapi import APIRouter, FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.utils.hub_client import init_hub_client_with_client, get_node_id_by_client
+from src.utils.hub_client import init_hub_client, get_node_id_by_client
 from src.utils.other import extract_hub_envs
 from src.api.oauth import valid_access_token
 from src.resources.database.entity import Database
@@ -329,11 +329,11 @@ class PodOrchestrationAPI:
             self._set_node_id_and_hub_client(max_attempts=5)
             if self.node_id is not None:
                 for analysis_id in self.database.get_analysis_ids():
-                        stream_logs(AnalysisStoppedLog(analysis_id),
-                                    self.node_id,
-                                    self.enable_hub_logging,
-                                    self.database,
-                                    self.hub_client)
+                    stream_logs(AnalysisStoppedLog(analysis_id),
+                                self.node_id,
+                                self.enable_hub_logging,
+                                self.database,
+                                self.hub_client)
             else:
                 logger.warning(f"Couldn't forward logs for stopped analyses.")
             return response
@@ -473,12 +473,12 @@ class PodOrchestrationAPI:
             client_id, client_secret, hub_url_core, hub_auth, enable_hub_logging, http_proxy, https_proxy = extract_hub_envs()
 
             self.enable_hub_logging = enable_hub_logging
-            self.hub_client = init_hub_client_with_client(client_id,
-                                                          client_secret,
-                                                          hub_url_core,
-                                                          hub_auth,
-                                                          http_proxy,
-                                                          https_proxy)
+            self.hub_client = init_hub_client(client_id,
+                                              client_secret,
+                                              hub_url_core,
+                                              hub_auth,
+                                              http_proxy,
+                                              https_proxy)
             self.node_id = get_node_id_by_client(self.hub_client, client_id) if self.hub_client else None
 
             if (max_attempts is not None) and (current_attempt >= max_attempts):

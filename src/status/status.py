@@ -15,7 +15,7 @@ from src.resources.utils import (unstuck_analysis_deployments,
                                  stream_logs,
                                  clean_up_the_rest)
 from src.status.constants import AnalysisStatus, _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
-from src.utils.hub_client import (init_hub_client_with_client,
+from src.utils.hub_client import (init_hub_client,
                                   get_node_id_by_client,
                                   get_node_analysis_id,
                                   get_partner_node_statuses,
@@ -62,7 +62,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                              http_proxy,
                              https_proxy)
             if None not in client_params:
-                hub_client = init_hub_client_with_client(*client_params)
+                hub_client = init_hub_client(*client_params)
             else:
                 logger.error(f"One or more hub client initialization parameters are None.\n"
                              f"Check values file for given parameters:\n"
@@ -159,8 +159,6 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
             # Sleep at end of iteration
             logger.status_loop(f"Iteration completed. Sleeping for {status_loop_interval} seconds.")
             time.sleep(status_loop_interval)
-            logger.status_loop(f"Iteration completed. Sleeping for {status_loop_interval} seconds.")
-
 
 
 def inform_analysis_of_partner_statuses(database: Database,

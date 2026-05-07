@@ -22,7 +22,7 @@ from src.utils.other import extract_hub_envs
 logger = get_logger()
 
 
-def init_hub_client_with_client(client_id: str,
+def init_hub_client(client_id: str,
                                 client_secret: str,
                                 hub_url_core: str,
                                 hub_auth: str,
@@ -196,7 +196,7 @@ def get_partner_node_statuses(hub_client: flame_hub.CoreClient,
         if analysis_node_statuses is not None else None
 
 
-def init_hub_client_and_update_hub_status_with_client(analysis_id: str, status: str) -> None:
+def init_hub_client_and_update_hub_status(analysis_id: str, status: str) -> None:
     """One-shot convenience that (re)builds a Hub client and pushes a status update.
 
     Used by API endpoints that do not hold a long-lived Hub client. Logs and
@@ -208,7 +208,7 @@ def init_hub_client_and_update_hub_status_with_client(analysis_id: str, status: 
         status: New execution status string.
     """
     client_id, client_secret, hub_url_core, hub_auth, _, http_proxy, https_proxy = extract_hub_envs()
-    hub_client = init_hub_client_with_client(client_id, client_secret, hub_url_core, hub_auth, http_proxy, https_proxy)
+    hub_client = init_hub_client(client_id, client_secret, hub_url_core, hub_auth, http_proxy, https_proxy)
     if hub_client is not None:
         node_id = get_node_id_by_client(hub_client, client_id)
         if node_id is not None:
