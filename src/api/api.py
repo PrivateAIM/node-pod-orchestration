@@ -354,20 +354,14 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            logger.debug(f"1 Stopping analysis with status: {self.database.get_latest_deployment(analysis_id).status}")
             response = stop_analysis(analysis_id, self.database)
-            logger.debug(f"2 Stopping analysis with status: {self.database.get_latest_deployment(analysis_id).status}")
             self._set_node_id_and_hub_client(max_attempts=5)
-            logger.debug(f"3 Stopping analysis with status: {self.database.get_latest_deployment(analysis_id).status}")
             if self.node_id is not None:
                 stream_logs(AnalysisStoppedLog(analysis_id),
                             self.node_id,
                             self.enable_hub_logging,
                             self.database,
                             self.hub_client)
-
-                logger.debug(
-                    f"4 Stopping analysis with status: {self.database.get_latest_deployment(analysis_id).status}")
             else:
                 logger.warning(f"Couldn't forward logs for stopped analysis.")
             return response
