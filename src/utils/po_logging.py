@@ -45,7 +45,7 @@ def get_logger() -> logging.Logger:
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(JsonFormatter())
         root.addHandler(handler)
-        root.setLevel(logging.INFO)
+        root.setLevel(logging.DEBUG)
 
     logger = logging.getLogger(__name__)
     return logger
