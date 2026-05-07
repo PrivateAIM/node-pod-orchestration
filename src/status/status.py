@@ -304,6 +304,8 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
         health_status = AnalysisStatus.EXECUTING.value
     elif analysis_status == AnalysisStatus.STUCK.value:
         health_status = AnalysisStatus.STUCK.value
+    elif analysis_status == AnalysisStatus.STOPPED.value:
+        health_status = AnalysisStatus.STOPPED.value
     else:
         health_status = AnalysisStatus.FAILED.value
     return health_status
