@@ -440,7 +440,8 @@ def _update_finished_status(database: Database, analysis_status: dict[str, str])
             delete_analysis(analysis_status['analysis_id'], database)  # delete analysis from database
         else:
             logger.info("Stop deployment")
-            stop_analysis(analysis_status['analysis_id'], database)  # stop analysis
+            # TODO : Temporly disabeld for debuging
+            #stop_analysis(analysis_status['analysis_id'], database)  # stop analysis
 
 
 def _set_analysis_hub_status(hub_client: flame_hub.CoreClient,
