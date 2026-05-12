@@ -75,7 +75,7 @@ class Analysis(BaseModel):
                                                   env=self.analysis_config,
                                                   namespace=namespace)
 
-        database.update_deployment(self.deployment_name, pod_ids=self.pod_ids)
+        database.update_deployment(self.deployment_name, pod_ids=json.dumps(self.pod_ids))
 
     def stop(self,
              database: Database,
