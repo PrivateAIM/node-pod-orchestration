@@ -152,10 +152,10 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                     f"internal_status={analysis_status['int_status']} "
                                     f"to {analysis_hub_status}")
             # Clean up Zombies
-
-            result = clean_up_the_rest(database, hub_client, get_current_namespace())
-            if result:
-                logger.action(f"Cleaned up orphaned resources...\n{result}")
+            # TODO
+            #result = clean_up_the_rest(database, hub_client, get_current_namespace())
+            #if result:
+            #    logger.action(f"Cleaned up orphaned resources...\n{result}")
 
             # Sleep at end of iteration
             logger.status_loop(f"Iteration completed. Sleeping for {status_loop_interval} seconds.")
