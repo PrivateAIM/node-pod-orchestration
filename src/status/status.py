@@ -152,10 +152,10 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                     f"internal_status={analysis_status['int_status']} "
                                     f"to {analysis_hub_status}")
             # Clean up Zombies
-            # TODO: removed for debuging
-            #result = clean_up_the_rest(database, hub_client, get_current_namespace())
-            #if result:
-            #    logger.action(f"Cleaned up orphaned resources...\n{result}")
+
+            result = clean_up_the_rest(database, hub_client, get_current_namespace())
+            if result:
+                logger.action(f"Cleaned up orphaned resources...\n{result}")
 
             # Sleep at end of iteration
             logger.status_loop(f"Iteration completed. Sleeping for {status_loop_interval} seconds.")
@@ -441,8 +441,7 @@ def _update_finished_status(database: Database, analysis_status: dict[str, str])
             delete_analysis(analysis_status['analysis_id'], database)  # delete analysis from database
         else:
             logger.info("Stop deployment")
-            # TODO : Temporly disabeld for debuging
-            #stop_analysis(analysis_status['analysis_id'], database)  # stop analysis
+            stop_analysis(analysis_status['analysis_id'], database)  # stop analysis
 
 
 def _set_analysis_hub_status(hub_client: flame_hub.CoreClient,

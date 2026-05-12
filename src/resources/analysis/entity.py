@@ -56,15 +56,10 @@ class Analysis(BaseModel):
         self.analysis_config['PROJECT_ID'] = self.project_id
         self.analysis_config['DEPLOYMENT_NAME'] = self.deployment_name
         self.namespace = namespace
-        self.pod_ids = create_analysis_deployment(name=self.deployment_name,
-                                                  image=self.image_url,
-                                                  env=self.analysis_config,
-                                                  namespace=namespace)
-
         database.create_analysis(analysis_id=self.analysis_id,
                                  deployment_name=self.deployment_name,
                                  project_id=self.project_id,
-                                 pod_ids=self.pod_ids,
+                                 pod_ids=None,
                                  status=self.status,
                                  log=self.log,
                                  registry_url=self.registry_url,
@@ -75,6 +70,12 @@ class Analysis(BaseModel):
                                  kong_token=self.kong_token,
                                  restart_counter=self.restart_counter,
                                  progress=self.progress)
+        self.pod_ids = create_analysis_deployment(name=self.deployment_name,
+                                                  image=self.image_url,
+                                                  env=self.analysis_config,
+                                                  namespace=namespace)
+
+        database.update_deployment(self.deployment_name, pod_ids=self.pod_ids)
 
     def stop(self,
              database: Database,
