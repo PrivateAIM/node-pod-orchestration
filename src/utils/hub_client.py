@@ -4,7 +4,7 @@ import ssl
 from pathlib import Path
 from functools import lru_cache
 from json import JSONDecodeError
-from typing import Optional
+from typing import Optional, Union
 from httpx import (Client,
                    HTTPTransport,
                    HTTPStatusError,
@@ -99,7 +99,7 @@ def get_node_id_by_client(hub_client: flame_hub.CoreClient, client_id: str) -> O
     return str(node_id_object.id) if node_id_object is not None else None
 
 
-def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, node_id_object_id: str) -> Optional[str]:
+def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, node_id_object_id: Optional[str] = None) -> Optional[Union[str, list[str]]]:
     """Look up the Hub analysis-node id for a (analysis, node) pair.
 
     Args:
@@ -111,18 +111,22 @@ def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, nod
         The analysis-node UUID as a string, or ``None`` if none exists.
     """
     try:
-        node_analyzes = hub_client.find_analysis_nodes(filter={'analysis_id': analysis_id,
-                                                               'node_id': node_id_object_id})
+        if node_id_object_id is not None:
+            node_analyzes = hub_client.find_analysis_nodes(filter={'analysis_id': analysis_id,
+                                                                   'node_id': node_id_object_id})
+        else:
+            node_analyzes = hub_client.find_analysis_nodes(filter={'analysis_id': analysis_id})
     except (HTTPStatusError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
         logger.error(f"Failed to retrieve node analyzes from hub python client: {repr(e)}")
         node_analyzes = None
 
     if node_analyzes:
-        node_analysis_id = str(node_analyzes[0].id)
+        if node_id_object_id is not None:
+            return str(node_analyzes[0].id)
+        else:
+            return [str(node_analysis.id) for node_analysis in node_analyzes]
     else:
-        node_analysis_id = None
-
-    return node_analysis_id
+        return None
 
 
 def update_hub_status(hub_client: flame_hub.CoreClient,

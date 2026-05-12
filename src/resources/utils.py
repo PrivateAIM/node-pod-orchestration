@@ -454,6 +454,6 @@ def stream_logs(log_entity: CreateLogEntity,
 def _validate_analyses_with_hub(analysis_ids: list[str], hub_client: CoreClient) -> list[str]:
     validated_ids = []
     for analysis_id in analysis_ids:
-        if get_analysis_node_statuses(hub_client, analysis_id) is not None:
+        if get_node_analysis_id(hub_client, analysis_id) is not None:
             validated_ids.append(analysis_id)
     return validated_ids
