@@ -341,9 +341,9 @@ def cleanup(cleanup_type: str,
             if cleanup_type in ['all', 'services', 'rs']:
                 # reinitialize storage-service pod
                 storage_service_name = find_k8s_resources('pod',
-                                                         'label',
-                                                         "component=flame-storage-service",
-                                                         namespace=namespace)[0]
+                                                          'label',
+                                                          "component=flame-storage-service",
+                                                          namespace=namespace)[0]
                 delete_k8s_resource(storage_service_name, 'pod', namespace)
                 response_content[cleanup_type] = "Reset storage service"
             if cleanup_type in ['all', 'keycloak']:
@@ -355,7 +355,7 @@ def cleanup(cleanup_type: str,
                         delete_keycloak_client(client['clientId'])
 
         else:
-            response_content[cleanup_type] = f"Unknown cleanup type: {cleanup_type} (known types: 'zombies', 'all', " +\
+            response_content[cleanup_type] = f"Unknown cleanup type: {cleanup_type} (known types: 'zombies', 'all', " + \
                                              "'analyzes', 'keycloak', 'services', 'mb', and 'rs')"
     response_content['zombies'] = clean_up_the_rest(database, hub_client, namespace)
     return response_content
