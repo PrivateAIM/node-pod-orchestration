@@ -380,14 +380,15 @@ def clean_up_the_rest(database: Database,
         deleted per resource type.
     """
     known_analysis_ids = database.get_analysis_ids()
-    if hub_client is not None:
-        validated_analysis_ids = _validate_analyses_with_hub(known_analysis_ids, hub_client)
-        for id in known_analysis_ids:
-            if id not in validated_analysis_ids:
-                database.delete_analysis(id)
-        known_analysis_ids = validated_analysis_ids
-    else:
-        logger.warning(f"No Hub client found, skipping hub validation for zombie deletion.")
+    # TODO: remove the hub validation for debging
+    #if hub_client is not None:
+        #validated_analysis_ids = _validate_analyses_with_hub(known_analysis_ids, hub_client)
+        #for id in known_analysis_ids:
+            #if id not in validated_analysis_ids:
+                #database.delete_analysis(id)
+        #known_analysis_ids = validated_analysis_ids
+    #else:
+        #logger.warning(f"No Hub client found, skipping hub validation for zombie deletion.")
 
     result_str = ""
     for res, (selector_args, max_r_split) in {'deployment': (["component=flame-analysis", "component=flame-analysis-nginx"], 1),
