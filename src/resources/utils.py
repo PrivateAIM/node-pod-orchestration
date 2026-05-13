@@ -380,13 +380,11 @@ def clean_up_the_rest(database: Database,
         deleted per resource type.
     """
     known_analysis_ids = database.get_analysis_ids()
-    # TODO: remove the hub validation for debging
     if hub_client is not None:
         validated_analysis_ids = _validate_analyses_with_hub(known_analysis_ids, hub_client)
         for id in known_analysis_ids:
             if id not in validated_analysis_ids:
                 database.delete_analysis(id)
-        logger.info(f"known analysis ids:\n\tbefore hub validation: {known_analysis_ids}\n\tafter hub validation: {validated_analysis_ids}")
         known_analysis_ids = validated_analysis_ids
     else:
         logger.warning(f"No Hub client found, skipping hub validation for zombie deletion.")
@@ -401,10 +399,8 @@ def clean_up_the_rest(database: Database,
             resources = find_k8s_resources(res, 'label', selector_arg, namespace=namespace)
             zombie_resources = [r for r in resources
                                 if (r is not None) and (resource_name_to_analysis(r) not in known_analysis_ids)]
-            logger.info(f"Identified zombie {res}s: { {r: (resource_name_to_analysis(r), resource_name_to_analysis(r) not in known_analysis_ids) for r in resources if r is not None} }")
             for z in zombie_resources:
-                logger.info(f"Deleting zombie {res} '{z}' with selector '{selector_arg}' in namespace '{namespace}' ")
-                #delete_k8s_resource(z, res, namespace=namespace)
+                delete_k8s_resource(z, res, namespace=namespace)
             result_str += f"Deleted {len(zombie_resources)} zombie " + \
                           f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
     return result_str
