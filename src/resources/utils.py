@@ -386,7 +386,7 @@ def clean_up_the_rest(database: Database,
         for id in known_analysis_ids:
             if id not in validated_analysis_ids:
                 database.delete_analysis(id)
-        logger.debug(f"known analysis ids:\n\tbefore hub validation: {known_analysis_ids}\n\tafter hub validation: {validated_analysis_ids}")
+        logger.info(f"known analysis ids:\n\tbefore hub validation: {known_analysis_ids}\n\tafter hub validation: {validated_analysis_ids}")
         known_analysis_ids = validated_analysis_ids
     else:
         logger.warning(f"No Hub client found, skipping hub validation for zombie deletion.")
@@ -401,9 +401,9 @@ def clean_up_the_rest(database: Database,
             resources = find_k8s_resources(res, 'label', selector_arg, namespace=namespace)
             zombie_resources = [r for r in resources
                                 if (r is not None) and (resource_name_to_analysis(r, max_r_split) not in known_analysis_ids)]
-            logger.debug(f"Identified zombie {res}s: { {r: (resource_name_to_analysis(r, max_r_split), resource_name_to_analysis(r, max_r_split) not in known_analysis_ids) for r in resources if r is not None} }")
+            logger.info(f"Identified zombie {res}s: { {r: (resource_name_to_analysis(r, max_r_split), resource_name_to_analysis(r, max_r_split) not in known_analysis_ids) for r in resources if r is not None} }")
             for z in zombie_resources:
-                logger.debug(f"Deleting zombie {res} '{z}' with selector '{selector_arg}' in namespace '{namespace}' ")
+                logger.info(f"Deleting zombie {res} '{z}' with selector '{selector_arg}' in namespace '{namespace}' ")
                 #delete_k8s_resource(z, res, namespace=namespace)
             result_str += f"Deleted {len(zombie_resources)} zombie " + \
                           f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
