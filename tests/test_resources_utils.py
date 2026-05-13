@@ -694,3 +694,29 @@ class TestStreamLogs:
             "node_analysis_id",
             run_status="executing",
         )
+
+    def test_empty_node_analysis_id_skips_hub_update(self, mock_database, mock_hub_client):
+        from src.resources.utils import stream_logs
+
+        log_entity = self._make_log_entity()
+        mock_database.progress_valid.return_value = True
+
+        with patch("src.resources.utils.get_node_analysis_id", return_value=[]):
+            with patch("src.resources.utils.update_hub_status") as mock_hub_update:
+                stream_logs(log_entity, "node-id", False, mock_database, mock_hub_client)
+
+        mock_database.update_analysis_progress.assert_not_called()
+        mock_hub_update.assert_not_called()
+
+    def test_none_node_analysis_id_skips_hub_update(self, mock_database, mock_hub_client):
+        from src.resources.utils import stream_logs
+
+        log_entity = self._make_log_entity()
+        mock_database.progress_valid.return_value = True
+
+        with patch("src.resources.utils.get_node_analysis_id", return_value=None):
+            with patch("src.resources.utils.update_hub_status") as mock_hub_update:
+                stream_logs(log_entity, "node-id", False, mock_database, mock_hub_client)
+
+        mock_database.update_analysis_progress.assert_not_called()
+        mock_hub_update.assert_not_called()

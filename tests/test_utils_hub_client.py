@@ -222,15 +222,15 @@ class TestGetNodeAnalysisId:
             filter={"analysis_id": "analysis-1", "node_id": "node-obj-id"}
         )
 
-    def test_empty_list_returns_none(self, mock_hub_client):
+    def test_empty_list_returns_empty_list(self, mock_hub_client):
         mock_hub_client.find_analysis_nodes.return_value = []
 
         from src.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id")
 
-        assert result is None
+        assert result == []
 
-    def test_http_status_error_returns_none(self, mock_hub_client):
+    def test_http_status_error_returns_empty_list(self, mock_hub_client):
         mock_hub_client.find_analysis_nodes.side_effect = HTTPStatusError(
             "500", request=MagicMock(), response=MagicMock()
         )
@@ -238,9 +238,9 @@ class TestGetNodeAnalysisId:
         from src.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id")
 
-        assert result is None
+        assert result == []
 
-    def test_hub_api_error_returns_none(self, mock_hub_client):
+    def test_hub_api_error_returns_empty_list(self, mock_hub_client):
         import flame_hub
         mock_hub_client.find_analysis_nodes.side_effect = flame_hub._exceptions.HubAPIError(
             "err", request=MagicMock()
@@ -249,15 +249,15 @@ class TestGetNodeAnalysisId:
         from src.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id")
 
-        assert result is None
+        assert result == []
 
-    def test_attribute_error_returns_none(self, mock_hub_client):
+    def test_attribute_error_returns_empty_list(self, mock_hub_client):
         mock_hub_client.find_analysis_nodes.side_effect = AttributeError("no attr")
 
         from src.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id")
 
-        assert result is None
+        assert result == []
 
 
 # ─── TestUpdateHubStatus ──────────────────────────────────────────────────────
