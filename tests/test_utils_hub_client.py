@@ -19,8 +19,8 @@ class TestInitHubClientWithClient:
             patch("src.utils.hub_client.flame_hub.auth.ClientAuth") as mock_auth,
             patch("src.utils.hub_client.flame_hub.CoreClient", return_value=mock_core_client),
         ):
-            from src.utils.hub_client import init_hub_client_with_client
-            result = init_hub_client_with_client(
+            from src.utils.hub_client import init_hub_client
+            result = init_hub_client(
                 client_id="cid",
                 client_secret="csec",
                 hub_url_core="http://core:3000",
@@ -36,8 +36,8 @@ class TestInitHubClientWithClient:
             patch("src.utils.hub_client.get_ssl_context", return_value=MagicMock()),
             patch("src.utils.hub_client.Client", side_effect=Exception("conn failed")),
         ):
-            from src.utils.hub_client import init_hub_client_with_client
-            result = init_hub_client_with_client(
+            from src.utils.hub_client import init_hub_client
+            result = init_hub_client(
                 client_id="cid",
                 client_secret="csec",
                 hub_url_core="http://core:3000",
@@ -59,8 +59,8 @@ class TestInitHubClientWithClient:
             patch("src.utils.hub_client.flame_hub.auth.ClientAuth"),
             patch("src.utils.hub_client.flame_hub.CoreClient"),
         ):
-            from src.utils.hub_client import init_hub_client_with_client
-            init_hub_client_with_client(
+            from src.utils.hub_client import init_hub_client
+            init_hub_client(
                 client_id="cid",
                 client_secret="csec",
                 hub_url_core="http://core:3000",
@@ -85,8 +85,8 @@ class TestInitHubClientWithClient:
             patch("src.utils.hub_client.flame_hub.auth.ClientAuth"),
             patch("src.utils.hub_client.flame_hub.CoreClient"),
         ):
-            from src.utils.hub_client import init_hub_client_with_client
-            init_hub_client_with_client(
+            from src.utils.hub_client import init_hub_client
+            init_hub_client(
                 client_id="cid",
                 client_secret="csec",
                 hub_url_core="http://core:3000",

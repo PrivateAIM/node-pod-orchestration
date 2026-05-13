@@ -253,7 +253,7 @@ def api_test_client(mock_database, mock_hub_client, mock_k8s_clients):
             ),
         ),
         patch(
-            "src.api.api.init_hub_client_with_client",
+            "src.api.api.init_hub_client",
             return_value=mock_hub_client,
         ),
         patch(

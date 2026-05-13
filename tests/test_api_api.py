@@ -269,12 +269,12 @@ class TestDeleteEndpoints:
 # ─── TestCleanupEndpoint ──────────────────────────────────────────────────────
 
 class TestCleanupEndpoint:
-    def test_cleanup(self, api_test_client, mock_database):
+    def test_cleanup(self, api_test_client, mock_database, mock_hub_client):
         fake_result = {"analyzes": "Deleted 1 analysis deployments"}
         with patch("src.api.api.cleanup", return_value=fake_result) as mock_fn:
             response = api_test_client.delete("/po/cleanup/analyzes")
         assert response.status_code == 200
-        mock_fn.assert_called_once_with("analyzes", mock_database, "default")
+        mock_fn.assert_called_once_with("analyzes", mock_database, mock_hub_client, "default")
 
     def test_cleanup_500_on_exception(self, api_test_client):
         with patch("src.api.api.cleanup", side_effect=RuntimeError("err")):

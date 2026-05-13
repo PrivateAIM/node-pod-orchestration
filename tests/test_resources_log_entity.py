@@ -122,7 +122,7 @@ class TestCreateStartUpErrorLog:
             analysis_id="analysis-2",
             status="stuck",
         )
-        assert "took to long during startup" in log.log
+        assert "took too long during startup" in log.log
         assert f"restart 3 of {_MAX_RESTARTS}" in log.log
         assert log.log_type == "error"
 

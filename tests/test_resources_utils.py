@@ -5,7 +5,7 @@ All external dependencies are mocked:
   - get_current_namespace / create_harbor_secret
   - Analysis class / read_db_analysis
   - get_analysis_logs
-  - init_hub_client_and_update_hub_status_with_client
+  - init_hub_client_and_update_hub_status
   - find_k8s_resources / delete_k8s_resource
   - _get_all_keycloak_clients / delete_keycloak_client
   - update_hub_status / get_node_analysis_id
@@ -68,7 +68,7 @@ class TestCreateAnalysis:
             "kong_token": "default_kong_token",
         }
 
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status_with_client")
+    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.Analysis")
     @patch("src.resources.utils.create_harbor_secret")
     @patch("src.resources.utils.get_current_namespace", return_value="default")
@@ -90,7 +90,7 @@ class TestCreateAnalysis:
         mock_hub.assert_called_once_with(self._VALID_UUID, AnalysisStatus.STARTED.value)
         assert result == {self._VALID_UUID: AnalysisStatus.STARTED.value}
 
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status_with_client")
+    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.Analysis")
     @patch("src.resources.utils.create_harbor_secret")
     @patch("src.resources.utils.get_current_namespace", return_value="default")
@@ -289,7 +289,7 @@ class TestGetPods:
 # ─── stop_analysis ────────────────────────────────────────────────────────────
 
 class TestStopAnalysis:
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status_with_client")
+    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
     @patch("src.resources.utils.read_db_analysis")
     def test_running_analysis_stopped(self, mock_read, mock_logs, mock_hub, mock_database):
@@ -305,7 +305,7 @@ class TestStopAnalysis:
         assert mock_deployment.stop.call_args.kwargs["status"] == AnalysisStatus.STARTED.value
         mock_hub.assert_called_once_with(_ANALYSIS_ID, AnalysisStatus.STARTED.value)
 
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status_with_client")
+    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
     @patch("src.resources.utils.read_db_analysis")
     def test_executed_analysis_keeps_executed_status(self, mock_read, mock_logs, mock_hub, mock_database):
@@ -320,7 +320,7 @@ class TestStopAnalysis:
         assert call_kwargs["status"] == AnalysisStatus.EXECUTED.value
         mock_hub.assert_called_once_with(_ANALYSIS_ID, AnalysisStatus.EXECUTED.value)
 
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status_with_client")
+    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
     @patch("src.resources.utils.read_db_analysis")
     def test_failed_analysis_keeps_failed_status(self, mock_read, mock_logs, mock_hub, mock_database):
@@ -335,7 +335,7 @@ class TestStopAnalysis:
         assert call_kwargs["status"] == AnalysisStatus.FAILED.value
         mock_hub.assert_called_once_with(_ANALYSIS_ID, AnalysisStatus.FAILED.value)
 
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status_with_client")
+    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
     @patch("src.resources.utils.read_db_analysis")
     def test_all_analyses(self, mock_read, mock_logs, mock_hub, mock_database):
@@ -450,7 +450,7 @@ class TestCleanup:
         from src.resources.utils import cleanup
 
         mock_database.get_analysis_ids.return_value = ["id1", "id2"]
-        result = cleanup("analyzes", mock_database)
+        result = cleanup("analyzes", mock_database, None)
 
         mock_database.reset_db.assert_called_once()
         assert "analyzes" in result
@@ -464,7 +464,7 @@ class TestCleanup:
     def test_mb_reinitializes_message_broker(self, mock_find, mock_delete, mock_cztr, mock_database):
         from src.resources.utils import cleanup
 
-        result = cleanup("mb", mock_database)
+        result = cleanup("mb", mock_database, None)
 
         mock_find.assert_called_once_with(
             "pod", "label", "component=flame-message-broker", namespace="default"
@@ -481,7 +481,7 @@ class TestCleanup:
     def test_rs_reinitializes_storage_service(self, mock_find, mock_delete, mock_cztr, mock_database):
         from src.resources.utils import cleanup
 
-        result = cleanup("rs", mock_database)
+        result = cleanup("rs", mock_database, None)
 
         mock_find.assert_called_once_with(
             "pod", "label", "component=flame-storage-service", namespace="default"
@@ -502,7 +502,7 @@ class TestCleanup:
             {"clientId": "non_flame_client", "name": "other-client"},
         ]
 
-        cleanup("keycloak", mock_database)
+        cleanup("keycloak", mock_database, None)
 
         # Only the orphaned flame client should be deleted; existing and non-flame skipped.
         mock_delete.assert_called_once_with("orphaned_analysis")
@@ -511,7 +511,7 @@ class TestCleanup:
     def test_unknown_type_returns_error_message(self, mock_cztr, mock_database):
         from src.resources.utils import cleanup
 
-        result = cleanup("unknown_type", mock_database)
+        result = cleanup("unknown_type", mock_database, None)
 
         assert "unknown_type" in result["unknown_type"]
         assert "Unknown cleanup type" in result["unknown_type"]
@@ -522,7 +522,7 @@ class TestCleanup:
     def test_comma_separated_processes_both_types(self, mock_find, mock_delete, mock_cztr, mock_database):
         from src.resources.utils import cleanup
 
-        result = cleanup("mb,rs", mock_database)
+        result = cleanup("mb,rs", mock_database, None)
 
         # mb calls find for message-broker, rs calls find for storage-service
         assert mock_find.call_count == 2
@@ -531,9 +531,9 @@ class TestCleanup:
     def test_always_calls_clean_up_the_rest(self, mock_cztr, mock_database):
         from src.resources.utils import cleanup
 
-        result = cleanup("unknown_type", mock_database)
+        result = cleanup("unknown_type", mock_database, None)
 
-        mock_cztr.assert_called_once_with(mock_database, "default")
+        mock_cztr.assert_called_once_with(mock_database, None, "default")
         assert result["zombies"] == "zombie cleanup done"
 
 
@@ -551,7 +551,7 @@ class TestCleanUpTheRest:
 
         mock_database.get_analysis_ids.return_value = ["known_id"]
 
-        result = clean_up_the_rest(mock_database)
+        result = clean_up_the_rest(mock_database, None)
 
         # Zombie resources (not in known_analysis_ids) should be deleted.
         assert mock_delete.call_count > 0
@@ -568,7 +568,7 @@ class TestCleanUpTheRest:
 
         mock_database.get_analysis_ids.return_value = ["known_id"]
 
-        clean_up_the_rest(mock_database)
+        clean_up_the_rest(mock_database, None)
 
         mock_delete.assert_not_called()
 
@@ -579,7 +579,7 @@ class TestCleanUpTheRest:
 
         mock_database.get_analysis_ids.return_value = []
 
-        result = clean_up_the_rest(mock_database)
+        result = clean_up_the_rest(mock_database, None)
 
         mock_delete.assert_not_called()
         assert isinstance(result, str)
@@ -596,7 +596,7 @@ class TestCleanUpTheRest:
 
         mock_database.get_analysis_ids.return_value = ["known_id"]
 
-        result = clean_up_the_rest(mock_database)
+        result = clean_up_the_rest(mock_database, None)
 
         # The string is treated as a single resource and identified as a zombie.
         assert mock_delete.call_count > 0

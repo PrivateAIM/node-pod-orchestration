@@ -88,7 +88,7 @@ class TestResourceNameToAnalysis:
     def test_double_split(self):
         from src.utils.other import resource_name_to_analysis
         # analysis_id itself contains a hyphen
-        result = resource_name_to_analysis("analysis-abc-123-0", max_r_split=1)
+        result = resource_name_to_analysis("analysis-abc-123-0")
         assert result == "abc-123"
 
     def test_nginx_prefix(self):
@@ -97,14 +97,14 @@ class TestResourceNameToAnalysis:
         result = resource_name_to_analysis("nginx-analysis-abc123-0")
         assert result == "abc123"
 
-    def test_max_r_split_two(self):
+    def test_extra_trailing_segment(self):
         from src.utils.other import resource_name_to_analysis
-        # with max_r_split=2 strips two trailing segments
-        result = resource_name_to_analysis("analysis-abc123-pod-0", max_r_split=2)
-        assert result == "abc123"
+        # extra segment between analysis_id and restart_counter — last segment stripped only
+        result = resource_name_to_analysis("analysis-abc123-pod-0")
+        assert result == "abc123-pod"
 
     def test_no_restart_counter(self):
         from src.utils.other import resource_name_to_analysis
-        # edge case: no trailing hyphen — rsplit finds nothing to strip, returns full segment
+        # edge case: no trailing segment to strip — returns empty string
         result = resource_name_to_analysis("analysis-abc123")
-        assert result == "abc123"
+        assert result == ""

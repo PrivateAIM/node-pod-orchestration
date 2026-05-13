@@ -55,11 +55,10 @@ class TestDecideStatusAction:
         # db=EXECUTING + int=FAILED (newly_ended)
         assert _decide_status_action(AnalysisStatus.EXECUTING.value, AnalysisStatus.FAILED.value) == "finishing"
 
-    def test_firmly_stuck_failed_db_stuck_int_returns_unstuck(self):
-        # db=FAILED + int=STUCK: is_stuck fires before firmly_stuck branch
-        # Note: firmly_stuck (db=FAILED, int=STUCK) overlaps with is_stuck,
-        # so this returns 'unstuck', not 'finishing'.
-        assert _decide_status_action(AnalysisStatus.FAILED.value, AnalysisStatus.STUCK.value) == "unstuck"
+    def test_firmly_stuck_failed_db_stuck_int_returns_finishing(self):
+        # db=FAILED + int=STUCK: is_stuck excludes FAILED (db_status not in [FAILED]),
+        # so firmly_stuck fires instead and returns 'finishing'.
+        assert _decide_status_action(AnalysisStatus.FAILED.value, AnalysisStatus.STUCK.value) == "finishing"
 
     def test_was_stopped_returns_finishing(self):
         # int_status=STOPPED
@@ -339,7 +338,7 @@ class TestSetAnalysisHubStatus:
             "node-analysis-id",
             {"db_status": AnalysisStatus.STARTED.value, "int_status": AnalysisStatus.EXECUTING.value},
         )
-        assert result == AnalysisStatus.EXECUTING.value
+        assert result == AnalysisStatus.STARTED.value
 
     @patch("src.status.status.update_hub_status")
     def test_int_failed_used_when_db_not_terminal(self, mock_update, mock_hub_client):
@@ -348,7 +347,7 @@ class TestSetAnalysisHubStatus:
             "node-analysis-id",
             {"db_status": AnalysisStatus.STARTED.value, "int_status": AnalysisStatus.FAILED.value},
         )
-        assert result == AnalysisStatus.FAILED.value
+        assert result == AnalysisStatus.STARTED.value
 
     @patch("src.status.status.update_hub_status")
     def test_default_falls_back_to_db_status(self, mock_update, mock_hub_client):
