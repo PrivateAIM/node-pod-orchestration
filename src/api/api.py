@@ -469,23 +469,24 @@ class PodOrchestrationAPI:
 
     def _set_node_id_and_hub_client(self, max_attempts: Optional[int] = None) -> None:
         current_attempt = 1
-        while self.node_id is None:
-            client_id, client_secret, hub_url_core, hub_auth, enable_hub_logging, http_proxy, https_proxy = extract_hub_envs()
+        client_id, client_secret, hub_url_core, hub_auth, enable_hub_logging, http_proxy, https_proxy = extract_hub_envs()
+        if (self.hub_client is None) or (get_node_id_by_client(self.hub_client, client_id) is None):
+            self.node_id = None
+            while self.node_id is None:
+                self.enable_hub_logging = enable_hub_logging
+                self.hub_client = init_hub_client(client_id,
+                                                  client_secret,
+                                                  hub_url_core,
+                                                  hub_auth,
+                                                  http_proxy,
+                                                  https_proxy)
+                self.node_id = get_node_id_by_client(self.hub_client, client_id) if self.hub_client else None
 
-            self.enable_hub_logging = enable_hub_logging
-            self.hub_client = init_hub_client(client_id,
-                                              client_secret,
-                                              hub_url_core,
-                                              hub_auth,
-                                              http_proxy,
-                                              https_proxy)
-            self.node_id = get_node_id_by_client(self.hub_client, client_id) if self.hub_client else None
-
-            if (max_attempts is not None) and (current_attempt >= max_attempts):
-                break
-            else:
-                current_attempt += 1
-                if current_attempt % 60 == 59:
-                    logger.warning(f"Unable to connect to Hub, attempt {current_attempt}"
-                                   f"{'/' + str(max_attempts) if max_attempts is not None else ''}.")
-                time.sleep(1)
+                if (max_attempts is not None) and (current_attempt >= max_attempts):
+                    break
+                else:
+                    current_attempt += 1
+                    if current_attempt % 60 == 59:
+                        logger.warning(f"Unable to connect to Hub, attempt {current_attempt}"
+                                       f"{'/' + str(max_attempts) if max_attempts is not None else ''}.")
+                    time.sleep(1)

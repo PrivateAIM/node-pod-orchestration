@@ -439,21 +439,23 @@ def stream_logs(log_entity: CreateLogEntity,
                                                  level=log_entity.log_type,
                                                  message=log_entity.log)
 
-    if database.progress_valid(log_entity.analysis_id, log_entity.progress):
-        database.update_analysis_progress(log_entity.analysis_id, log_entity.progress)
-        update_hub_status(hub_core_client,
-                          get_node_analysis_id(hub_core_client, log_entity.analysis_id, node_id),
-                          run_status=log_entity.status,
-                          run_progress=log_entity.progress)
-    else:
-        update_hub_status(hub_core_client,
-                          get_node_analysis_id(hub_core_client, log_entity.analysis_id, node_id),
-                          run_status=log_entity.status)
+    node_analysis_id = get_node_analysis_id(hub_core_client, log_entity.analysis_id, node_id)
+    if isinstance(node_analysis_id, str):
+        if database.progress_valid(log_entity.analysis_id, log_entity.progress):
+            database.update_analysis_progress(log_entity.analysis_id, log_entity.progress)
+            update_hub_status(hub_core_client,
+                              node_analysis_id,
+                              run_status=log_entity.status,
+                              run_progress=log_entity.progress)
+        else:
+            update_hub_status(hub_core_client,
+                              node_analysis_id,
+                              run_status=log_entity.status)
 
 
 def _validate_analyses_with_hub(analysis_ids: list[str], hub_client: CoreClient) -> list[str]:
     validated_ids = []
     for analysis_id in analysis_ids:
-        if get_node_analysis_id(hub_client, analysis_id) is not None:
+        if get_node_analysis_id(hub_client, analysis_id) != []:
             validated_ids.append(analysis_id)
     return validated_ids

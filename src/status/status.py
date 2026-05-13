@@ -92,12 +92,11 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                     # Get node analysis id
                     if analysis_id not in node_analysis_ids.keys():
                         node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
-                        if node_analysis_id is not None:
+                        if isinstance(node_analysis_id, str):
                             node_analysis_ids[analysis_id] = node_analysis_id
                         else:
                             logger.warning(f"Retrieving node_analysis id for malformed analysis returned None "
                                            f"(analysis_id={analysis_id})... Skipping")
-                            delete_analysis(analysis_id, database)
                             continue
                     else:
                         node_analysis_id = node_analysis_ids[analysis_id]

@@ -108,7 +108,8 @@ def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, nod
         node_id_object_id: Hub node id (see :func:`get_node_id_by_client`).
 
     Returns:
-        The analysis-node UUID as a string, or ``None`` if none exists.
+        The analysis-node UUID as a string for the specified node_id_object_id, else all analysis-node UUIDs,
+        an empty list if none exists, or None if the request failed.
     """
     try:
         if node_id_object_id is not None:
@@ -126,7 +127,7 @@ def get_node_analysis_id(hub_client: flame_hub.CoreClient, analysis_id: str, nod
         else:
             return [str(node_analysis.id) for node_analysis in node_analyzes]
     else:
-        return None
+        return []
 
 
 def update_hub_status(hub_client: flame_hub.CoreClient,
@@ -171,13 +172,7 @@ def get_analysis_node_statuses(hub_client: flame_hub.CoreClient, analysis_id: st
     except (HTTPStatusError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
         logger.error(f"Failed to retrieve node analyzes from hub python client: {repr(e)}")
         return None
-    analysis_node_statuses = {}
-    if node_analyzes:
-        for node in node_analyzes:
-            analysis_node_statuses[str(node.id)] = node.execution_status
-        return analysis_node_statuses
-    else:
-        return None
+    return {str(node.id): node.execution_status for node in node_analyzes} if node_analyzes else {}
 
 
 def get_partner_node_statuses(hub_client: flame_hub.CoreClient,
@@ -217,7 +212,7 @@ def init_hub_client_and_update_hub_status(analysis_id: str, status: str) -> None
         node_id = get_node_id_by_client(hub_client, client_id)
         if node_id is not None:
             node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
-            if node_analysis_id is not None:
+            if isinstance(node_analysis_id, str):
                 update_hub_status(hub_client, node_analysis_id, run_status=status)
             else:
                 logger.error("Failed to retrieve node_analysis_id from hub client. Cannot update status.")
