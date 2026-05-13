@@ -381,14 +381,15 @@ def clean_up_the_rest(database: Database,
     """
     known_analysis_ids = database.get_analysis_ids()
     # TODO: remove the hub validation for debging
-    #if hub_client is not None:
-        #validated_analysis_ids = _validate_analyses_with_hub(known_analysis_ids, hub_client)
-        #for id in known_analysis_ids:
-            #if id not in validated_analysis_ids:
-                #database.delete_analysis(id)
-        #known_analysis_ids = validated_analysis_ids
-    #else:
-        #logger.warning(f"No Hub client found, skipping hub validation for zombie deletion.")
+    if hub_client is not None:
+        validated_analysis_ids = _validate_analyses_with_hub(known_analysis_ids, hub_client)
+        for id in known_analysis_ids:
+            if id not in validated_analysis_ids:
+                database.delete_analysis(id)
+        logger.debug(f"known analysis ids:\n\tbefore hub validation: {known_analysis_ids}\n\tafter hub validation: {validated_analysis_ids}")
+        known_analysis_ids = validated_analysis_ids
+    else:
+        logger.warning(f"No Hub client found, skipping hub validation for zombie deletion.")
 
     result_str = ""
     for res, (selector_args, max_r_split) in {'deployment': (["component=flame-analysis", "component=flame-analysis-nginx"], 1),
@@ -400,8 +401,10 @@ def clean_up_the_rest(database: Database,
             resources = find_k8s_resources(res, 'label', selector_arg, namespace=namespace)
             zombie_resources = [r for r in resources
                                 if (r is not None) and (resource_name_to_analysis(r, max_r_split) not in known_analysis_ids)]
+            logger.debug(f"Identified zombie {res}s: { {r: (resource_name_to_analysis(r, max_r_split), resource_name_to_analysis(r, max_r_split) not in known_analysis_ids) for r in resources} }")
             for z in zombie_resources:
-                delete_k8s_resource(z, res, namespace=namespace)
+                logger.debug(f"Deleting zombie {res} '{z}' with selector '{selector_arg}' in namespace '{namespace}' ")
+                #delete_k8s_resource(z, res, namespace=namespace)
             result_str += f"Deleted {len(zombie_resources)} zombie " + \
                           f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
     return result_str
