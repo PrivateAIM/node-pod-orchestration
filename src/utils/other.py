@@ -25,7 +25,7 @@ def extract_hub_envs() -> tuple[Optional[str],
             os.getenv('PO_HTTPS_PROXY'))
 
 
-def resource_name_to_analysis(deployment_name: str, max_r_split: int = 1) -> str:
+def resource_name_to_analysis(deployment_name: str) -> str:
     """Extract the analysis id from a FLAME analysis resource name.
 
     Resource names follow the ``analysis-{analysis_id}-{restart_counter}``
@@ -34,12 +34,11 @@ def resource_name_to_analysis(deployment_name: str, max_r_split: int = 1) -> str
 
     Args:
         deployment_name: Kubernetes resource name.
-        max_r_split: Number of trailing ``-``-separated segments to drop.
 
     Returns:
         The analysis id portion of the name.
     """
-    return deployment_name.split("analysis-")[-1].rsplit('-', max_r_split)[0]
+    return '-'.join(deployment_name.split("analysis-")[-1].split('-', 5)[:-1])
 
 
 def is_uuid(test_str: Union[str, uuid.UUID], version: int = 4):

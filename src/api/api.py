@@ -1,11 +1,12 @@
+import time
 import uvicorn
-import os
+from typing import Optional
 import threading
 from fastapi import APIRouter, FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.utils.hub_client import init_hub_client_with_client, get_node_id_by_client
+from src.utils.hub_client import init_hub_client, get_node_id_by_client
 from src.utils.other import extract_hub_envs
 from src.api.oauth import valid_access_token
 from src.resources.database.entity import Database
@@ -23,6 +24,7 @@ from src.resources.utils import (create_analysis,
 from src.utils.po_logging import get_logger
 
 logger = get_logger()
+
 
 class PodOrchestrationAPI:
     """FastAPI application exposing the Pod Orchestration REST endpoints.
@@ -49,16 +51,11 @@ class PodOrchestrationAPI:
         """
         self.database = database
 
-        client_id, client_secret, hub_url_core, hub_auth, enable_hub_logging, http_proxy, https_proxy = extract_hub_envs()
+        self.node_id = None
+        self.hub_client = None
+        self.enable_hub_logging = None
+        self._set_node_id_and_hub_client(max_attempts=100)
 
-        self.enable_hub_logging = enable_hub_logging
-        self.hub_client = init_hub_client_with_client(client_id,
-                                                          client_secret,
-                                                          hub_url_core,
-                                                          hub_auth,
-                                                          http_proxy,
-                                                          https_proxy)
-        self.node_id = get_node_id_by_client(self.hub_client, client_id) if self.hub_client else None
         self.namespace = namespace
         app = FastAPI(title="FLAME PO",
                       docs_url="/api/docs",
@@ -329,12 +326,16 @@ class PodOrchestrationAPI:
         """
         try:
             response = stop_analysis('all', self.database)
-            for analysis_id in self.database.get_analysis_ids():
-                stream_logs(AnalysisStoppedLog(analysis_id),
-                            self.node_id,
-                            self.enable_hub_logging,
-                            self.database,
-                            self.hub_client)
+            self._set_node_id_and_hub_client(max_attempts=5)
+            if self.node_id is not None:
+                for analysis_id in self.database.get_analysis_ids():
+                    stream_logs(AnalysisStoppedLog(analysis_id),
+                                self.node_id,
+                                self.enable_hub_logging,
+                                self.database,
+                                self.hub_client)
+            else:
+                logger.warning(f"Couldn't forward logs for stopped analyses.")
             return response
         except Exception as e:
             logger.error(f"Error stopping ALL analyzes: {repr(e)}")
@@ -354,11 +355,15 @@ class PodOrchestrationAPI:
         """
         try:
             response = stop_analysis(analysis_id, self.database)
-            stream_logs(AnalysisStoppedLog(analysis_id),
-                        self.node_id,
-                        self.enable_hub_logging,
-                        self.database,
-                        self.hub_client)
+            self._set_node_id_and_hub_client(max_attempts=5)
+            if self.node_id is not None:
+                stream_logs(AnalysisStoppedLog(analysis_id),
+                            self.node_id,
+                            self.enable_hub_logging,
+                            self.database,
+                            self.hub_client)
+            else:
+                logger.warning(f"Couldn't forward logs for stopped analysis.")
             return response
         except Exception as e:
             logger.error(f"Error stopping analysis: {repr(e)}")
@@ -414,7 +419,11 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            return cleanup(cleanup_type, self.database, self.namespace)
+            self._set_node_id_and_hub_client(max_attempts=5)
+            return cleanup(cleanup_type,
+                           self.database,
+                           self.hub_client,
+                           self.namespace)
         except Exception as e:
             logger.error(f"Error cleaning up: {repr(e)}")
             raise HTTPException(status_code=500, detail=f"Error cleaning up (see po logs).")
@@ -433,9 +442,14 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            return stream_logs(body, self.node_id, self.enable_hub_logging, self.database, self.hub_client)
-        except Exception as e:
-            logger.error(f"Error streaming logs: {repr(e)}")
+            self._set_node_id_and_hub_client(max_attempts=5)
+            if self.node_id is not None:
+                return stream_logs(body, self.node_id, self.enable_hub_logging, self.database, self.hub_client)
+            else:
+                raise Exception
+        except Exception:
+            logger.error(f"Error streaming logs: node_id={self.node_id}, "
+                         f"hub_client={self.hub_client}.")
             raise HTTPException(status_code=500, detail=f"Error streaming logs (see po logs).")
 
     def health_call(self):
@@ -452,3 +466,27 @@ class PodOrchestrationAPI:
             raise RuntimeError("Main thread is not alive.")
         else:
             return {'status': "ok"}
+
+    def _set_node_id_and_hub_client(self, max_attempts: Optional[int] = None) -> None:
+        current_attempt = 1
+        client_id, client_secret, hub_url_core, hub_auth, enable_hub_logging, http_proxy, https_proxy = extract_hub_envs()
+        if (self.hub_client is None) or (get_node_id_by_client(self.hub_client, client_id) is None):
+            self.node_id = None
+            while self.node_id is None:
+                self.enable_hub_logging = enable_hub_logging
+                self.hub_client = init_hub_client(client_id,
+                                                  client_secret,
+                                                  hub_url_core,
+                                                  hub_auth,
+                                                  http_proxy,
+                                                  https_proxy)
+                self.node_id = get_node_id_by_client(self.hub_client, client_id) if self.hub_client else None
+
+                if (max_attempts is not None) and (current_attempt >= max_attempts):
+                    break
+                else:
+                    current_attempt += 1
+                    if current_attempt % 60 == 59:
+                        logger.warning(f"Unable to connect to Hub, attempt {current_attempt}"
+                                       f"{'/' + str(max_attempts) if max_attempts is not None else ''}.")
+                    time.sleep(1)

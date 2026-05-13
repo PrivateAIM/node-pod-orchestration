@@ -180,33 +180,57 @@ class TestAnalysisStop:
         )
 
     def test_stop_sets_status_to_stopped(self, started_analysis, mock_database):
-        with patch("src.resources.analysis.entity.delete_deployment"):
+        with (
+            patch("src.resources.analysis.entity.delete_deployment"),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.delete_subscription"),
+        ):
             started_analysis.stop(database=mock_database)
         assert started_analysis.status == AnalysisStatus.STOPPED.value
 
     def test_stop_with_custom_status(self, started_analysis, mock_database):
-        with patch("src.resources.analysis.entity.delete_deployment"):
+        with (
+            patch("src.resources.analysis.entity.delete_deployment"),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.delete_subscription"),
+        ):
             started_analysis.stop(database=mock_database, status=AnalysisStatus.FAILED.value)
         assert started_analysis.status == AnalysisStatus.FAILED.value
 
     def test_stop_sets_log_when_provided(self, started_analysis, mock_database):
-        with patch("src.resources.analysis.entity.delete_deployment"):
+        with (
+            patch("src.resources.analysis.entity.delete_deployment"),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.delete_subscription"),
+        ):
             started_analysis.stop(database=mock_database, log="something went wrong")
         assert started_analysis.log == "something went wrong"
 
     def test_stop_preserves_existing_log_when_none_provided(self, started_analysis, mock_database):
         started_analysis.log = "original log"
-        with patch("src.resources.analysis.entity.delete_deployment"):
+        with (
+            patch("src.resources.analysis.entity.delete_deployment"),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.delete_subscription"),
+        ):
             started_analysis.stop(database=mock_database)
         assert started_analysis.log == "original log"
 
     def test_stop_calls_delete_deployment(self, started_analysis, mock_database):
-        with patch("src.resources.analysis.entity.delete_deployment") as mock_del:
+        with (
+            patch("src.resources.analysis.entity.delete_deployment") as mock_del,
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.delete_subscription"),
+        ):
             started_analysis.stop(database=mock_database)
         mock_del.assert_called_once_with("analysis-test-analysis-0", namespace="default")
 
     def test_stop_updates_database_deployment_status(self, started_analysis, mock_database):
-        with patch("src.resources.analysis.entity.delete_deployment"):
+        with (
+            patch("src.resources.analysis.entity.delete_deployment"),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.delete_subscription"),
+        ):
             started_analysis.stop(database=mock_database)
         calls = mock_database.update_deployment.call_args_list
         assert any(
@@ -215,7 +239,11 @@ class TestAnalysisStop:
         )
 
     def test_stop_updates_database_deployment_log(self, started_analysis, mock_database):
-        with patch("src.resources.analysis.entity.delete_deployment"):
+        with (
+            patch("src.resources.analysis.entity.delete_deployment"),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.delete_subscription"),
+        ):
             started_analysis.stop(database=mock_database, log="bye")
         calls = mock_database.update_deployment.call_args_list
         assert any(

@@ -8,6 +8,7 @@ from src.utils.token import create_analysis_tokens
 from src.resources.database.db_models import AnalysisDB
 from src.resources.database.entity import Database
 from src.status.constants import AnalysisStatus
+from src.utils.mb_client import delete_subscription
 
 
 class Analysis(BaseModel):
@@ -55,15 +56,10 @@ class Analysis(BaseModel):
         self.analysis_config['PROJECT_ID'] = self.project_id
         self.analysis_config['DEPLOYMENT_NAME'] = self.deployment_name
         self.namespace = namespace
-        self.pod_ids = create_analysis_deployment(name=self.deployment_name,
-                                                  image=self.image_url,
-                                                  env=self.analysis_config,
-                                                  namespace=namespace)
-
         database.create_analysis(analysis_id=self.analysis_id,
                                  deployment_name=self.deployment_name,
                                  project_id=self.project_id,
-                                 pod_ids=self.pod_ids,
+                                 pod_ids=None,
                                  status=self.status,
                                  log=self.log,
                                  registry_url=self.registry_url,
@@ -74,6 +70,12 @@ class Analysis(BaseModel):
                                  kong_token=self.kong_token,
                                  restart_counter=self.restart_counter,
                                  progress=self.progress)
+        self.pod_ids = create_analysis_deployment(name=self.deployment_name,
+                                                  image=self.image_url,
+                                                  env=self.analysis_config,
+                                                  namespace=namespace)
+
+        database.update_deployment(self.deployment_name, pod_ids=json.dumps(self.pod_ids))
 
     def stop(self,
              database: Database,
@@ -94,6 +96,9 @@ class Analysis(BaseModel):
         # Update the database
         database.update_deployment(self.deployment_name, status=self.status)
         database.update_deployment(self.deployment_name, log=self.log)
+        # end message-broker subscription
+        self.tokens = create_analysis_tokens(kong_token=self.kong_token, analysis_id=self.analysis_id)
+        delete_subscription(self.analysis_id, self.tokens['KEYCLOAK_TOKEN'])
 
 
 def read_db_analysis(analysis: AnalysisDB) -> Analysis:
