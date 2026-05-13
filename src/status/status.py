@@ -87,7 +87,6 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                 if database.analysis_is_running(analysis_id)]
             logger.action(f"Checking for running analyzes...{running_analyzes}")
             if running_analyzes:
-                hub_client_issues = 0
                 for analysis_id in running_analyzes:
                     logger.status_loop(f"Current analysis id: {analysis_id}")
                     # Get node analysis id
