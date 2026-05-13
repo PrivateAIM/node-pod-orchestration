@@ -392,16 +392,16 @@ def clean_up_the_rest(database: Database,
         logger.warning(f"No Hub client found, skipping hub validation for zombie deletion.")
 
     result_str = ""
-    for res, (selector_args, max_r_split) in {'deployment': (["component=flame-analysis", "component=flame-analysis-nginx"], 1),
-                                              'pod': (["component=flame-analysis", "component=flame-analysis-nginx"], 2),
-                                              'service': (["component=flame-analysis", "component=flame-analysis-nginx"], 1),
-                                              'networkpolicy': (["component=flame-nginx-to-analysis-policy"], 2),
-                                              'configmap': (["component=flame-nginx-analysis-config-map"], 2)}.items():
+    for res, selector_args in {'deployment': ["component=flame-analysis", "component=flame-analysis-nginx"],
+                                              'pod': ["component=flame-analysis", "component=flame-analysis-nginx"],
+                                              'service': ["component=flame-analysis", "component=flame-analysis-nginx"],
+                                              'networkpolicy': ["component=flame-nginx-to-analysis-policy"],
+                                              'configmap': ["component=flame-nginx-analysis-config-map"]}.items():
         for selector_arg in selector_args:
             resources = find_k8s_resources(res, 'label', selector_arg, namespace=namespace)
             zombie_resources = [r for r in resources
-                                if (r is not None) and (resource_name_to_analysis(r, max_r_split) not in known_analysis_ids)]
-            logger.info(f"Identified zombie {res}s: { {r: (resource_name_to_analysis(r, max_r_split), resource_name_to_analysis(r, max_r_split) not in known_analysis_ids) for r in resources if r is not None} }")
+                                if (r is not None) and (resource_name_to_analysis(r) not in known_analysis_ids)]
+            logger.info(f"Identified zombie {res}s: { {r: (resource_name_to_analysis(r), resource_name_to_analysis(r) not in known_analysis_ids) for r in resources if r is not None} }")
             for z in zombie_resources:
                 logger.info(f"Deleting zombie {res} '{z}' with selector '{selector_arg}' in namespace '{namespace}' ")
                 #delete_k8s_resource(z, res, namespace=namespace)
