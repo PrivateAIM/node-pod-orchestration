@@ -391,10 +391,10 @@ def clean_up_the_rest(database: Database,
 
     result_str = ""
     for res, selector_args in {'deployment': ["component=flame-analysis", "component=flame-analysis-nginx"],
-                                              'pod': ["component=flame-analysis", "component=flame-analysis-nginx"],
-                                              'service': ["component=flame-analysis", "component=flame-analysis-nginx"],
-                                              'networkpolicy': ["component=flame-nginx-to-analysis-policy"],
-                                              'configmap': ["component=flame-nginx-analysis-config-map"]}.items():
+                               'pod': ["component=flame-analysis", "component=flame-analysis-nginx"],
+                               'service': ["component=flame-analysis", "component=flame-analysis-nginx"],
+                               'networkpolicy': ["component=flame-nginx-to-analysis-policy"],
+                               'configmap': ["component=flame-nginx-analysis-config-map"]}.items():
         for selector_arg in selector_args:
             resources = find_k8s_resources(res, 'label', selector_arg, namespace=namespace)
             zombie_resources = [r for r in resources
