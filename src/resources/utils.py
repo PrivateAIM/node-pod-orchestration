@@ -401,7 +401,7 @@ def clean_up_the_rest(database: Database,
             resources = find_k8s_resources(res, 'label', selector_arg, namespace=namespace)
             zombie_resources = [r for r in resources
                                 if (r is not None) and (resource_name_to_analysis(r, max_r_split) not in known_analysis_ids)]
-            logger.debug(f"Identified zombie {res}s: { {r: (resource_name_to_analysis(r, max_r_split), resource_name_to_analysis(r, max_r_split) not in known_analysis_ids) for r in resources} }")
+            logger.debug(f"Identified zombie {res}s: { {r: (resource_name_to_analysis(r, max_r_split), resource_name_to_analysis(r, max_r_split) not in known_analysis_ids) for r in resources if r is not None} }")
             for z in zombie_resources:
                 logger.debug(f"Deleting zombie {res} '{z}' with selector '{selector_arg}' in namespace '{namespace}' ")
                 #delete_k8s_resource(z, res, namespace=namespace)
