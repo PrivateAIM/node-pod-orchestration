@@ -18,6 +18,8 @@ PORTS = {'nginx': [80],
          'analysis': [8000],
          'service': [80]}
 
+_IP_WAIT_TIMEOUT = 300  # seconds to wait for a pod IP before giving up
+
 
 def create_harbor_secret(host_address: str,
                          user: str,
@@ -141,30 +143,10 @@ def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
     logger.action(f"Deleting deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     app_client = client.AppsV1Api()
     for name in [deployment_name, f'nginx-{deployment_name}']:
-        try:
-            app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
-            _delete_service(name, namespace)
-        except client.exceptions.ApiException as e:
-            if e.reason == 'Not Found':
-                logger.warning(f"Could not find {name} for deletion")
-            else:
-                logger.error(f"Unknown error when attempting to delete {name} (reason={e.reason})")
-    network_client = client.NetworkingV1Api()
-    try:
-        network_client.delete_namespaced_network_policy(name=f'nginx-to-{deployment_name}-policy', namespace=namespace)
-    except client.exceptions.ApiException as e:
-        if e.reason == 'Not Found':
-            logger.error(f"Could not find nginx-to-{deployment_name}-policy for deletion")
-        else:
-            logger.error(f"Unknown error when attempting to delete nginx-to-{deployment_name}-policy (reason={e.reason})")
-    core_client = client.CoreV1Api()
-    try:
-        core_client.delete_namespaced_config_map(name=f"nginx-{deployment_name}-config", namespace=namespace)
-    except client.exceptions.ApiException as e:
-        if e.reason == 'Not Found':
-            logger.error(f"Could not find {deployment_name}-config for deletion")
-        else:
-            logger.error(f"Unknown error when attempting to delete {deployment_name}-config (reason={e.reason})")
+        _delete_k8s_deployment(app_client, name, namespace)
+        _delete_service(name, namespace)
+    _delete_network_policy(f'nginx-to-{deployment_name}-policy', namespace)
+    _delete_config_map(f'nginx-{deployment_name}-config', namespace)
 
 
 def get_analysis_logs(deployment_names: dict[str, str],
@@ -373,7 +355,10 @@ def _create_nginx_config_map(analysis_name: str,
                                                  'component=flame-message-broker',
                                                  namespace=namespace)[0]
     message_broker_pod = None
+    _mb_wait_start = time.time()
     while message_broker_pod is None:
+        if time.time() - _mb_wait_start > _IP_WAIT_TIMEOUT:
+            raise TimeoutError(f"Timed out waiting for message broker pod IP (>{_IP_WAIT_TIMEOUT}s)")
         message_broker_pod = core_client.read_namespaced_pod(name=message_broker_pod_name,
                                                              namespace=namespace)
         if message_broker_pod is not None:
@@ -392,7 +377,11 @@ def _create_nginx_config_map(analysis_name: str,
                                                 'component=flame-po',
                                                 namespace=namespace)[0]
     pod_orchestration_pod = None
+    _po_wait_start = time.time()
     while pod_orchestration_pod is None:
+        if time.time() - _po_wait_start > _IP_WAIT_TIMEOUT:
+            raise TimeoutError(f"Timed out waiting for pod orchestration pod IP (>{_IP_WAIT_TIMEOUT}s)")
+
         try:
             pod_orchestration_pod = core_client.read_namespaced_pod(name=pod_orchestration_name,
                                                                     namespace=namespace)
@@ -404,7 +393,11 @@ def _create_nginx_config_map(analysis_name: str,
 
     # await and get analysis pod ip
     analysis_ip = None
+    _analysis_wait_start = time.time()
     while analysis_ip is None:
+        if time.time() - _analysis_wait_start > _IP_WAIT_TIMEOUT:
+            raise TimeoutError(f"Timed out waiting for analysis pod IP for {analysis_name} (>{_IP_WAIT_TIMEOUT}s)")
+
         pod_list_object = core_client.list_namespaced_pod(label_selector=f"app={analysis_name}",
                                                           watch=False,
                                                           namespace=namespace)
@@ -624,6 +617,18 @@ def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespa
     network_client.create_namespaced_network_policy(namespace=namespace, body=network_body)
 
 
+def _delete_k8s_deployment(app_client: client.AppsV1Api, name: str, namespace: str) -> None:
+    try:
+        app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
+    except client.exceptions.ApiException as e:
+        if e.reason == 'Not Found':
+            logger.warning(f"Could not find deployment {name} for deletion")
+        else:
+            logger.error(f"Unknown error when attempting to delete deployment {name} (reason={e.reason})")
+    except Exception as e:
+        logger.error(f"Unexpected error when attempting to delete deployment {name}: {e}")
+
+
 def _delete_service(name: str, namespace: str = 'default') -> None:
     """Delete a Kubernetes service by name.
 
@@ -632,7 +637,41 @@ def _delete_service(name: str, namespace: str = 'default') -> None:
         namespace: Namespace the service lives in.
     """
     core_client = client.CoreV1Api()
-    core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace)
+    try:
+        core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace)
+    except client.exceptions.ApiException as e:
+        if e.reason == 'Not Found':
+            logger.warning(f"Could not find service {name} for deletion")
+        else:
+            logger.error(f"Unknown error when attempting to delete service {name} (reason={e.reason})")
+    except Exception as e:
+        logger.error(f"Unexpected error when attempting to delete service {name}: {e}")
+
+
+def _delete_network_policy(name: str, namespace: str) -> None:
+    network_client = client.NetworkingV1Api()
+    try:
+        network_client.delete_namespaced_network_policy(name=name, namespace=namespace)
+    except client.exceptions.ApiException as e:
+        if e.reason == 'Not Found':
+            logger.warning(f"Could not find network policy {name} for deletion")
+        else:
+            logger.error(f"Unknown error when attempting to delete network policy {name} (reason={e.reason})")
+    except Exception as e:
+        logger.error(f"Unexpected error when attempting to delete network policy {name}: {e}")
+
+
+def _delete_config_map(name: str, namespace: str) -> None:
+    core_client = client.CoreV1Api()
+    try:
+        core_client.delete_namespaced_config_map(name=name, namespace=namespace)
+    except client.exceptions.ApiException as e:
+        if e.reason == 'Not Found':
+            logger.warning(f"Could not find config map {name} for deletion")
+        else:
+            logger.error(f"Unknown error when attempting to delete config map {name} (reason={e.reason})")
+    except Exception as e:
+        logger.error(f"Unexpected error when attempting to delete config map {name}: {e}")
 
 
 def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = 'default') -> list[str]:
