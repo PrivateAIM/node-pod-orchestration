@@ -18,6 +18,8 @@ PORTS = {'nginx': [80],
          'analysis': [8000],
          'service': [80]}
 
+_IP_WAIT_TIMEOUT = 300  # seconds to wait for a pod IP before giving up
+
 
 def create_harbor_secret(host_address: str,
                          user: str,
@@ -353,7 +355,10 @@ def _create_nginx_config_map(analysis_name: str,
                                                  'component=flame-message-broker',
                                                  namespace=namespace)[0]
     message_broker_pod = None
+    _mb_wait_start = time.time()
     while message_broker_pod is None:
+        if time.time() - _mb_wait_start > _IP_WAIT_TIMEOUT:
+            raise TimeoutError(f"Timed out waiting for message broker pod IP (>{_IP_WAIT_TIMEOUT}s)")
         message_broker_pod = core_client.read_namespaced_pod(name=message_broker_pod_name,
                                                              namespace=namespace)
         if message_broker_pod is not None:
@@ -372,7 +377,11 @@ def _create_nginx_config_map(analysis_name: str,
                                                 'component=flame-po',
                                                 namespace=namespace)[0]
     pod_orchestration_pod = None
+    _po_wait_start = time.time()
     while pod_orchestration_pod is None:
+        if time.time() - _po_wait_start > _IP_WAIT_TIMEOUT:
+            raise TimeoutError(f"Timed out waiting for pod orchestration pod IP (>{_IP_WAIT_TIMEOUT}s)")
+
         try:
             pod_orchestration_pod = core_client.read_namespaced_pod(name=pod_orchestration_name,
                                                                     namespace=namespace)
@@ -384,7 +393,11 @@ def _create_nginx_config_map(analysis_name: str,
 
     # await and get analysis pod ip
     analysis_ip = None
+    _analysis_wait_start = time.time()
     while analysis_ip is None:
+        if time.time() - _analysis_wait_start > _IP_WAIT_TIMEOUT:
+            raise TimeoutError(f"Timed out waiting for analysis pod IP for {analysis_name} (>{_IP_WAIT_TIMEOUT}s)")
+
         pod_list_object = core_client.list_namespaced_pod(label_selector=f"app={analysis_name}",
                                                           watch=False,
                                                           namespace=namespace)

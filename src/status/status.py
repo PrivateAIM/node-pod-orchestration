@@ -14,7 +14,7 @@ from src.resources.utils import (unstuck_analysis_deployments,
                                  delete_analysis,
                                  stream_logs,
                                  clean_up_the_rest)
-from src.status.constants import AnalysisStatus, _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
+from src.status.constants import AnalysisStatus, _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT, _STARTING_TIMEOUT
 from src.utils.hub_client import (init_hub_client,
                                   get_node_id_by_client,
                                   get_node_analysis_id,
@@ -210,16 +210,25 @@ def _get_analysis_status(analysis_id: str, database: Database) -> Optional[dict[
     analysis = database.get_latest_deployment(analysis_id)
     if analysis is not None:
         db_status = analysis.status
+        if db_status == AnalysisStatus.STARTING.value:
+            elapsed = time.time() - (analysis.time_created or 0)
+            if elapsed < _STARTING_TIMEOUT:  # 360s / 6min
+                int_status = AnalysisStatus.STARTING.value
+            else:
+                # Safety net: creation took too long treat as STARTED+FAILED to trigger unstuck
+                logger.warning(f"Analysis {analysis_id} stuck in STARTING for {elapsed:.0f}s — triggering unstuck")
+                db_status = AnalysisStatus.STARTED.value
+                int_status = AnalysisStatus.FAILED.value
         # Make the Finished status final, the internal status is not checked anymore,
         # because the analysis will already be deleted
-        if db_status == AnalysisStatus.EXECUTED.value:
+        elif db_status == AnalysisStatus.EXECUTED.value:
             int_status = AnalysisStatus.EXECUTED.value
         else:
             int_status = _get_internal_deployment_status(analysis.deployment_name, analysis_id)
-        status_action = _decide_status_action(analysis.status, int_status)
-        logger.status_loop(f"Calculating action: db_status={analysis.status}, int_status={int_status} -> status_action={status_action}")
+        status_action = _decide_status_action(db_status, int_status)
+        logger.status_loop(f"Calculating action: db_status={db_status}, int_status={int_status} -> status_action={status_action}")
         return {'analysis_id': analysis_id,
-                'db_status': analysis.status,
+                'db_status': db_status,
                 'int_status': int_status,
                 'status_action': status_action}
     else:

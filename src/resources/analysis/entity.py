@@ -48,7 +48,6 @@ class Analysis(BaseModel):
             database: Database wrapper used to persist the new deployment.
             namespace: Namespace the Kubernetes resources are created in.
         """
-        self.status = AnalysisStatus.STARTED.value
         self.deployment_name = "analysis-" + self.analysis_id + "-" + str(self.restart_counter)
         self.tokens = create_analysis_tokens(kong_token=self.kong_token, analysis_id=self.analysis_id)
         self.analysis_config = self.tokens
@@ -60,7 +59,7 @@ class Analysis(BaseModel):
                                  deployment_name=self.deployment_name,
                                  project_id=self.project_id,
                                  pod_ids=None,
-                                 status=self.status,
+                                 status=AnalysisStatus.STARTING.value,
                                  log=self.log,
                                  registry_url=self.registry_url,
                                  image_url=self.image_url,
@@ -70,12 +69,18 @@ class Analysis(BaseModel):
                                  kong_token=self.kong_token,
                                  restart_counter=self.restart_counter,
                                  progress=self.progress)
-        self.pod_ids = create_analysis_deployment(name=self.deployment_name,
-                                                  image=self.image_url,
-                                                  env=self.analysis_config,
-                                                  namespace=namespace)
+        try:
+            self.pod_ids = create_analysis_deployment(name=self.deployment_name,
+                                                      image=self.image_url,
+                                                      env=self.analysis_config,
+                                                      namespace=namespace)
+        except Exception:
+            database.update_deployment_status(self.deployment_name, AnalysisStatus.FAILED.value)
+            raise
 
+        self.status = AnalysisStatus.STARTED.value
         database.update_deployment(self.deployment_name, pod_ids=json.dumps(self.pod_ids))
+        database.update_deployment_status(self.deployment_name, self.status)
 
     def stop(self,
              database: Database,
