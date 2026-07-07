@@ -389,7 +389,7 @@ def _stream_stuck_logs(analysis: AnalysisDB,
     if is_slow:
         deployment_name = analysis.deployment_name
         # Retrieve status of latest pod
-        pod_status_dict = get_pod_status(deployment_name)
+        pod_status_dict = get_pod_status(deployment_name, get_current_namespace())
         if pod_status_dict is not None:
             _, pod_status_dict = list(pod_status_dict.items())[-1]
             ready, reason, message = pod_status_dict['ready'], pod_status_dict['reason'], pod_status_dict['message']

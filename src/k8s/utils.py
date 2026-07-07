@@ -1,5 +1,6 @@
 import time
-from typing import Literal, Optional, Union
+from functools import lru_cache
+from typing import Literal, Optional
 
 from kubernetes import config, client
 
@@ -14,6 +15,7 @@ def load_cluster_config():
     config.load_incluster_config()
 
 
+@lru_cache(maxsize=1)
 def get_current_namespace() -> str:
     """Return the namespace this pod is running in.
 
@@ -95,7 +97,7 @@ def find_k8s_resources(resource_type: str,
     return resource_names
 
 
-def delete_k8s_resource(name: str, resource_type: str, namespace: str = 'default') -> None:
+def delete_k8s_resource(name: str, resource_type: str, namespace: Optional[str] = None) -> None:
     """Delete a Kubernetes resource by name and type.
 
     ``Not Found`` errors are swallowed silently; other API errors are logged.
@@ -109,6 +111,7 @@ def delete_k8s_resource(name: str, resource_type: str, namespace: str = 'default
     Raises:
         ValueError: If ``resource_type`` is not supported.
     """
+    namespace = namespace or get_current_namespace()
     logger.action(f"Deleting resource: {name} of type {resource_type} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     if resource_type == 'deployment':
         try:

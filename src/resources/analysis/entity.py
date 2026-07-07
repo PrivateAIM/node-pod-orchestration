@@ -9,6 +9,7 @@ from src.resources.database.db_models import AnalysisDB
 from src.resources.database.entity import Database
 from src.status.constants import AnalysisStatus
 from src.utils.mb_client import delete_subscription
+from src.k8s.utils import get_current_namespace
 
 
 class Analysis(BaseModel):
@@ -37,7 +38,7 @@ class Analysis(BaseModel):
     log: Optional[str] = None
     pod_ids: Optional[list[str]] = None
 
-    def start(self, database: Database, namespace: str = 'default') -> None:
+    def start(self, database: Database, namespace: Optional[str] = None) -> None:
         """Deploy the analysis on Kubernetes and persist it in the database.
 
         Generates the deployment name, mints the Kong and Keycloak tokens,
@@ -55,7 +56,7 @@ class Analysis(BaseModel):
         self.analysis_config['ANALYSIS_ID'] = self.analysis_id
         self.analysis_config['PROJECT_ID'] = self.project_id
         self.analysis_config['DEPLOYMENT_NAME'] = self.deployment_name
-        self.namespace = namespace
+        self.namespace = namespace or get_current_namespace()
         database.create_analysis(analysis_id=self.analysis_id,
                                  deployment_name=self.deployment_name,
                                  project_id=self.project_id,
@@ -98,7 +99,7 @@ class Analysis(BaseModel):
         database.update_deployment(self.deployment_name, log=self.log)
         # end message-broker subscription
         self.tokens = create_analysis_tokens(kong_token=self.kong_token, analysis_id=self.analysis_id)
-        delete_subscription(self.analysis_id, self.tokens['KEYCLOAK_TOKEN'])
+        delete_subscription(self.analysis_id, self.tokens['KEYCLOAK_TOKEN'], namespace=self.namespace)
 
 
 def read_db_analysis(analysis: AnalysisDB) -> Analysis:

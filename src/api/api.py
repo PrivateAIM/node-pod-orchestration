@@ -10,6 +10,7 @@ from src.utils.hub_client import init_hub_client, get_node_id_by_client
 from src.utils.other import extract_hub_envs
 from src.api.oauth import valid_access_token
 from src.resources.database.entity import Database
+from src.k8s.utils import get_current_namespace
 from src.resources.analysis.entity import CreateAnalysis
 from src.resources.log.entity import CreateLogEntity, AnalysisStoppedLog
 from src.resources.utils import (create_analysis,
@@ -42,7 +43,7 @@ class PodOrchestrationAPI:
         namespace: Kubernetes namespace the API operates within.
     """
 
-    def __init__(self, database: Database, namespace: str = 'default'):
+    def __init__(self, database: Database, namespace: Optional[str] = None):
         """Build the FastAPI app, register routes, and start the uvicorn server.
 
         Args:
@@ -56,7 +57,7 @@ class PodOrchestrationAPI:
         self.enable_hub_logging = None
         self._set_node_id_and_hub_client(max_attempts=100)
 
-        self.namespace = namespace
+        self.namespace = namespace or get_current_namespace()
         app = FastAPI(title="FLAME PO",
                       docs_url="/api/docs",
                       redoc_url="/api/redoc",

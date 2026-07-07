@@ -47,6 +47,13 @@ class TestLoadClusterConfig:
 # ─── get_current_namespace ───────────────────────────────────────────────────
 
 class TestGetCurrentNamespace:
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self):
+        """Reset the lru_cache so each test reads a fresh (mocked) namespace file."""
+        get_current_namespace.cache_clear()
+        yield
+        get_current_namespace.cache_clear()
+
     def test_reads_namespace_from_file(self):
         with patch("builtins.open", mock_open(read_data="flame-namespace\n")):
             result = get_current_namespace()

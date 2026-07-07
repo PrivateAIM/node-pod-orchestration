@@ -15,8 +15,7 @@ from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
 from src.utils.hub_client import (init_hub_client_and_update_hub_status,
                                   update_hub_status,
-                                  get_node_analysis_id,
-                                  get_analysis_node_statuses)
+                                  get_node_analysis_id)
 from src.utils.other import resource_name_to_analysis
 from src.utils.po_logging import get_logger
 from src.utils.other import is_uuid
@@ -144,7 +143,7 @@ def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[st
             if deployment.status in [AnalysisStatus.EXECUTING.value]:
                 deployment_names[analysis_id] = read_db_analysis(deployment).deployment_name
 
-    return get_analysis_logs(deployment_names, database=database)
+    return get_analysis_logs(deployment_names, database=database, namespace=get_current_namespace())
 
 
 def get_status_and_progress(analysis_id_str: str, database: Database) -> dict[str, dict[str, str]]:
@@ -221,7 +220,7 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
 
     for analysis_id, deployment in deployments.items():
         # save logs as string to database (will be read as dict in retrieve_history)
-        log = str(get_analysis_logs({analysis_id: deployment.deployment_name}, database=database))
+        log = str(get_analysis_logs({analysis_id: deployment.deployment_name}, database=database, namespace=get_current_namespace()))
         if deployment.status in [AnalysisStatus.FAILED.value,
                                  AnalysisStatus.EXECUTED.value,
                                  AnalysisStatus.STARTED.value]:

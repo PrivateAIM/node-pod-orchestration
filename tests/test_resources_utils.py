@@ -198,7 +198,7 @@ class TestRetrieveLogs:
         retrieve_logs(_ANALYSIS_ID, mock_database)
 
         mock_get_logs.assert_called_once_with(
-            {_ANALYSIS_ID: "analysis-analysis_id-0"}, database=mock_database
+            {_ANALYSIS_ID: "analysis-analysis_id-0"}, database=mock_database, namespace="default"
         )
 
     @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
@@ -211,7 +211,7 @@ class TestRetrieveLogs:
 
         retrieve_logs(_ANALYSIS_ID, mock_database)
 
-        mock_get_logs.assert_called_once_with({}, database=mock_database)
+        mock_get_logs.assert_called_once_with({}, database=mock_database, namespace="default")
 
     @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
     def test_all_analyses(self, mock_get_logs, mock_database, sample_analysis_db):

@@ -8,7 +8,7 @@ import string
 from kubernetes import client
 
 from src.resources.database.entity import Database
-from src.k8s.utils import find_k8s_resources
+from src.k8s.utils import find_k8s_resources, get_current_namespace
 from src.utils.po_logging import get_logger
 
 
@@ -23,7 +23,7 @@ def create_harbor_secret(host_address: str,
                          user: str,
                          password: str,
                          name: str = 'flame-harbor-credentials',
-                         namespace: str = 'default') -> None:
+                         namespace: Optional[str] = None) -> None:
     """Create (or recreate) the dockerconfigjson secret used to pull analysis images.
 
     If a secret with the same name already exists it is deleted and recreated
@@ -40,6 +40,7 @@ def create_harbor_secret(host_address: str,
         Exception: If the conflict cannot be resolved or an unexpected API
             error occurs.
     """
+    namespace = namespace or get_current_namespace()
     core_client = client.CoreV1Api()
     secret_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
     secret = client.V1Secret(metadata=secret_metadata,
@@ -73,7 +74,7 @@ def create_harbor_secret(host_address: str,
 def create_analysis_deployment(name: str,
                                image: str,
                                env: Optional[dict[str, str]] = None,
-                               namespace: str = 'default') -> list[str]:
+                               namespace: Optional[str] = None) -> list[str]:
     """Deploy an analysis pod along with its nginx sidecar, service, and network policy.
 
     Creates the analysis ``Deployment`` using the Harbor pull secret, exposes
@@ -90,6 +91,7 @@ def create_analysis_deployment(name: str,
     Returns:
         List of pod names that belong to the new analysis deployment.
     """
+    namespace = namespace or get_current_namespace()
     app_client = client.AppsV1Api()
     containers = []
 
@@ -124,10 +126,10 @@ def create_analysis_deployment(name: str,
 
     nginx_name, _ = _create_analysis_nginx_deployment(name, analysis_service_name, env, namespace)
 
-    return _get_pods(name)
+    return _get_pods(name, namespace)
 
 
-def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
+def delete_deployment(deployment_name: str, namespace: Optional[str] = None) -> None:
     """Tear down an analysis and its companion nginx resources.
 
     Deletes both the analysis and ``nginx-{name}`` deployments with their
@@ -138,6 +140,7 @@ def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
         deployment_name: Name of the analysis deployment to remove.
         namespace: Namespace the resources live in.
     """
+    namespace = namespace or get_current_namespace()
     logger.action(f"Deleting deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     app_client = client.AppsV1Api()
     for name in [deployment_name, f'nginx-{deployment_name}']:
@@ -169,7 +172,7 @@ def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
 
 def get_analysis_logs(deployment_names: dict[str, str],
                       database: Database,
-                      namespace: str = 'default') -> dict[str, dict[str, list[str]]]:
+                      namespace: Optional[str] = None) -> dict[str, dict[str, list[str]]]:
     """Collect pod logs for the analysis and nginx deployments.
 
     Args:
@@ -183,6 +186,7 @@ def get_analysis_logs(deployment_names: dict[str, str],
         Nested mapping ``{'analysis': {analysis_id: [log, ...]},
         'nginx': {analysis_id: [log, ...]}}``.
     """
+    namespace = namespace or get_current_namespace()
     return {'analysis': {analysis_id: _get_logs(name=deployment_name,
                                                 pod_ids=database.get_deployment_pod_ids(deployment_name),
                                                 namespace=namespace)
@@ -193,7 +197,7 @@ def get_analysis_logs(deployment_names: dict[str, str],
             }
 
 
-def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional[dict[str, dict[str, str]]]:
+def get_pod_status(deployment_name: str, namespace: Optional[str] = None) -> Optional[dict[str, dict[str, str]]]:
     """Return readiness and (if not ready) failure details for each pod in a deployment.
 
     Args:
@@ -204,6 +208,7 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
         Mapping ``{pod_name: {'ready': bool, 'reason': str, 'message': str}}``,
         or ``None`` when no pods or no container statuses are available.
     """
+    namespace = namespace or get_current_namespace()
     core_client = client.CoreV1Api()
 
     # get pods in deployment
@@ -635,7 +640,7 @@ def _delete_service(name: str, namespace: str = 'default') -> None:
     core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace)
 
 
-def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = 'default') -> list[str]:
+def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: Optional[str] = None) -> list[str]:
     """Retrieve and sanitize logs for the pods matching ``app={name}``.
 
     Filters out INFO lines and routine health/webhook access lines, and strips
@@ -649,6 +654,7 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
     Returns:
         One sanitized log string per matched pod.
     """
+    namespace = namespace or get_current_namespace()
     core_client = client.CoreV1Api()
     # get pods in deployment
     pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name}')
@@ -673,7 +679,7 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
     return final_logs
 
 
-def _get_pods(name: str, namespace: str = 'default') -> list[str]:
+def _get_pods(name: str, namespace: Optional[str] = None) -> list[str]:
     """Return pod names matching the ``app={name}`` label selector.
 
     Args:
@@ -683,6 +689,7 @@ def _get_pods(name: str, namespace: str = 'default') -> list[str]:
     Returns:
         List of matching pod names.
     """
+    namespace = namespace or get_current_namespace()
     core_client = client.CoreV1Api()
     return [pod.metadata.name
             for pod in core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name}').items]
