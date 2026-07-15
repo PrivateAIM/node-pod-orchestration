@@ -7,7 +7,6 @@ import flame_hub
 
 from src.resources.log.entity import CreateStartUpErrorLog
 from src.k8s.kubernetes import PORTS, get_pod_status
-from src.k8s.utils import get_current_namespace
 from src.resources.database.entity import Database, AnalysisDB
 from src.resources.utils import (unstuck_analysis_deployments,
                                  stop_analysis,
@@ -28,7 +27,7 @@ from src.utils.po_logging import get_logger
 logger = get_logger()
 
 
-def status_loop(database: Database, status_loop_interval: int) -> None:
+def status_loop(database: Database, status_loop_interval: int, namespace: str ="default") -> None:
     """Run the blocking background loop that reconciles analyses with the Hub.
 
     On each iteration the loop:
@@ -150,7 +149,7 @@ def status_loop(database: Database, status_loop_interval: int) -> None:
                                     f"internal_status={analysis_status['int_status']} "
                                     f"to {analysis_hub_status}")
             # Clean up Zombies
-            result = clean_up_the_rest(database, hub_client, get_current_namespace())
+            result = clean_up_the_rest(database, hub_client, namespace=namespace)
             if result:
                 logger.action(f"Cleaned up orphaned resources...\n{result}")
 
@@ -389,7 +388,7 @@ def _stream_stuck_logs(analysis: AnalysisDB,
     if is_slow:
         deployment_name = analysis.deployment_name
         # Retrieve status of latest pod
-        pod_status_dict = get_pod_status(deployment_name)
+        pod_status_dict = get_pod_status(deployment_name, namespace=analysis.namespace)
         if pod_status_dict is not None:
             _, pod_status_dict = list(pod_status_dict.items())[-1]
             ready, reason, message = pod_status_dict['ready'], pod_status_dict['reason'], pod_status_dict['message']

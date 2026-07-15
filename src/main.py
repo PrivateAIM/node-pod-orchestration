@@ -29,12 +29,12 @@ def main():
 
     # init database
     database = Database()
-
-    api_thread = Thread(target=start_po_api, kwargs={'database': database, 'namespace': get_current_namespace()})
+    namespace = get_current_namespace()
+    api_thread = Thread(target=start_po_api, kwargs={'database': database, 'namespace': namespace})
     api_thread.start()
 
     # start status loop
-    status_loop(database, int(os.getenv('STATUS_LOOP_INTERVAL', '10')))
+    status_loop(database, int(os.getenv('STATUS_LOOP_INTERVAL', '10')), namespace=namespace)
 
 
 def start_po_api(database: Database, namespace: str):

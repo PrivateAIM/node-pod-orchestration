@@ -124,7 +124,7 @@ def create_analysis_deployment(name: str,
 
     nginx_name, _ = _create_analysis_nginx_deployment(name, analysis_service_name, env, namespace)
 
-    return _get_pods(name)
+    return _get_pods(name, namespace)
 
 
 def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:

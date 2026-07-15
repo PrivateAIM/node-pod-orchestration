@@ -30,6 +30,7 @@ def get_current_namespace() -> str:
     # Handle the case where the file is not found
     except FileNotFoundError:
         # Fallback to a default namespace if the file is not found
+        logger.warning(f"Namespace file not found at {namespace_file}. Falling back to 'default' namespace.")
         return 'default'
 
 

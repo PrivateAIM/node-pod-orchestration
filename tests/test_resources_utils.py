@@ -83,7 +83,7 @@ class TestCreateAnalysis:
         mock_analysis_cls.return_value = mock_inst
 
         body = CreateAnalysis(**self._valid_body_kwargs())
-        result = create_analysis(body, mock_database)
+        result = create_analysis(body, mock_database, namespace="default")
 
         mock_harbor.assert_called_once()
         mock_inst.start.assert_called_once_with(database=mock_database, namespace="default")
@@ -106,7 +106,7 @@ class TestCreateAnalysis:
         mock_analysis_cls.return_value = mock_inst
         mock_database.extract_analysis_body.return_value = self._valid_body_kwargs()
 
-        result = create_analysis(self._VALID_UUID, mock_database)
+        result = create_analysis(self._VALID_UUID, mock_database, namespace="default")
 
         mock_database.extract_analysis_body.assert_called_once_with(self._VALID_UUID)
         mock_harbor.assert_called_once()
@@ -120,7 +120,7 @@ class TestCreateAnalysis:
         mock_database.extract_analysis_body.return_value = None
 
         with patch("src.resources.utils.get_current_namespace", return_value="default"):
-            result = create_analysis("nonexistent_id", mock_database)
+            result = create_analysis("nonexistent_id", mock_database, namespace="default")
 
         assert result == {"status": "Analysis ID not found in database."}
 
