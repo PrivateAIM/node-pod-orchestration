@@ -19,7 +19,7 @@ PyJWT = "^2.10.1"
 python-dotenv = "^1.2.2"
 kong-admin-client = {git = "https://github.com/PrivateAIM/kong-admin-python-client.git"}
 flame-hub-client = "^0.2.13"
-cryptography="^46.0.7"
+cryptography=">=46.0.7,<49.0.0"
 truststore = "^0.10.4"
 
 [tool.poetry.group.dev.dependencies]
