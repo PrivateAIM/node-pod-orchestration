@@ -10,7 +10,7 @@ from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_anal
 from src.resources.log.entity import CreateLogEntity
 from src.status.constants import AnalysisStatus
 from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
-from src.k8s.utils import get_current_namespace, find_k8s_resources, delete_k8s_resource
+from src.k8s.utils import find_k8s_resources, delete_k8s_resource
 from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
 from src.utils.hub_client import (init_hub_client_and_update_hub_status,
@@ -28,7 +28,7 @@ logger = get_logger()
 _MAX_UNSTUCK_REATTEMPTS = 10
 
 
-def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dict[str, str]:
+def create_analysis(body: Union[CreateAnalysis, str], database: Database, namespace: str ="default") -> dict[str, str]:
     """Create and start a new analysis deployment.
 
     Validates the UUIDs, provisions the Harbor pull secret, constructs the
@@ -39,6 +39,7 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dic
         body: Either a :class:`CreateAnalysis` payload or an analysis id used
             to rebuild the payload from the database (restart case).
         database: Database wrapper used for persistence.
+        namespace: k8s namespace name
 
     Returns:
         Mapping ``{analysis_id: status}`` for the newly started deployment.
@@ -48,7 +49,6 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database) -> dic
     Raises:
         HTTPException: 400 if ``analysis_id`` or ``project_id`` is not a UUID.
     """
-    namespace = get_current_namespace()
 
     if isinstance(body, str):
         body = database.extract_analysis_body(body)
@@ -137,14 +137,16 @@ def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[st
     else:
         analysis_ids = [analysis_id_str]
 
+    namespace = 'default'
     deployment_names = {}
     for analysis_id in analysis_ids:
         deployment = database.get_latest_deployment(analysis_id)
         if deployment is not None:
             if deployment.status in [AnalysisStatus.EXECUTING.value]:
                 deployment_names[analysis_id] = read_db_analysis(deployment).deployment_name
-
-    return get_analysis_logs(deployment_names, database=database)
+            if namespace == 'default':
+                namespace = deployment.namespace
+    return get_analysis_logs(deployment_names, database=database, namespace=namespace)
 
 
 def get_status_and_progress(analysis_id_str: str, database: Database) -> dict[str, dict[str, str]]:
@@ -280,7 +282,7 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
         for i in range(_MAX_UNSTUCK_REATTEMPTS):
             try:
                 time.sleep(10)  # wait for k8s to update status
-                create_analysis(analysis_id, database)
+                create_analysis(analysis_id, database, deployment.namespace)
                 database.delete_old_deployments_from_db(analysis_id)
                 success = True
                 break

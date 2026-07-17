@@ -2,7 +2,7 @@
 Tests for src/resources/utils.py — business logic layer.
 
 All external dependencies are mocked:
-  - get_current_namespace / create_harbor_secret
+  - create_harbor_secret
   - Analysis class / read_db_analysis
   - get_analysis_logs
   - init_hub_client_and_update_hub_status
@@ -71,9 +71,8 @@ class TestCreateAnalysis:
     @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.Analysis")
     @patch("src.resources.utils.create_harbor_secret")
-    @patch("src.resources.utils.get_current_namespace", return_value="default")
     def test_from_create_analysis_body(
-        self, mock_ns, mock_harbor, mock_analysis_cls, mock_hub, mock_database
+        self, mock_harbor, mock_analysis_cls, mock_hub, mock_database
     ):
         from src.resources.utils import create_analysis
 
@@ -83,7 +82,7 @@ class TestCreateAnalysis:
         mock_analysis_cls.return_value = mock_inst
 
         body = CreateAnalysis(**self._valid_body_kwargs())
-        result = create_analysis(body, mock_database)
+        result = create_analysis(body, mock_database, namespace="default")
 
         mock_harbor.assert_called_once()
         mock_inst.start.assert_called_once_with(database=mock_database, namespace="default")
@@ -93,9 +92,8 @@ class TestCreateAnalysis:
     @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.Analysis")
     @patch("src.resources.utils.create_harbor_secret")
-    @patch("src.resources.utils.get_current_namespace", return_value="default")
     def test_from_string_extracts_body_and_restarts(
-        self, mock_ns, mock_harbor, mock_analysis_cls, mock_hub, mock_database
+        self, mock_harbor, mock_analysis_cls, mock_hub, mock_database
     ):
         """When body is a string, extract_analysis_body is called and the analysis is restarted."""
         from src.resources.utils import create_analysis
@@ -106,7 +104,7 @@ class TestCreateAnalysis:
         mock_analysis_cls.return_value = mock_inst
         mock_database.extract_analysis_body.return_value = self._valid_body_kwargs()
 
-        result = create_analysis(self._VALID_UUID, mock_database)
+        result = create_analysis(self._VALID_UUID, mock_database, namespace="default")
 
         mock_database.extract_analysis_body.assert_called_once_with(self._VALID_UUID)
         mock_harbor.assert_called_once()
@@ -119,8 +117,7 @@ class TestCreateAnalysis:
 
         mock_database.extract_analysis_body.return_value = None
 
-        with patch("src.resources.utils.get_current_namespace", return_value="default"):
-            result = create_analysis("nonexistent_id", mock_database)
+        result = create_analysis("nonexistent_id", mock_database, namespace="default")
 
         assert result == {"status": "Analysis ID not found in database."}
 
@@ -198,7 +195,7 @@ class TestRetrieveLogs:
         retrieve_logs(_ANALYSIS_ID, mock_database)
 
         mock_get_logs.assert_called_once_with(
-            {_ANALYSIS_ID: "analysis-analysis_id-0"}, database=mock_database
+            {_ANALYSIS_ID: "analysis-analysis_id-0"}, database=mock_database, namespace="default"
         )
 
     @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
@@ -211,7 +208,7 @@ class TestRetrieveLogs:
 
         retrieve_logs(_ANALYSIS_ID, mock_database)
 
-        mock_get_logs.assert_called_once_with({}, database=mock_database)
+        mock_get_logs.assert_called_once_with({}, database=mock_database, namespace="default")
 
     @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
     def test_all_analyses(self, mock_get_logs, mock_database, sample_analysis_db):
@@ -429,7 +426,9 @@ class TestUnstuckAnalysisDeployments:
 
         mock_stop.assert_called_once_with(_ANALYSIS_ID, mock_database)
         mock_sleep.assert_called_once_with(10)
-        mock_create.assert_called_once_with(_ANALYSIS_ID, mock_database)
+        mock_create.assert_called_once_with(
+            _ANALYSIS_ID, mock_database, mock_database.get_latest_deployment.return_value.namespace
+        )
         mock_database.delete_old_deployments_from_db.assert_called_once_with(_ANALYSIS_ID)
 
     def test_not_found_does_nothing(self, mock_database):

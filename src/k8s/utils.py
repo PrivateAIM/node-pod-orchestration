@@ -1,5 +1,5 @@
 import time
-from typing import Literal, Optional, Union
+from typing import Literal, Optional
 
 from kubernetes import config, client
 
@@ -30,6 +30,7 @@ def get_current_namespace() -> str:
     # Handle the case where the file is not found
     except FileNotFoundError:
         # Fallback to a default namespace if the file is not found
+        logger.warning(f"Namespace file not found at {namespace_file}. Falling back to 'default' namespace.")
         return 'default'
 
 
@@ -120,28 +121,28 @@ def delete_k8s_resource(name: str, resource_type: str, namespace: str = 'default
     elif resource_type == 'service':
         try:
             core_client = client.CoreV1Api()
-            core_client.delete_namespaced_service(name=name, namespace=namespace)
+            core_client.delete_namespaced_service(name=name, namespace=namespace, propagation_policy='Foreground')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
                 logger.error(f"Not Found {name} service")
     elif resource_type == 'pod':
         try:
             core_client = client.CoreV1Api()
-            core_client.delete_namespaced_pod(name=name, namespace=namespace)
+            core_client.delete_namespaced_pod(name=name, namespace=namespace, propagation_policy='Foreground')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
                 logger.error(f"Not Found {name} pod")
     elif resource_type == 'configmap':
         try:
             core_client = client.CoreV1Api()
-            core_client.delete_namespaced_config_map(name=name, namespace=namespace)
+            core_client.delete_namespaced_config_map(name=name, namespace=namespace, propagation_policy='Foreground')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
                 logger.error(f"Not Found {name} configmap")
     elif resource_type == 'networkpolicy':
         try:
             network_client = client.NetworkingV1Api()
-            network_client.delete_namespaced_network_policy(name=name, namespace=namespace)
+            network_client.delete_namespaced_network_policy(name=name, namespace=namespace, propagation_policy='Foreground')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
                 logger.error(f"Not Found {name} networkpolicy")

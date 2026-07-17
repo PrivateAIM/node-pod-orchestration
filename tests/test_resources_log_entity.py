@@ -107,10 +107,12 @@ class TestCreateStartUpErrorLog:
             analysis_id="analysis-1",
             status="stuck",
         )
-        assert "ANALYSISSTARTUPERROR" in log.log
+        # restart_num < _MAX_RESTARTS -> non-terminating, logged as a warning
+        assert "ANALYSISSTARTUPWARNING" in log.log
         assert "failed to connect" in log.log
         assert f"restart 1 of {_MAX_RESTARTS}" in log.log
-        assert log.log_type == "error"
+        assert "Terminating analysis as failed." not in log.log
+        assert log.log_type == "warn"
         assert log.analysis_id == "analysis-1"
         assert log.status == "stuck"
         assert log.progress == 0
@@ -122,8 +124,11 @@ class TestCreateStartUpErrorLog:
             analysis_id="analysis-2",
             status="stuck",
         )
+        # restart_num == _MAX_RESTARTS -> terminating, logged as an error
+        assert "ANALYSISSTARTUPERROR" in log.log
         assert "took too long during startup" in log.log
         assert f"restart 3 of {_MAX_RESTARTS}" in log.log
+        assert "Terminating analysis as failed." in log.log
         assert log.log_type == "error"
 
     def test_k8s_type_log_content_no_k8s_msg(self):
@@ -202,7 +207,7 @@ class TestCreateStartUpErrorLog:
         )
         result = log.to_log_entity()
         assert isinstance(result, LogEntity)
-        assert result.log_type == "error"
+        assert result.log_type == "warn"
 
 
 # ─── AnalysisStoppedLog ───────────────────────────────────────────────────────

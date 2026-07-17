@@ -55,10 +55,10 @@ class TestAnalysisStatusEnum:
 
 class TestConstants:
     def test_max_restarts_value(self):
-        assert _MAX_RESTARTS == 10
+        assert _MAX_RESTARTS == 3
 
     def test_internal_status_timeout_value(self):
-        assert _INTERNAL_STATUS_TIMEOUT == 10
+        assert _INTERNAL_STATUS_TIMEOUT == 60
 
     def test_max_restarts_is_int(self):
         assert isinstance(_MAX_RESTARTS, int)
