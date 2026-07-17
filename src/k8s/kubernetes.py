@@ -59,7 +59,7 @@ def create_harbor_secret(host_address: str,
         logger.warning(f"Harbor secret already exists in namespace {namespace}, attempting to resolve conflict by "
                        f"deleting and recreating the secret.")
         try:
-            core_client.delete_namespaced_secret(name=name, namespace=namespace)
+            core_client.delete_namespaced_secret(name=name, namespace=namespace, propagation_policy='Foreground')
             core_client.create_namespaced_secret(namespace=namespace, body=secret)
         except client.exceptions.ApiException as e:
             if e.reason != 'Conflict':
@@ -101,6 +101,10 @@ def create_analysis_deployment(name: str,
                                    if env is not None else [])
     containers.append(container)
 
+    net_stats_container = _build_net_stats_container(name)
+    if net_stats_container is not None:
+        containers.append(net_stats_container)
+
     labels = {'app': name, 'component': "flame-analysis"}
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace, labels=labels)
     depl_pod_metadata = client.V1ObjectMeta(labels=labels)
@@ -124,7 +128,7 @@ def create_analysis_deployment(name: str,
 
     nginx_name, _ = _create_analysis_nginx_deployment(name, analysis_service_name, env, namespace)
 
-    return _get_pods(name)
+    return _get_pods(name, namespace)
 
 
 def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
@@ -141,30 +145,10 @@ def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
     logger.action(f"Deleting deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     app_client = client.AppsV1Api()
     for name in [deployment_name, f'nginx-{deployment_name}']:
-        try:
-            app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace)
-            _delete_service(name, namespace)
-        except client.exceptions.ApiException as e:
-            if e.reason == 'Not Found':
-                logger.warning(f"Could not find {name} for deletion")
-            else:
-                logger.error(f"Unknown error when attempting to delete {name} (reason={e.reason})")
-    network_client = client.NetworkingV1Api()
-    try:
-        network_client.delete_namespaced_network_policy(name=f'nginx-to-{deployment_name}-policy', namespace=namespace)
-    except client.exceptions.ApiException as e:
-        if e.reason == 'Not Found':
-            logger.error(f"Could not find nginx-to-{deployment_name}-policy for deletion")
-        else:
-            logger.error(f"Unknown error when attempting to delete nginx-to-{deployment_name}-policy (reason={e.reason})")
-    core_client = client.CoreV1Api()
-    try:
-        core_client.delete_namespaced_config_map(name=f"nginx-{deployment_name}-config", namespace=namespace)
-    except client.exceptions.ApiException as e:
-        if e.reason == 'Not Found':
-            logger.error(f"Could not find {deployment_name}-config for deletion")
-        else:
-            logger.error(f"Unknown error when attempting to delete {deployment_name}-config (reason={e.reason})")
+        _delete_k8s_deployment(app_client, name, namespace)
+        _delete_service(name, namespace)
+    _delete_network_policy(f'nginx-to-{deployment_name}-policy', namespace)
+    _delete_config_map(f'nginx-{deployment_name}-config', namespace)
 
 
 def get_analysis_logs(deployment_names: dict[str, str],
@@ -239,6 +223,42 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
             return None
     else:
         return None
+
+
+def _build_net_stats_container(analysis_name: str) -> Optional[client.V1Container]:
+    """Build the net-stats sidecar container spec, or return None if disabled.
+
+    Controlled by the ``NET_STATS_ENABLED`` env var. Image is read from
+    ``NET_STATS_IMAGE``. Emits a single cumulative log on SIGTERM.
+    """
+    if os.getenv('NET_STATS_ENABLED', '').lower() not in ('1', 'true'):
+        return None
+
+    _NET_STATS_SCRIPT = """\
+    iface=$(grep -v -e lo -e 'Inter' -e 'face' /proc/net/dev | awk -F: '{print $1}' | tr -d ' ' | head -1)
+    line=$(grep "${iface}:" /proc/net/dev | tr -s ' ')
+    start_rx=$(echo $line | cut -d' ' -f2)
+    start_tx=$(echo $line | cut -d' ' -f10)
+
+    handle_term() {
+      line=$(grep "${iface}:" /proc/net/dev | tr -s ' ')
+      rx=$(echo $line | cut -d' ' -f2)
+      tx=$(echo $line | cut -d' ' -f10)
+      printf '{"level":"info","message":"network_stats","bytes_in":%d,"bytes_out":%d,"interface":"%s","event_name":"netstats.analysis.traffic"}\\n' $((rx - start_rx)) $((tx - start_tx)) "$iface"
+      sleep 5
+      exit 0
+    }
+    trap handle_term TERM INT
+
+    while true; do sleep 3600 & wait $!; done
+    """
+
+    return client.V1Container(
+        name=f'net-stats-{analysis_name}',
+        image=os.getenv('NET_STATS_IMAGE', 'busybox:1.37'),
+        image_pull_policy='IfNotPresent',
+        command=['/bin/sh', '-c', _NET_STATS_SCRIPT],
+    )
 
 
 def _create_analysis_nginx_deployment(analysis_name: str,
@@ -624,6 +644,18 @@ def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespa
     network_client.create_namespaced_network_policy(namespace=namespace, body=network_body)
 
 
+def _delete_k8s_deployment(app_client: client.AppsV1Api, name: str, namespace: str) -> None:
+    try:
+        app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace, propagation_policy='Foreground')
+    except client.exceptions.ApiException as e:
+        if e.reason == 'Not Found':
+            logger.warning(f"Could not find deployment {name} for deletion")
+        else:
+            logger.error(f"Unknown error when attempting to delete deployment {name} (reason={e.reason})")
+    except Exception as e:
+        logger.error(f"Unexpected error when attempting to delete deployment {name}: {e}")
+
+
 def _delete_service(name: str, namespace: str = 'default') -> None:
     """Delete a Kubernetes service by name.
 
@@ -632,7 +664,41 @@ def _delete_service(name: str, namespace: str = 'default') -> None:
         namespace: Namespace the service lives in.
     """
     core_client = client.CoreV1Api()
-    core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace)
+    try:
+        core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace, propagation_policy='Foreground')
+    except client.exceptions.ApiException as e:
+        if e.reason == 'Not Found':
+            logger.warning(f"Could not find service {name} for deletion")
+        else:
+            logger.error(f"Unknown error when attempting to delete service {name} (reason={e.reason})")
+    except Exception as e:
+        logger.error(f"Unexpected error when attempting to delete service {name}: {e}")
+
+
+def _delete_network_policy(name: str, namespace: str) -> None:
+    network_client = client.NetworkingV1Api()
+    try:
+        network_client.delete_namespaced_network_policy(name=name, namespace=namespace, propagation_policy='Foreground')
+    except client.exceptions.ApiException as e:
+        if e.reason == 'Not Found':
+            logger.warning(f"Could not find network policy {name} for deletion")
+        else:
+            logger.error(f"Unknown error when attempting to delete network policy {name} (reason={e.reason})")
+    except Exception as e:
+        logger.error(f"Unexpected error when attempting to delete network policy {name}: {e}")
+
+
+def _delete_config_map(name: str, namespace: str) -> None:
+    core_client = client.CoreV1Api()
+    try:
+        core_client.delete_namespaced_config_map(name=name, namespace=namespace, propagation_policy='Foreground')
+    except client.exceptions.ApiException as e:
+        if e.reason == 'Not Found':
+            logger.warning(f"Could not find config map {name} for deletion")
+        else:
+            logger.error(f"Unknown error when attempting to delete config map {name} (reason={e.reason})")
+    except Exception as e:
+        logger.error(f"Unexpected error when attempting to delete config map {name}: {e}")
 
 
 def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = 'default') -> list[str]:

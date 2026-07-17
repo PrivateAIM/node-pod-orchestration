@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from httpx import ConnectError, ConnectTimeout
 
-from src.status.constants import AnalysisStatus, _MAX_RESTARTS
+from src.status.constants import AnalysisStatus, _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
 from src.status.status import (
     _decide_status_action,
     _fix_stuck_status,
@@ -128,8 +128,8 @@ class TestGetInternalDeploymentStatus:
     @patch("src.status.status.time")
     @patch("src.status.status.Client")
     def test_timeout_returns_failed(self, mock_client_cls, mock_time):
-        # start_time=0, then elapsed_time=11 > _INTERNAL_STATUS_TIMEOUT=10
-        mock_time.time.side_effect = [0, 11]
+        # start_time=0, then elapsed_time exceeds _INTERNAL_STATUS_TIMEOUT
+        mock_time.time.side_effect = [0, _INTERNAL_STATUS_TIMEOUT + 1]
         mock_time.sleep = MagicMock()
         mock_client_cls.return_value.get.side_effect = ConnectError("connection refused")
 

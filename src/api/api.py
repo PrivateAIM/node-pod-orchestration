@@ -175,7 +175,7 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            return create_analysis(body, self.database)
+            return create_analysis(body, self.database, self.namespace)
         except Exception as e:
             logger.error(f"Error creating analysis: {repr(e)}")
             raise HTTPException(status_code=500, detail=f"Error creating analysis (see po logs).")

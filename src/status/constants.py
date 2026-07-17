@@ -1,10 +1,10 @@
 from enum import Enum
 
 
-_INTERNAL_STATUS_TIMEOUT = 10  # Time in seconds to wait for internal status response
+_INTERNAL_STATUS_TIMEOUT = 60  # Time in seconds to wait for internal status response
 
 
-_MAX_RESTARTS = 10  # Maximum number of restarts for a stuck analysis
+_MAX_RESTARTS = 3  # Maximum number of restarts for a stuck analysis
 
 
 class AnalysisStatus(Enum):

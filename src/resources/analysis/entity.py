@@ -98,7 +98,7 @@ class Analysis(BaseModel):
         database.update_deployment(self.deployment_name, log=self.log)
         # end message-broker subscription
         self.tokens = create_analysis_tokens(kong_token=self.kong_token, analysis_id=self.analysis_id)
-        delete_subscription(self.analysis_id, self.tokens['KEYCLOAK_TOKEN'])
+        delete_subscription(self.analysis_id, self.tokens['KEYCLOAK_TOKEN'], namespace=self.namespace)
 
 
 def read_db_analysis(analysis: AnalysisDB) -> Analysis:
