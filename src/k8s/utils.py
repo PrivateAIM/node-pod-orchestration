@@ -114,42 +114,42 @@ def delete_k8s_resource(name: str, resource_type: str, namespace: str = 'default
     if resource_type == 'deployment':
         try:
             app_client = client.AppsV1Api()
-            app_client.delete_namespaced_deployment(name=name, namespace=namespace, propagation_policy='Foreground')
+            app_client.delete_namespaced_deployment(name=name, namespace=namespace, propagation_policy='Background')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
                 logger.error(f"Not Found {name} deployment")
     elif resource_type == 'service':
         try:
             core_client = client.CoreV1Api()
-            core_client.delete_namespaced_service(name=name, namespace=namespace, propagation_policy='Foreground')
+            core_client.delete_namespaced_service(name=name, namespace=namespace, propagation_policy='Background')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
                 logger.error(f"Not Found {name} service")
     elif resource_type == 'pod':
         try:
             core_client = client.CoreV1Api()
-            core_client.delete_namespaced_pod(name=name, namespace=namespace, propagation_policy='Foreground')
+            core_client.delete_namespaced_pod(name=name, namespace=namespace, propagation_policy='Background')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
                 logger.error(f"Not Found {name} pod")
     elif resource_type == 'configmap':
         try:
             core_client = client.CoreV1Api()
-            core_client.delete_namespaced_config_map(name=name, namespace=namespace, propagation_policy='Foreground')
+            core_client.delete_namespaced_config_map(name=name, namespace=namespace, propagation_policy='Background')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
                 logger.error(f"Not Found {name} configmap")
     elif resource_type == 'networkpolicy':
         try:
             network_client = client.NetworkingV1Api()
-            network_client.delete_namespaced_network_policy(name=name, namespace=namespace, propagation_policy='Foreground')
+            network_client.delete_namespaced_network_policy(name=name, namespace=namespace, propagation_policy='Background')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
                 logger.error(f"Not Found {name} networkpolicy")
     elif resource_type == 'job':
         try:
             batch_client = client.BatchV1Api()
-            batch_client.delete_namespaced_job(name=name, namespace=namespace, propagation_policy='Foreground')
+            batch_client.delete_namespaced_job(name=name, namespace=namespace, propagation_policy='Background')
         except client.exceptions.ApiException as e:
             if e.reason != 'Not Found':
                 logger.error(f"Not Found {name} job")
