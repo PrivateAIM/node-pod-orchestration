@@ -59,7 +59,10 @@ def create_harbor_secret(host_address: str,
         logger.warning(f"Harbor secret already exists in namespace {namespace}, attempting to resolve conflict by "
                        f"deleting and recreating the secret.")
         try:
-            core_client.delete_namespaced_secret(name=name, namespace=namespace, propagation_policy='Foreground')
+            core_client.delete_namespaced_secret(name=name,
+                                                 namespace=namespace,
+                                                 grace_period_seconds=0,
+                                                 propagation_policy='Background')
             core_client.create_namespaced_secret(namespace=namespace, body=secret)
         except client.exceptions.ApiException as e:
             if e.reason != 'Conflict':
@@ -646,7 +649,10 @@ def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespa
 
 def _delete_k8s_deployment(app_client: client.AppsV1Api, name: str, namespace: str) -> None:
     try:
-        app_client.delete_namespaced_deployment(async_req=False, name=name, namespace=namespace, propagation_policy='Foreground')
+        app_client.delete_namespaced_deployment(async_req=False,
+                                                name=name,
+                                                namespace=namespace,
+                                                propagation_policy='Background')
     except client.exceptions.ApiException as e:
         if e.reason == 'Not Found':
             logger.warning(f"Could not find deployment {name} for deletion")
@@ -665,7 +671,7 @@ def _delete_service(name: str, namespace: str = 'default') -> None:
     """
     core_client = client.CoreV1Api()
     try:
-        core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace, propagation_policy='Foreground')
+        core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace, propagation_policy='Background')
     except client.exceptions.ApiException as e:
         if e.reason == 'Not Found':
             logger.warning(f"Could not find service {name} for deletion")
@@ -678,7 +684,7 @@ def _delete_service(name: str, namespace: str = 'default') -> None:
 def _delete_network_policy(name: str, namespace: str) -> None:
     network_client = client.NetworkingV1Api()
     try:
-        network_client.delete_namespaced_network_policy(name=name, namespace=namespace, propagation_policy='Foreground')
+        network_client.delete_namespaced_network_policy(name=name, namespace=namespace, propagation_policy='Background')
     except client.exceptions.ApiException as e:
         if e.reason == 'Not Found':
             logger.warning(f"Could not find network policy {name} for deletion")
@@ -691,7 +697,7 @@ def _delete_network_policy(name: str, namespace: str) -> None:
 def _delete_config_map(name: str, namespace: str) -> None:
     core_client = client.CoreV1Api()
     try:
-        core_client.delete_namespaced_config_map(name=name, namespace=namespace, propagation_policy='Foreground')
+        core_client.delete_namespaced_config_map(name=name, namespace=namespace, propagation_policy='Background')
     except client.exceptions.ApiException as e:
         if e.reason == 'Not Found':
             logger.warning(f"Could not find config map {name} for deletion")

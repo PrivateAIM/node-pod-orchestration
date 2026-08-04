@@ -200,7 +200,7 @@ class TestDeleteK8sResourceTypes:
     def test_delete_deployment(self, mock_k8s_clients):
         delete_k8s_resource("my-dep", "deployment")
         mock_k8s_clients.apps_v1.delete_namespaced_deployment.assert_called_once_with(
-            name="my-dep", namespace="default", propagation_policy="Foreground"
+            name="my-dep", namespace="default", propagation_policy="Background"
         )
 
     def test_delete_service(self, mock_k8s_clients):
@@ -230,13 +230,13 @@ class TestDeleteK8sResourceTypes:
     def test_delete_job(self, mock_k8s_clients):
         delete_k8s_resource("my-job", "job")
         mock_k8s_clients.batch_v1.delete_namespaced_job.assert_called_once_with(
-            name="my-job", namespace="default", propagation_policy="Foreground"
+            name="my-job", namespace="default", propagation_policy="Background"
         )
 
     def test_custom_namespace_forwarded(self, mock_k8s_clients):
         delete_k8s_resource("my-dep", "deployment", namespace="flame-ns")
         mock_k8s_clients.apps_v1.delete_namespaced_deployment.assert_called_once_with(
-            name="my-dep", namespace="flame-ns", propagation_policy="Foreground"
+            name="my-dep", namespace="flame-ns", propagation_policy="Background"
         )
 
     def test_unsupported_type_raises_value_error(self, mock_k8s_clients):
