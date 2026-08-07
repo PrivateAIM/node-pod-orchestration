@@ -10,7 +10,7 @@ _update_running_status, _update_finished_status, _set_analysis_hub_status.
 from unittest.mock import MagicMock, patch
 
 import pytest
-from httpx import ConnectError, ConnectTimeout
+from httpx2 import ConnectError, ConnectTimeout
 
 from src.status.constants import AnalysisStatus, _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
 from src.status.status import (

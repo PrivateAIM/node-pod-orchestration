@@ -1,4 +1,4 @@
-from httpx import Client, ConnectError, HTTPStatusError, TimeoutException, ConnectTimeout
+from httpx2 import Client, ConnectError, HTTPStatusError, TimeoutException, ConnectTimeout
 from src.k8s.utils import find_k8s_resources
 from src.utils.po_logging import get_logger
 

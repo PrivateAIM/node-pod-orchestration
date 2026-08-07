@@ -5,11 +5,11 @@ from pathlib import Path
 from functools import lru_cache
 from json import JSONDecodeError
 from typing import Optional, Union
-from httpx import (Client,
-                   HTTPTransport,
-                   HTTPStatusError,
-                   ConnectError,
-                   ConnectTimeout)
+from httpx2 import (Client,
+                    HTTPTransport,
+                    HTTPStatusError,
+                    ConnectError,
+                    ConnectTimeout)
 import truststore
 
 import flame_hub

@@ -1,7 +1,7 @@
 import time
 import os
 from typing import Optional
-from httpx import Client, HTTPStatusError, ConnectError, ConnectTimeout, TimeoutException
+from httpx2 import Client, HTTPStatusError, ConnectError, ConnectTimeout, TimeoutException
 
 import flame_hub
 

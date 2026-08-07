@@ -272,14 +272,15 @@ def api_test_client(mock_database, mock_hub_client, mock_k8s_clients):
         "preferred_username": "tester",
     }
 
-    # starlette 0.36.x / httpx 0.28.x incompatibility: starlette passes `app=` to
-    # httpx.Client, but httpx 0.28 removed that parameter. ASGITransport is async-only.
-    # Use a thin sync wrapper that drives AsyncClient via anyio.run().
+    # starlette 0.36.x / httpx2 incompatibility: starlette passes `app=` to
+    # httpx2.Client, but that parameter was removed in httpx 0.28 (which httpx2 forks).
+    # ASGITransport is async-only. Use a thin sync wrapper that drives AsyncClient
+    # via anyio.run().
     import anyio
-    import httpx
+    import httpx2
 
     class SyncASGIClient:
-        """Sync test client that drives httpx.AsyncClient with ASGITransport via anyio."""
+        """Sync test client that drives httpx2.AsyncClient with ASGITransport via anyio."""
 
         def __init__(self, asgi_app, base_url="http://testserver"):
             self.app = asgi_app
@@ -287,8 +288,8 @@ def api_test_client(mock_database, mock_hub_client, mock_k8s_clients):
 
         def _request(self, method: str, url: str, **kwargs):
             async def _do():
-                async with httpx.AsyncClient(
-                    transport=httpx.ASGITransport(app=self.app),
+                async with httpx2.AsyncClient(
+                    transport=httpx2.ASGITransport(app=self.app),
                     base_url=self._base_url,
                 ) as client:
                     return await getattr(client, method)(url, **kwargs)

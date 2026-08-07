@@ -3,7 +3,7 @@ from json import JSONDecodeError
 from unittest.mock import MagicMock, patch, call
 
 import pytest
-from httpx import HTTPStatusError, ConnectError, ConnectTimeout
+from httpx2 import HTTPStatusError, ConnectError, ConnectTimeout
 
 
 # ─── TestInitHubClientWithClient ─────────────────────────────────────────────

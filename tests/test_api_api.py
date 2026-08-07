@@ -24,15 +24,15 @@ class TestHealthEndpoint:
     def test_healthz_no_auth_required(self, api_test_client):
         """healthz route has no auth dependency — it works even without a token."""
         import anyio
-        import httpx
+        import httpx2
 
         app = api_test_client.app
         overrides_backup = dict(app.dependency_overrides)
         app.dependency_overrides.clear()
 
         async def _get():
-            async with httpx.AsyncClient(
-                transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+            async with httpx2.AsyncClient(
+                transport=httpx2.ASGITransport(app=app), base_url="http://testserver"
             ) as client:
                 return await client.get("/po/healthz")
 
@@ -48,15 +48,15 @@ class TestUnauthenticated:
     def test_unauthenticated_create_returns_4xx(self, api_test_client):
         """Without override, OAuth dependency raises 401/403."""
         import anyio
-        import httpx
+        import httpx2
 
         app = api_test_client.app
         overrides_backup = dict(app.dependency_overrides)
         app.dependency_overrides.clear()
 
         async def _post():
-            async with httpx.AsyncClient(
-                transport=httpx.ASGITransport(app=app),
+            async with httpx2.AsyncClient(
+                transport=httpx2.ASGITransport(app=app),
                 base_url="http://testserver",
                 follow_redirects=True,
             ) as client:
