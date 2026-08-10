@@ -5,11 +5,11 @@ from pathlib import Path
 from functools import lru_cache
 from json import JSONDecodeError
 from typing import Optional, Union
-from httpx import (Client,
-                   HTTPTransport,
-                   HTTPStatusError,
-                   ConnectError,
-                   ConnectTimeout)
+from httpx2 import (Client,
+                    HTTPTransport,
+                    HTTPStatusError,
+                    ConnectError,
+                    ConnectTimeout)
 import truststore
 
 import flame_hub
@@ -23,11 +23,11 @@ logger = get_logger()
 
 
 def init_hub_client(client_id: str,
-                                client_secret: str,
-                                hub_url_core: str,
-                                hub_auth: str,
-                                http_proxy: str,
-                                https_proxy: str) -> Optional[flame_hub.CoreClient]:
+                    client_secret: str,
+                    hub_url_core: str,
+                    hub_auth: str,
+                    http_proxy: str,
+                    https_proxy: str) -> Optional[flame_hub.CoreClient]:
     """Authenticate and build a :class:`flame_hub.CoreClient` talking to the FLAME Hub.
 
     Honors the ``PO_HTTP_PROXY`` / ``PO_HTTPS_PROXY`` and ``EXTRA_CA_CERTS``

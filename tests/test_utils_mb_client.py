@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from httpx import ConnectError, HTTPStatusError, ConnectTimeout
+from httpx2 import ConnectError, HTTPStatusError, ConnectTimeout
 
 
 # ─── TestDeleteSubscription ───────────────────────────────────────────────────
