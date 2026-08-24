@@ -321,7 +321,7 @@ def _create_analysis_nginx_deployment(analysis_name: str,
         sub_path="nginx.conf"
     )
     container = client.V1Container(name=nginx_name,
-                                   image=os.getenv('NGINX_IMAGE', 'nginx:1.29.8'),
+                                   image=os.getenv('NGINX_IMAGE', 'nginx-unprivileged:1.31.4-alpine-perl'),
                                    image_pull_policy="IfNotPresent",
                                    ports=[client.V1ContainerPort(PORTS['nginx'][0])],
                                    liveness_probe=liveness_probe,
@@ -461,6 +461,7 @@ def _create_nginx_config_map(analysis_name: str,
     # generate config map
     data = {
             "nginx.conf": f"""
+            pid /tmp/nginx.pid;
             worker_processes 1;
             events {{ worker_connections 1024; }}
             http {{
