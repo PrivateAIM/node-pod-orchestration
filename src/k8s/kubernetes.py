@@ -14,7 +14,7 @@ from src.utils.po_logging import get_logger
 
 logger = get_logger()
 
-PORTS = {'nginx': [80],
+PORTS = {'nginx': [8080],
          'analysis': [8000],
          'service': [80]}
 
@@ -349,7 +349,7 @@ def _create_analysis_nginx_deployment(analysis_name: str,
 
     nginx_service_name = _create_service(nginx_name,
                                          ports=PORTS['service'],
-                                         target_ports=PORTS['service'],
+                                         target_ports=PORTS['nginx'],
                                          meta_data_labels=labels,
                                          namespace=namespace)
     time.sleep(.1)
