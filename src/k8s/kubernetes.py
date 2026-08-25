@@ -321,7 +321,7 @@ def _create_analysis_nginx_deployment(analysis_name: str,
         sub_path="nginx.conf"
     )
     container = client.V1Container(name=nginx_name,
-                                   image=os.getenv('NGINX_IMAGE', 'nginx-unprivileged:1.31.4-alpine-perl'),
+                                   image=os.getenv('NGINX_IMAGE', 'nginxinc/nginx-unprivileged:1.31.4-alpine-perl'),
                                    image_pull_policy="IfNotPresent",
                                    ports=[client.V1ContainerPort(PORTS['nginx'][0])],
                                    liveness_probe=liveness_probe,
@@ -336,9 +336,9 @@ def _create_analysis_nginx_deployment(analysis_name: str,
     depl_selector = client.V1LabelSelector(match_labels={'app': nginx_name})
     depl_pod_spec = client.V1PodSpec(containers=containers,
                                      volumes=[cf_vol],
-                                     security_context=client.V1PodSecurityContext(run_as_group=1000,
+                                     security_context=client.V1PodSecurityContext(run_as_group=101,
                                                                                   run_as_non_root=True,
-                                                                                  run_as_user=1000)
+                                                                                  run_as_user=101)
                                      )
     depl_template = client.V1PodTemplateSpec(metadata=depl_pod_metadata, spec=depl_pod_spec)
 
