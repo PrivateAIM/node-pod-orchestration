@@ -176,7 +176,7 @@ def inform_analysis_of_partner_statuses(database: Database,
     """
     node_statuses = get_partner_node_statuses(hub_client, analysis_id, node_analysis_id)
     deployment_name = database.get_latest_deployment(analysis_id).deployment_name
-    client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}")
+    client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['service'][0]}")
     try: # try except, in case analysis api is not yet ready
         response = client.post(url="/analysis/partner_status",
                                headers=[('Connection', 'close')],
@@ -187,9 +187,9 @@ def inform_analysis_of_partner_statuses(database: Database,
     except HTTPStatusError as e:
         logger.warning(f"Error whilst trying to access analysis partner_status endpoint: {repr(e)}")
     except ConnectError as e:
-        logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {repr(e)}")
+        logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}")
     except (TimeoutException, ConnectTimeout) as e:
-        logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {repr(e)}")
+        logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} timed out: {repr(e)}")
     client.close()
     return None
 
@@ -266,7 +266,7 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
     """
     # Attempt to retrieve internal analysis status via health endpoint
     start_time = time.time()
-    client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}")
+    client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['service'][0]}")
     while True:
         try:
             response = client.get("/analysis/healthz", headers=[('Connection', 'close')])
@@ -276,9 +276,9 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
         except HTTPStatusError as e:
             logger.warning(f"Error whilst retrieving internal deployment status: {repr(e)}")
         except ConnectError as e:
-            logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} yielded an error: {repr(e)}")
+            logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}")
         except (TimeoutException, ConnectTimeout)  as e:
-            logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['nginx'][0]} timed out: {repr(e)}")
+            logger.warning(f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} timed out: {repr(e)}")
         elapsed_time = time.time() - start_time
         if elapsed_time > _INTERNAL_STATUS_TIMEOUT:
             logger.error(f"Timeout getting internal deployment status after {elapsed_time:.1f} seconds")
@@ -323,7 +323,7 @@ def _refresh_keycloak_token(deployment_name: str, analysis_id: str, token_remain
     """
     if token_remaining_time < (int(os.getenv('STATUS_LOOP_INTERVAL', '10')) * 2 + 1):
         keycloak_token = get_keycloak_token(analysis_id)
-        client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['nginx'][0]}")
+        client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['service'][0]}")
         try:
             response = client.post("/analysis/token_refresh",
                                    json={'token': keycloak_token},

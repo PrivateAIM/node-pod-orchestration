@@ -14,7 +14,7 @@ from src.utils.po_logging import get_logger
 
 logger = get_logger()
 
-PORTS = {'nginx': [80],
+PORTS = {'nginx': [8080],
          'analysis': [8000],
          'service': [80]}
 
@@ -115,7 +115,10 @@ def create_analysis_deployment(name: str,
     depl_pod_spec = client.V1PodSpec(containers=containers,
                                      image_pull_secrets=[
                                          client.V1LocalObjectReference(name="flame-harbor-credentials"),
-                                     ])
+                                     ],
+                                     security_context=client.V1PodSecurityContext(run_as_group=1000,
+                                                                                  run_as_non_root=True,
+                                                                                  run_as_user=1000))
     depl_template = client.V1PodTemplateSpec(metadata=depl_pod_metadata, spec=depl_pod_spec)
 
     depl_spec = client.V1DeploymentSpec(selector=depl_selector, template=depl_template)
@@ -318,7 +321,7 @@ def _create_analysis_nginx_deployment(analysis_name: str,
         sub_path="nginx.conf"
     )
     container = client.V1Container(name=nginx_name,
-                                   image=os.getenv('NGINX_IMAGE', 'nginx:1.29.8'),
+                                   image=os.getenv('NGINX_IMAGE', 'nginxinc/nginx-unprivileged:1.31.4-alpine-perl'),
                                    image_pull_policy="IfNotPresent",
                                    ports=[client.V1ContainerPort(PORTS['nginx'][0])],
                                    liveness_probe=liveness_probe,
@@ -332,7 +335,11 @@ def _create_analysis_nginx_deployment(analysis_name: str,
     depl_pod_metadata = client.V1ObjectMeta(labels=labels)
     depl_selector = client.V1LabelSelector(match_labels={'app': nginx_name})
     depl_pod_spec = client.V1PodSpec(containers=containers,
-                                     volumes=[cf_vol])
+                                     volumes=[cf_vol],
+                                     security_context=client.V1PodSecurityContext(run_as_group=101,
+                                                                                  run_as_non_root=True,
+                                                                                  run_as_user=101)
+                                     )
     depl_template = client.V1PodTemplateSpec(metadata=depl_pod_metadata, spec=depl_pod_spec)
 
     depl_spec = client.V1DeploymentSpec(selector=depl_selector, template=depl_template)
@@ -342,7 +349,7 @@ def _create_analysis_nginx_deployment(analysis_name: str,
 
     nginx_service_name = _create_service(nginx_name,
                                          ports=PORTS['service'],
-                                         target_ports=PORTS['service'],
+                                         target_ports=PORTS['nginx'],
                                          meta_data_labels=labels,
                                          namespace=namespace)
     time.sleep(.1)
@@ -454,6 +461,7 @@ def _create_nginx_config_map(analysis_name: str,
     # generate config map
     data = {
             "nginx.conf": f"""
+            pid /tmp/nginx.pid;
             worker_processes 1;
             events {{ worker_connections 1024; }}
             http {{
