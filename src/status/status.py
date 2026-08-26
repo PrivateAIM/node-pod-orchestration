@@ -211,8 +211,8 @@ def _get_analysis_status(analysis_id: str, database: Database) -> Optional[dict[
         db_status = analysis.status
         # Make the Finished status final, the internal status is not checked anymore,
         # because the analysis will already be deleted
-        if db_status == AnalysisStatus.EXECUTED.value:
-            int_status = AnalysisStatus.EXECUTED.value
+        if db_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.STOPPED.value, AnalysisStatus.FAILED.value]:
+            int_status = db_status
         else:
             int_status = _get_internal_deployment_status(analysis.deployment_name, analysis_id)
         status_action = _decide_status_action(analysis.status, int_status)
