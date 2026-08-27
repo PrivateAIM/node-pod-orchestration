@@ -599,7 +599,7 @@ def _create_service(name: str,
                                         ports=[client.V1ServicePort(port=port, target_port=target_port)
                                                for port, target_port in zip(ports, target_ports)])
 
-    service_body = client.V1Service(metadata=client.V1ObjectMeta(name=name, labels=meta_data_labels),
+    service_body = client.V1Service(metadata=client.V1ObjectMeta(name=name, namespace=namespace, labels=meta_data_labels),
                                     spec=service_spec)
     core_client.create_namespaced_service(body=service_body, namespace=namespace)
 
