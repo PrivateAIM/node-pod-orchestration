@@ -621,17 +621,18 @@ def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespa
 
     # egress to nginx and kube-dns pod (kube dns' namespace has to be specified)
     # currently hardcoded for this label TODO make it work with ports and protocols
-    egress = [client.V1NetworkPolicyEgressRule(
-        to=[client.V1NetworkPolicyPeer(
-            pod_selector=client.V1LabelSelector(
-                match_labels={'app': nginx_name})),
-            client.V1NetworkPolicyPeer(
-                pod_selector=client.V1LabelSelector(
-                    match_labels={'k8s-app': 'kube-dns'}),
-                namespace_selector=client.V1LabelSelector(
-                    match_labels={'kubernetes.io/metadata.name': 'kube-system'}))
-            ]
-    )]
+    nginx_egress = client.V1NetworkPolicyEgressRule(
+        to=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_name}))]
+    )
+
+    dns_egress = client.V1NetworkPolicyEgressRule(
+        ports=[
+            client.V1NetworkPolicyPort(port=53, protocol='UDP'),
+            client.V1NetworkPolicyPort(port=53, protocol='TCP')
+        ]
+    )
+
+    egress = [nginx_egress, dns_egress]
 
     # ingress from nginx pod
     ingress = [client.V1NetworkPolicyIngressRule(
