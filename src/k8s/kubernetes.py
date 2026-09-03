@@ -136,13 +136,12 @@ def create_analysis_deployment(name: str,
     app_client.create_namespaced_deployment(async_req=False, namespace=namespace, body=depl_body)
     time.sleep(.1)
 
-    analysis_service_name = _create_service(name,
-                                            ports=PORTS['service'],
-                                            target_ports=PORTS['analysis'],
-                                            meta_data_labels=labels,
-                                            namespace=namespace).metadata.name
-
-    _create_analysis_nginx_deployment(name, analysis_service_name, env, namespace)
+    _ = _create_service(name,
+                        ports=PORTS['service'],
+                        target_ports=PORTS['analysis'],
+                        meta_data_labels=labels,
+                        namespace=namespace)
+    _create_analysis_nginx_deployment(name, env, namespace)
 
     return _get_pods(name, namespace)
 
@@ -243,7 +242,7 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
 
 def _build_nginx_host_aliases(nginx_name: str,
                               nginx_service: client.V1Service,
-                              namespace: str) -> list[client.V1HostAlias]:
+                              namespace: str = 'default') -> list[client.V1HostAlias]:
     """Map the nginx service name onto its cluster IP for the analysis pod's hosts file."""
     cluster_ip = nginx_service.spec.cluster_ip if nginx_service.spec is not None else None
     if (not cluster_ip) or (cluster_ip == 'None'):
@@ -295,7 +294,6 @@ def _build_net_stats_container(analysis_name: str) -> Optional[client.V1Containe
 
 
 def _create_analysis_nginx_deployment(analysis_name: str,
-                                      analysis_service_name: str,
                                       analysis_env: Optional[dict[str, str]] = None,
                                       namespace: str = 'default') -> str:
     """Deploy the nginx reverse-proxy sidecar for an analysis.
@@ -306,8 +304,6 @@ def _create_analysis_nginx_deployment(analysis_name: str,
 
     Args:
         analysis_name: Name of the analysis deployment this nginx sidecar fronts.
-        analysis_service_name: Service name of the analysis deployment used as
-            the nginx upstream.
         analysis_env: Analysis config (must include ``ANALYSIS_ID`` and
             ``PROJECT_ID``) used to template the nginx config.
         namespace: Namespace in which to create the resources.
@@ -320,7 +316,6 @@ def _create_analysis_nginx_deployment(analysis_name: str,
     nginx_name = f"nginx-{analysis_name}"
 
     config_map_name = _create_nginx_config_map(analysis_name=analysis_name,
-                                               analysis_service_name=analysis_service_name,
                                                nginx_name=nginx_name,
                                                analysis_env=analysis_env,
                                                namespace=namespace)
@@ -381,7 +376,6 @@ def _create_analysis_nginx_deployment(analysis_name: str,
 
 
 def _create_nginx_config_map(analysis_name: str,
-                             analysis_service_name: str,
                              nginx_name: str,
                              analysis_env: Optional[dict[str, str]] = None,
                              namespace: str = 'default') -> str:
@@ -394,7 +388,6 @@ def _create_nginx_config_map(analysis_name: str,
 
     Args:
         analysis_name: Name of the analysis deployment.
-        analysis_service_name: Upstream service for ``/analysis`` ingress.
         nginx_name: Name of the nginx deployment (used to prefix the config
             map name).
         analysis_env: Analysis config containing ``ANALYSIS_ID`` and
@@ -476,13 +469,13 @@ def _create_nginx_config_map(analysis_name: str,
                                          manual_name_selector='proxy',
                                          namespace=namespace)[0]
     storage_service_name = find_k8s_resources('service',
-                                             'label',
-                                             'component=flame-storage-service',
-                                             namespace=namespace)[0]
+                                              'label',
+                                              'component=flame-storage-service',
+                                              namespace=namespace)[0]
 
     # generate config map
     data = {
-            "nginx.conf": f"""
+        "nginx.conf": f"""
             pid /tmp/nginx.pid;
             worker_processes 1;
             events {{ worker_connections 1024; }}
@@ -573,7 +566,7 @@ def _create_nginx_config_map(analysis_name: str,
                     # ingress: message-broker/pod-orchestration to analysis deployment
                     location /analysis {{
                         rewrite     ^/analysis(/.*) $1 break;
-                        proxy_pass  http://{analysis_service_name};
+                        proxy_pass  http://{analysis_name};
                         allow       {message_broker_ip};
                         allow       {pod_orchestration_ip};
                         deny        all;
