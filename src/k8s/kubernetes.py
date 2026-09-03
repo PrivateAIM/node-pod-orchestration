@@ -96,6 +96,15 @@ def create_analysis_deployment(name: str,
     app_client = client.AppsV1Api()
     containers = []
 
+    # the nginx service is created up front so that its cluster IP can be pinned into the analysis pod
+    nginx_name = f"nginx-{name}"
+    nginx_service = _create_service(nginx_name,
+                                    ports=PORTS['service'],
+                                    target_ports=PORTS['nginx'],
+                                    meta_data_labels={'app': nginx_name, 'component': 'flame-analysis-nginx'},
+                                    namespace=namespace)
+    host_aliases = _build_nginx_host_aliases(nginx_name, nginx_service, namespace)
+
     container = client.V1Container(name=name,
                                    image=image,
                                    image_pull_policy='IfNotPresent',
@@ -113,6 +122,7 @@ def create_analysis_deployment(name: str,
     depl_pod_metadata = client.V1ObjectMeta(labels=labels)
     depl_selector = client.V1LabelSelector(match_labels=labels)
     depl_pod_spec = client.V1PodSpec(containers=containers,
+                                     host_aliases=host_aliases,
                                      image_pull_secrets=[
                                          client.V1LocalObjectReference(name="flame-harbor-credentials"),
                                      ],
@@ -126,13 +136,12 @@ def create_analysis_deployment(name: str,
     app_client.create_namespaced_deployment(async_req=False, namespace=namespace, body=depl_body)
     time.sleep(.1)
 
-    analysis_service_name = _create_service(name,
-                                            ports=PORTS['service'],
-                                            target_ports=PORTS['analysis'],
-                                            meta_data_labels=labels,
-                                            namespace=namespace)
-
-    nginx_name, _ = _create_analysis_nginx_deployment(name, analysis_service_name, env, namespace)
+    _ = _create_service(name,
+                        ports=PORTS['service'],
+                        target_ports=PORTS['analysis'],
+                        meta_data_labels=labels,
+                        namespace=namespace)
+    _create_analysis_nginx_deployment(name, env, namespace)
 
     return _get_pods(name, namespace)
 
@@ -231,6 +240,23 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
         return None
 
 
+def _build_nginx_host_aliases(nginx_name: str,
+                              nginx_service: client.V1Service,
+                              namespace: str = 'default') -> list[client.V1HostAlias]:
+    """Map the nginx service name onto its cluster IP for the analysis pod's hosts file."""
+    cluster_ip = nginx_service.spec.cluster_ip if nginx_service.spec is not None else None
+    if (not cluster_ip) or (cluster_ip == 'None'):
+        logger.error(f"Service {nginx_name} in namespace {namespace} was created without a cluster IP, so it cannot "
+                     f"be pinned into the analysis pod (cluster_ip={cluster_ip}).")
+        raise ValueError(f"Service {nginx_name} was created without a cluster IP (see logs)")
+
+    return [client.V1HostAlias(ip=cluster_ip,
+                               hostnames=[nginx_name,
+                                          f"{nginx_name}.{namespace}",
+                                          f"{nginx_name}.{namespace}.svc",
+                                          f"{nginx_name}.{namespace}.svc.cluster.local"])]
+
+
 def _build_net_stats_container(analysis_name: str) -> Optional[client.V1Container]:
     """Build the net-stats sidecar container spec, or return None if disabled.
 
@@ -268,9 +294,8 @@ def _build_net_stats_container(analysis_name: str) -> Optional[client.V1Containe
 
 
 def _create_analysis_nginx_deployment(analysis_name: str,
-                                      analysis_service_name: str,
                                       analysis_env: Optional[dict[str, str]] = None,
-                                      namespace: str = 'default') -> tuple[str, str]:
+                                      namespace: str = 'default') -> str:
     """Deploy the nginx reverse-proxy sidecar for an analysis.
 
     Builds the nginx ConfigMap, starts the ``nginx-{analysis_name}`` deployment
@@ -279,21 +304,18 @@ def _create_analysis_nginx_deployment(analysis_name: str,
 
     Args:
         analysis_name: Name of the analysis deployment this nginx sidecar fronts.
-        analysis_service_name: Service name of the analysis deployment used as
-            the nginx upstream.
         analysis_env: Analysis config (must include ``ANALYSIS_ID`` and
             ``PROJECT_ID``) used to template the nginx config.
         namespace: Namespace in which to create the resources.
 
     Returns:
-        Tuple ``(nginx_deployment_name, nginx_service_name)``.
+        The nginx deployment name.
     """
     app_client = client.AppsV1Api()
     containers = []
     nginx_name = f"nginx-{analysis_name}"
 
     config_map_name = _create_nginx_config_map(analysis_name=analysis_name,
-                                               analysis_service_name=analysis_service_name,
                                                nginx_name=nginx_name,
                                                analysis_env=analysis_env,
                                                namespace=namespace)
@@ -347,19 +369,13 @@ def _create_analysis_nginx_deployment(analysis_name: str,
 
     app_client.create_namespaced_deployment(async_req=False, namespace=namespace, body=depl_body)
 
-    nginx_service_name = _create_service(nginx_name,
-                                         ports=PORTS['service'],
-                                         target_ports=PORTS['nginx'],
-                                         meta_data_labels=labels,
-                                         namespace=namespace)
     time.sleep(.1)
     _create_analysis_network_policy(analysis_name, nginx_name, namespace)
 
-    return nginx_name, nginx_service_name
+    return nginx_name
 
 
 def _create_nginx_config_map(analysis_name: str,
-                             analysis_service_name: str,
                              nginx_name: str,
                              analysis_env: Optional[dict[str, str]] = None,
                              namespace: str = 'default') -> str:
@@ -372,7 +388,6 @@ def _create_nginx_config_map(analysis_name: str,
 
     Args:
         analysis_name: Name of the analysis deployment.
-        analysis_service_name: Upstream service for ``/analysis`` ingress.
         nginx_name: Name of the nginx deployment (used to prefix the config
             map name).
         analysis_env: Analysis config containing ``ANALYSIS_ID`` and
@@ -454,13 +469,13 @@ def _create_nginx_config_map(analysis_name: str,
                                          manual_name_selector='proxy',
                                          namespace=namespace)[0]
     storage_service_name = find_k8s_resources('service',
-                                             'label',
-                                             'component=flame-storage-service',
-                                             namespace=namespace)[0]
+                                              'label',
+                                              'component=flame-storage-service',
+                                              namespace=namespace)[0]
 
     # generate config map
     data = {
-            "nginx.conf": f"""
+        "nginx.conf": f"""
             pid /tmp/nginx.pid;
             worker_processes 1;
             events {{ worker_connections 1024; }}
@@ -551,7 +566,7 @@ def _create_nginx_config_map(analysis_name: str,
                     # ingress: message-broker/pod-orchestration to analysis deployment
                     location /analysis {{
                         rewrite     ^/analysis(/.*) $1 break;
-                        proxy_pass  http://{analysis_service_name};
+                        proxy_pass  http://{analysis_name};
                         allow       {message_broker_ip};
                         allow       {pod_orchestration_ip};
                         deny        all;
@@ -578,7 +593,7 @@ def _create_service(name: str,
                     ports: list[int],
                     target_ports: list[int],
                     meta_data_labels: dict[str, str] = None,
-                    namespace: str = 'default') -> str:
+                    namespace: str = 'default') -> client.V1Service:
     """Create a ClusterIP service selecting pods by the ``app={name}`` label.
 
     Args:
@@ -589,7 +604,7 @@ def _create_service(name: str,
         namespace: Namespace in which to create the service.
 
     Returns:
-        The service name (equal to ``name``).
+        The created service object, including the assigned cluster IP.
     """
     if meta_data_labels is None:
         meta_data_labels = {'app': name}
@@ -601,9 +616,8 @@ def _create_service(name: str,
 
     service_body = client.V1Service(metadata=client.V1ObjectMeta(name=name, namespace=namespace, labels=meta_data_labels),
                                     spec=service_spec)
-    core_client.create_namespaced_service(body=service_body, namespace=namespace)
 
-    return name
+    return core_client.create_namespaced_service(body=service_body, namespace=namespace)
 
 
 def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespace: str = 'default') -> None:
@@ -619,23 +633,16 @@ def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespa
     """
     network_client = client.NetworkingV1Api()
 
-    # egress to nginx and kube-dns pod (kube dns' namespace has to be specified)
-    # currently hardcoded for this label TODO make it work with ports and protocols
+    # egress to the nginx pod only, on the port it proxies on (ports match the destination pod port, post-DNAT)
     egress = [client.V1NetworkPolicyEgressRule(
-        to=[client.V1NetworkPolicyPeer(
-            pod_selector=client.V1LabelSelector(
-                match_labels={'app': nginx_name})),
-            client.V1NetworkPolicyPeer(
-                pod_selector=client.V1LabelSelector(
-                    match_labels={'k8s-app': 'kube-dns'}),
-                namespace_selector=client.V1LabelSelector(
-                    match_labels={'kubernetes.io/metadata.name': 'kube-system'}))
-            ]
+        to=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_name}))],
+        ports=[client.V1NetworkPolicyPort(port=PORTS['nginx'][0], protocol='TCP')]
     )]
 
-    # ingress from nginx pod
+    # ingress from the nginx pod only, on the analysis port
     ingress = [client.V1NetworkPolicyIngressRule(
-        _from=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_name}))]
+        _from=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_name}))],
+        ports=[client.V1NetworkPolicyPort(port=PORTS['analysis'][0], protocol='TCP')]
     )]
 
     policy_types = ['Ingress', 'Egress']
