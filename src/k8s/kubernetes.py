@@ -473,6 +473,9 @@ def _create_nginx_config_map(analysis_name: str,
                                               'component=flame-storage-service',
                                               namespace=namespace)[0]
 
+    proxy_timeout = 600
+    proxy_connect_timeout = 10
+
     # generate config map
     data = {
         "nginx.conf": f"""
@@ -493,7 +496,12 @@ def _create_nginx_config_map(analysis_name: str,
                     proxy_set_header X-Real-IP $remote_addr;
                     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                     proxy_set_header X-Forwarded-Proto $scheme;
-                    
+
+                    proxy_connect_timeout {proxy_connect_timeout}s;
+                    proxy_send_timeout    {proxy_timeout}s;
+                    proxy_read_timeout    {proxy_timeout}s;
+                    send_timeout          {proxy_timeout}s;
+
                     # health check
                     location /healthz {{
                         return 200 'healthy';
