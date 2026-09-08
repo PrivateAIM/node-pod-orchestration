@@ -473,7 +473,7 @@ def _create_nginx_config_map(analysis_name: str,
                                               'component=flame-storage-service',
                                               namespace=namespace)[0]
 
-    proxy_timeout = 600
+    proxy_timeout = 900
     proxy_connect_timeout = 10
 
     # generate config map
