@@ -9,6 +9,8 @@ Covers:
   - get_pod_status: ready/waiting/terminated/no pods
 """
 
+import os
+
 import pytest
 from unittest.mock import MagicMock, patch, call
 from kubernetes.client.exceptions import ApiException
@@ -169,6 +171,28 @@ class TestCreateAnalysisDeployment:
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
         mock_k8s_clients.core_v1.create_namespaced_config_map.assert_called_once()
+
+    def test_config_map_sets_default_proxy_timeouts(self, mock_k8s_clients, _setup_pod_reads):
+        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+            create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
+
+        _, call_kwargs = mock_k8s_clients.core_v1.create_namespaced_config_map.call_args
+        nginx_conf = call_kwargs["body"].data["nginx.conf"]
+        assert "proxy_connect_timeout 10s;" in nginx_conf
+        assert "proxy_send_timeout    600s;" in nginx_conf
+        assert "proxy_read_timeout    600s;" in nginx_conf
+        assert "send_timeout          600s;" in nginx_conf
+
+    def test_config_map_proxy_timeout_overridable(self, mock_k8s_clients, _setup_pod_reads):
+        env_override = {"NGINX_PROXY_TIMEOUT": "1800", "NGINX_PROXY_CONNECT_TIMEOUT": "5"}
+        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()), \
+                patch.dict(os.environ, env_override):
+            create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
+
+        _, call_kwargs = mock_k8s_clients.core_v1.create_namespaced_config_map.call_args
+        nginx_conf = call_kwargs["body"].data["nginx.conf"]
+        assert "proxy_connect_timeout 5s;" in nginx_conf
+        assert "proxy_read_timeout    1800s;" in nginx_conf
 
     def test_creates_network_policy(self, mock_k8s_clients, _setup_pod_reads):
         with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):

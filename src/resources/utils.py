@@ -223,7 +223,9 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
 
     for analysis_id, deployment in deployments.items():
         # save logs as string to database (will be read as dict in retrieve_history)
-        log = str(get_analysis_logs({analysis_id: deployment.deployment_name}, database=database))
+        log = str(get_analysis_logs({analysis_id: deployment.deployment_name},
+                                    database=database,
+                                    namespace=deployment.namespace))
         if deployment.status in [AnalysisStatus.FAILED.value,
                                  AnalysisStatus.EXECUTED.value,
                                  AnalysisStatus.STARTED.value]:
