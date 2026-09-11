@@ -20,7 +20,7 @@ python-dotenv = "^1.2.2"
 kong-admin-client = {git = "https://github.com/PrivateAIM/kong-admin-python-client.git"}
 flame-hub-client = "^0.5.0"
 httpx2 = "^2.9.1"
-cryptography="^49.0.0"
+cryptography=">=49,<51"
 truststore = "^0.10.4"
 
 [tool.poetry.group.dev.dependencies]
