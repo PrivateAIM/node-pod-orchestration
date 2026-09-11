@@ -63,7 +63,7 @@ class TestCreateHarborSecret:
         create_harbor_secret("harbor.test", "user", "password", name="my-secret")
 
         mock_k8s_clients.core_v1.delete_namespaced_secret.assert_called_once_with(
-            name="my-secret", namespace="default"
+            name="my-secret", namespace="default", grace_period_seconds=0, propagation_policy="Background"
         )
         assert mock_k8s_clients.core_v1.create_namespaced_secret.call_count == 2
 
@@ -179,11 +179,12 @@ class TestCreateAnalysisDeployment:
         _, call_kwargs = mock_k8s_clients.core_v1.create_namespaced_config_map.call_args
         nginx_conf = call_kwargs["body"].data["nginx.conf"]
         assert "proxy_connect_timeout 10s;" in nginx_conf
-        assert "proxy_send_timeout    600s;" in nginx_conf
-        assert "proxy_read_timeout    600s;" in nginx_conf
-        assert "send_timeout          600s;" in nginx_conf
+        assert "proxy_send_timeout    900s;" in nginx_conf
+        assert "proxy_read_timeout    900s;" in nginx_conf
+        assert "send_timeout          900s;" in nginx_conf
 
-    def test_config_map_proxy_timeout_overridable(self, mock_k8s_clients, _setup_pod_reads):
+    def test_config_map_proxy_timeouts_are_not_env_overridable(self, mock_k8s_clients, _setup_pod_reads):
+        """Proxy timeouts are hardcoded by design; env vars must not change them."""
         env_override = {"NGINX_PROXY_TIMEOUT": "1800", "NGINX_PROXY_CONNECT_TIMEOUT": "5"}
         with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()), \
                 patch.dict(os.environ, env_override):
@@ -191,8 +192,8 @@ class TestCreateAnalysisDeployment:
 
         _, call_kwargs = mock_k8s_clients.core_v1.create_namespaced_config_map.call_args
         nginx_conf = call_kwargs["body"].data["nginx.conf"]
-        assert "proxy_connect_timeout 5s;" in nginx_conf
-        assert "proxy_read_timeout    1800s;" in nginx_conf
+        assert "proxy_connect_timeout 10s;" in nginx_conf
+        assert "proxy_read_timeout    900s;" in nginx_conf
 
     def test_creates_network_policy(self, mock_k8s_clients, _setup_pod_reads):
         with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
@@ -244,14 +245,14 @@ class TestDeleteDeployment:
         delete_deployment("analysis-123-0")
 
         mock_k8s_clients.networking_v1.delete_namespaced_network_policy.assert_called_once_with(
-            name="nginx-to-analysis-123-0-policy", namespace="default"
+            name="nginx-to-analysis-123-0-policy", namespace="default", propagation_policy="Background"
         )
 
     def test_deletes_config_map(self, mock_k8s_clients):
         delete_deployment("analysis-123-0")
 
         mock_k8s_clients.core_v1.delete_namespaced_config_map.assert_called_once_with(
-            name="nginx-analysis-123-0-config", namespace="default"
+            name="nginx-analysis-123-0-config", namespace="default", propagation_policy="Background"
         )
 
     def test_not_found_deployment_exception_is_silenced(self, mock_k8s_clients):
@@ -272,7 +273,7 @@ class TestDeleteDeployment:
         calls = mock_k8s_clients.apps_v1.delete_namespaced_deployment.call_args_list
         assert all(c[1]["namespace"] == "flame-ns" for c in calls)
         mock_k8s_clients.networking_v1.delete_namespaced_network_policy.assert_called_once_with(
-            name="nginx-to-analysis-123-0-policy", namespace="flame-ns"
+            name="nginx-to-analysis-123-0-policy", namespace="flame-ns", propagation_policy="Background"
         )
 
 

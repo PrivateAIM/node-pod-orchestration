@@ -1,3 +1,10 @@
+"""Pydantic models for analysis log entries.
+
+Defines the persisted :class:`LogEntity` plus the ``Create*Log`` factories
+used to record notable lifecycle events (status changes, start-up errors,
+stop requests) in a consistent shape before they are forwarded to the Hub.
+"""
+
 import uuid
 import time
 from datetime import datetime
@@ -12,7 +19,9 @@ class LogEntity(BaseModel):
     """A persisted log line with an id and ISO-ish timestamp."""
 
     log: str
-    log_type: Literal['emerg', 'alert', 'crit', 'error', 'warn', 'notice', 'info', 'debug']
+    log_type: Literal[
+        "emerg", "alert", "crit", "error", "warn", "notice", "info", "debug"
+    ]
 
     id: str
     created_at: str
@@ -26,7 +35,9 @@ class CreateLogEntity(BaseModel):
     """Request body accepted by ``POST /po/stream_logs`` from analysis pods."""
 
     log: str
-    log_type: Literal['emerg', 'alert', 'crit', 'error', 'warn', 'notice', 'info', 'debug']
+    log_type: Literal[
+        "emerg", "alert", "crit", "error", "warn", "notice", "info", "debug"
+    ]
 
     analysis_id: str
     status: str
@@ -38,7 +49,7 @@ class CreateLogEntity(BaseModel):
             log=self.log,
             log_type=self.log_type,
             id=str(uuid.uuid4()),
-            created_at=str(datetime.now())
+            created_at=str(datetime.now()),
         )
 
 
@@ -51,12 +62,14 @@ class CreateStartUpErrorLog(CreateLogEntity):
     analysis will be terminated.
     """
 
-    def __init__(self,
-                 restart_num: int,
-                 error_type: Literal['stuck', 'slow', 'k8s'],
-                 analysis_id: str,
-                 status: str,
-                 k8s_error_msg: str = '') -> None:
+    def __init__(
+        self,
+        restart_num: int,
+        error_type: Literal["stuck", "slow", "k8s"],
+        analysis_id: str,
+        status: str,
+        k8s_error_msg: str = "",
+    ) -> None:
         """Build the error log message.
 
         Args:
@@ -70,30 +83,38 @@ class CreateStartUpErrorLog(CreateLogEntity):
         terminating = restart_num >= _MAX_RESTARTS
         term_msg = " -> Terminating analysis as failed." if terminating else ""
         if error_type == "stuck":
-            log = (f"[flame -- POAPI: ANALYSISSTARTUP{'ERROR' if terminating else 'WARNING'} -- "
-                   f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
-                   f"The analysis failed to connect to other node components "
-                   f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}")
+            log = (
+                f"[flame -- POAPI: ANALYSISSTARTUP{'ERROR' if terminating else 'WARNING'} -- "
+                f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
+                f"The analysis failed to connect to other node components "
+                f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}"
+            )
         elif error_type == "slow":
-            log = (f"[flame -- POAPI: ANALYSISSTARTUP{'ERROR' if terminating else 'WARNING'} -- "
-                   f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
-                   f"The analysis took too long during startup and was restarted "
-                   f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}")
+            log = (
+                f"[flame -- POAPI: ANALYSISSTARTUP{'ERROR' if terminating else 'WARNING'} -- "
+                f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
+                f"The analysis took too long during startup and was restarted "
+                f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}"
+            )
         elif error_type == "k8s":
-            log = (f"[flame -- POAPI: ANALYSISSTARTUP{'ERROR' if terminating else 'WARNING'} -- "
-                   f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
-                   f"The analysis failed to deploy in kubernetes "
-                   f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}")
+            log = (
+                f"[flame -- POAPI: ANALYSISSTARTUP{'ERROR' if terminating else 'WARNING'} -- "
+                f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
+                f"The analysis failed to deploy in kubernetes "
+                f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}"
+            )
             if k8s_error_msg:
                 log += f"\n\tKubernetesApiError: {k8s_error_msg}."
         else:
-            log = ''
+            log = ""
 
-        super().__init__(log=log,
-                         log_type="error" if terminating else "warn",
-                         analysis_id=analysis_id,
-                         status=status,
-                         progress=0)
+        super().__init__(
+            log=log,
+            log_type="error" if terminating else "warn",
+            analysis_id=analysis_id,
+            status=status,
+            progress=0,
+        )
 
 
 class AnalysisStoppedLog(CreateLogEntity):
@@ -101,11 +122,15 @@ class AnalysisStoppedLog(CreateLogEntity):
 
     def __init__(self, analysis_id: str) -> None:
         """Build the stop log for ``analysis_id`` with status ``stopped``."""
-        log = (f"[flame -- POAPI: ANALYSISSTOPPED -- "
-               f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
-               f"Info: The analysis was stopped either locally, or externally on another node.")
-        super().__init__(log=log,
-                         log_type="info",
-                         analysis_id=analysis_id,
-                         status=AnalysisStatus.STOPPED.value,
-                         progress=0)
+        log = (
+            f"[flame -- POAPI: ANALYSISSTOPPED -- "
+            f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
+            f"Info: The analysis was stopped either locally, or externally on another node."
+        )
+        super().__init__(
+            log=log,
+            log_type="info",
+            analysis_id=analysis_id,
+            status=AnalysisStatus.STOPPED.value,
+            progress=0,
+        )

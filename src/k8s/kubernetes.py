@@ -1,3 +1,17 @@
+"""Creation and teardown of the Kubernetes resources backing an analysis.
+
+Every analysis owns a small set of namespaced resources: a Deployment running
+the analysis container alongside an nginx reverse-proxy sidecar (and an
+optional network statistics sidecar), a Service fronting it, a NetworkPolicy
+restricting egress to the node's own services, a ConfigMap holding the
+generated nginx configuration, and a Harbor image pull secret.
+
+The public helpers here create that set, read pod status and logs, and delete
+the resources again; the private ``_create_*`` / ``_delete_*`` helpers handle
+the individual resource kinds and swallow "not found" errors so cleanup stays
+idempotent.
+"""
+
 import os
 import time
 import json
@@ -14,16 +28,16 @@ from src.utils.po_logging import get_logger
 
 logger = get_logger()
 
-PORTS = {'nginx': [8080],
-         'analysis': [8000],
-         'service': [80]}
+PORTS = {"nginx": [8080], "analysis": [8000], "service": [80]}
 
 
-def create_harbor_secret(host_address: str,
-                         user: str,
-                         password: str,
-                         name: str = 'flame-harbor-credentials',
-                         namespace: str = 'default') -> None:
+def create_harbor_secret(
+    host_address: str,
+    user: str,
+    password: str,
+    name: str = "flame-harbor-credentials",
+    namespace: str = "default",
+) -> None:
     """Create (or recreate) the dockerconfigjson secret used to pull analysis images.
 
     If a secret with the same name already exists it is deleted and recreated
@@ -42,41 +56,64 @@ def create_harbor_secret(host_address: str,
     """
     core_client = client.CoreV1Api()
     secret_metadata = client.V1ObjectMeta(name=name, namespace=namespace)
-    secret = client.V1Secret(metadata=secret_metadata,
-                             type='kubernetes.io/dockerconfigjson',
-                             string_data={'docker-server': host_address,
-                                          'docker-username': user.replace('$', '\\$'),
-                                          'docker-password': password,
-                                          '.dockerconfigjson': json.dumps({'auths':
-                                                                               {host_address:
-                                                                                    {'username': user,
-                                                                                     'password': password,
-                                                                                     'auth': base64.b64encode(f"{user}:{password}".encode("ascii")).decode("ascii")}}})}
-                             )
+    secret = client.V1Secret(
+        metadata=secret_metadata,
+        type="kubernetes.io/dockerconfigjson",
+        string_data={
+            "docker-server": host_address,
+            "docker-username": user.replace("$", "\\$"),
+            "docker-password": password,
+            ".dockerconfigjson": json.dumps(
+                {
+                    "auths": {
+                        host_address: {
+                            "username": user,
+                            "password": password,
+                            "auth": base64.b64encode(
+                                f"{user}:{password}".encode("ascii")
+                            ).decode("ascii"),
+                        }
+                    }
+                }
+            ),
+        },
+    )
     try:
         core_client.create_namespaced_secret(namespace=namespace, body=secret)
     except client.exceptions.ApiException:
-        logger.warning(f"Harbor secret already exists in namespace {namespace}, attempting to resolve conflict by "
-                       f"deleting and recreating the secret.")
+        logger.warning(
+            f"Harbor secret already exists in namespace {namespace}, attempting to resolve conflict by "
+            f"deleting and recreating the secret."
+        )
         try:
-            core_client.delete_namespaced_secret(name=name,
-                                                 namespace=namespace,
-                                                 grace_period_seconds=0,
-                                                 propagation_policy='Background')
+            core_client.delete_namespaced_secret(
+                name=name,
+                namespace=namespace,
+                grace_period_seconds=0,
+                propagation_policy="Background",
+            )
             core_client.create_namespaced_secret(namespace=namespace, body=secret)
         except client.exceptions.ApiException as e:
-            if e.reason != 'Conflict':
+            if e.reason != "Conflict":
                 logger.error(f"Unknown error during harbor secret creation: {repr(e)}")
-                raise Exception(f"Unknown error during harbor secret creation (see po logs)")
+                raise Exception(
+                    "Unknown error during harbor secret creation (see po logs)"
+                )
             else:
-                logger.error(f"Conflict in harbor secret creation remains unresolved: {repr(e)}")
-                raise Exception(f"Conflict in harbor secret creation remains unresolved (see po logs)")
+                logger.error(
+                    f"Conflict in harbor secret creation remains unresolved: {repr(e)}"
+                )
+                raise Exception(
+                    "Conflict in harbor secret creation remains unresolved (see po logs)"
+                )
 
 
-def create_analysis_deployment(name: str,
-                               image: str,
-                               env: Optional[dict[str, str]] = None,
-                               namespace: str = 'default') -> list[str]:
+def create_analysis_deployment(
+    name: str,
+    image: str,
+    env: Optional[dict[str, str]] = None,
+    namespace: str = "default",
+) -> list[str]:
     """Deploy an analysis pod along with its nginx sidecar, service, and network policy.
 
     Creates the analysis ``Deployment`` using the Harbor pull secret, exposes
@@ -98,55 +135,70 @@ def create_analysis_deployment(name: str,
 
     # the nginx service is created up front so that its cluster IP can be pinned into the analysis pod
     nginx_name = f"nginx-{name}"
-    nginx_service = _create_service(nginx_name,
-                                    ports=PORTS['service'],
-                                    target_ports=PORTS['nginx'],
-                                    meta_data_labels={'app': nginx_name, 'component': 'flame-analysis-nginx'},
-                                    namespace=namespace)
+    nginx_service = _create_service(
+        nginx_name,
+        ports=PORTS["service"],
+        target_ports=PORTS["nginx"],
+        meta_data_labels={"app": nginx_name, "component": "flame-analysis-nginx"},
+        namespace=namespace,
+    )
     host_aliases = _build_nginx_host_aliases(nginx_name, nginx_service, namespace)
 
-    container = client.V1Container(name=name,
-                                   image=image,
-                                   image_pull_policy='IfNotPresent',
-                                   ports=[client.V1ContainerPort(PORTS['analysis'][0])],
-                                   env=[client.V1EnvVar(name=key, value=val) for key, val in env.items()]
-                                   if env is not None else [])
+    container = client.V1Container(
+        name=name,
+        image=image,
+        image_pull_policy="IfNotPresent",
+        ports=[client.V1ContainerPort(PORTS["analysis"][0])],
+        env=[client.V1EnvVar(name=key, value=val) for key, val in env.items()]
+        if env is not None
+        else [],
+    )
     containers.append(container)
 
     net_stats_container = _build_net_stats_container(name)
     if net_stats_container is not None:
         containers.append(net_stats_container)
 
-    labels = {'app': name, 'component': "flame-analysis"}
+    labels = {"app": name, "component": "flame-analysis"}
     depl_metadata = client.V1ObjectMeta(name=name, namespace=namespace, labels=labels)
     depl_pod_metadata = client.V1ObjectMeta(labels=labels)
     depl_selector = client.V1LabelSelector(match_labels=labels)
-    depl_pod_spec = client.V1PodSpec(containers=containers,
-                                     host_aliases=host_aliases,
-                                     image_pull_secrets=[
-                                         client.V1LocalObjectReference(name="flame-harbor-credentials"),
-                                     ],
-                                     security_context=client.V1PodSecurityContext(run_as_group=1000,
-                                                                                  run_as_non_root=True,
-                                                                                  run_as_user=1000))
-    depl_template = client.V1PodTemplateSpec(metadata=depl_pod_metadata, spec=depl_pod_spec)
+    depl_pod_spec = client.V1PodSpec(
+        containers=containers,
+        host_aliases=host_aliases,
+        image_pull_secrets=[
+            client.V1LocalObjectReference(name="flame-harbor-credentials"),
+        ],
+        security_context=client.V1PodSecurityContext(
+            run_as_group=1000, run_as_non_root=True, run_as_user=1000
+        ),
+    )
+    depl_template = client.V1PodTemplateSpec(
+        metadata=depl_pod_metadata, spec=depl_pod_spec
+    )
 
     depl_spec = client.V1DeploymentSpec(selector=depl_selector, template=depl_template)
-    depl_body = client.V1Deployment(api_version='apps/v1', kind='Deployment', metadata=depl_metadata, spec=depl_spec)
-    app_client.create_namespaced_deployment(async_req=False, namespace=namespace, body=depl_body)
-    time.sleep(.1)
+    depl_body = client.V1Deployment(
+        api_version="apps/v1", kind="Deployment", metadata=depl_metadata, spec=depl_spec
+    )
+    app_client.create_namespaced_deployment(
+        async_req=False, namespace=namespace, body=depl_body
+    )
+    time.sleep(0.1)
 
-    _ = _create_service(name,
-                        ports=PORTS['service'],
-                        target_ports=PORTS['analysis'],
-                        meta_data_labels=labels,
-                        namespace=namespace)
+    _ = _create_service(
+        name,
+        ports=PORTS["service"],
+        target_ports=PORTS["analysis"],
+        meta_data_labels=labels,
+        namespace=namespace,
+    )
     _create_analysis_nginx_deployment(name, env, namespace)
 
     return _get_pods(name, namespace)
 
 
-def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
+def delete_deployment(deployment_name: str, namespace: str = "default") -> None:
     """Tear down an analysis and its companion nginx resources.
 
     Deletes both the analysis and ``nginx-{name}`` deployments with their
@@ -157,18 +209,20 @@ def delete_deployment(deployment_name: str, namespace: str = 'default') -> None:
         deployment_name: Name of the analysis deployment to remove.
         namespace: Namespace the resources live in.
     """
-    logger.action(f"Deleting deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.action(
+        f"Deleting deployment {deployment_name} in namespace {namespace} at {time.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
     app_client = client.AppsV1Api()
-    for name in [deployment_name, f'nginx-{deployment_name}']:
+    for name in [deployment_name, f"nginx-{deployment_name}"]:
         _delete_k8s_deployment(app_client, name, namespace)
         _delete_service(name, namespace)
-    _delete_network_policy(f'nginx-to-{deployment_name}-policy', namespace)
-    _delete_config_map(f'nginx-{deployment_name}-config', namespace)
+    _delete_network_policy(f"nginx-to-{deployment_name}-policy", namespace)
+    _delete_config_map(f"nginx-{deployment_name}-config", namespace)
 
 
-def get_analysis_logs(deployment_names: dict[str, str],
-                      database: Database,
-                      namespace: str = 'default') -> dict[str, dict[str, list[str]]]:
+def get_analysis_logs(
+    deployment_names: dict[str, str], database: Database, namespace: str = "default"
+) -> dict[str, dict[str, list[str]]]:
     """Collect pod logs for the analysis and nginx deployments.
 
     Args:
@@ -182,17 +236,25 @@ def get_analysis_logs(deployment_names: dict[str, str],
         Nested mapping ``{'analysis': {analysis_id: [log, ...]},
         'nginx': {analysis_id: [log, ...]}}``.
     """
-    return {'analysis': {analysis_id: _get_logs(name=deployment_name,
-                                                pod_ids=database.get_deployment_pod_ids(deployment_name),
-                                                namespace=namespace)
-                         for analysis_id, deployment_name in deployment_names.items()},
-            'nginx': {analysis_id: _get_logs(name=f"nginx-{deployment_name}",
-                                             namespace=namespace)
-                      for analysis_id, deployment_name in deployment_names.items()}
-            }
+    return {
+        "analysis": {
+            analysis_id: _get_logs(
+                name=deployment_name,
+                pod_ids=database.get_deployment_pod_ids(deployment_name),
+                namespace=namespace,
+            )
+            for analysis_id, deployment_name in deployment_names.items()
+        },
+        "nginx": {
+            analysis_id: _get_logs(name=f"nginx-{deployment_name}", namespace=namespace)
+            for analysis_id, deployment_name in deployment_names.items()
+        },
+    }
 
 
-def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional[dict[str, dict[str, str]]]:
+def get_pod_status(
+    deployment_name: str, namespace: str = "default"
+) -> Optional[dict[str, dict[str, str]]]:
     """Return readiness and (if not ready) failure details for each pod in a deployment.
 
     Args:
@@ -206,7 +268,9 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
     core_client = client.CoreV1Api()
 
     # get pods in deployment
-    pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={deployment_name}').items
+    pods = core_client.list_namespaced_pod(
+        namespace=namespace, label_selector=f"app={deployment_name}"
+    ).items
 
     if pods is not None:
         pod_status = {}
@@ -218,20 +282,30 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
                 if status and status[0]:
                     status = status[0]
                     pod_status[name] = {}
-                    pod_status[name]['ready'] = status.ready
+                    pod_status[name]["ready"] = status.ready
                     if status.ready:
-                        pod_status[name]['reason'] = ''
-                        pod_status[name]['message'] = ''
+                        pod_status[name]["reason"] = ""
+                        pod_status[name]["message"] = ""
                     else:
                         if status.state.waiting is not None:
-                            pod_status[name]['reason'] = str(status.state.waiting.reason)
-                            pod_status[name]['message'] = str(status.state.waiting.message)
+                            pod_status[name]["reason"] = str(
+                                status.state.waiting.reason
+                            )
+                            pod_status[name]["message"] = str(
+                                status.state.waiting.message
+                            )
                         elif status.state.terminated is not None:
-                            pod_status[name]['reason'] = str(status.state.terminated.reason)
-                            pod_status[name]['message'] = str(status.state.terminated.message)
+                            pod_status[name]["reason"] = str(
+                                status.state.terminated.reason
+                            )
+                            pod_status[name]["message"] = str(
+                                status.state.terminated.message
+                            )
                         else:
-                            pod_status[name]['reason'] = "UnknownError"
-                            pod_status[name]['message'] = "Kubernetes fell into an unknown error state (neither terminated nor waiting)."
+                            pod_status[name]["reason"] = "UnknownError"
+                            pod_status[name]["message"] = (
+                                "Kubernetes fell into an unknown error state (neither terminated nor waiting)."
+                            )
         if pod_status:
             return pod_status
         else:
@@ -240,21 +314,33 @@ def get_pod_status(deployment_name: str, namespace: str = 'default') -> Optional
         return None
 
 
-def _build_nginx_host_aliases(nginx_name: str,
-                              nginx_service: client.V1Service,
-                              namespace: str = 'default') -> list[client.V1HostAlias]:
+def _build_nginx_host_aliases(
+    nginx_name: str, nginx_service: client.V1Service, namespace: str = "default"
+) -> list[client.V1HostAlias]:
     """Map the nginx service name onto its cluster IP for the analysis pod's hosts file."""
-    cluster_ip = nginx_service.spec.cluster_ip if nginx_service.spec is not None else None
-    if (not cluster_ip) or (cluster_ip == 'None'):
-        logger.error(f"Service {nginx_name} in namespace {namespace} was created without a cluster IP, so it cannot "
-                     f"be pinned into the analysis pod (cluster_ip={cluster_ip}).")
-        raise ValueError(f"Service {nginx_name} was created without a cluster IP (see logs)")
+    cluster_ip = (
+        nginx_service.spec.cluster_ip if nginx_service.spec is not None else None
+    )
+    if (not cluster_ip) or (cluster_ip == "None"):
+        logger.error(
+            f"Service {nginx_name} in namespace {namespace} was created without a cluster IP, so it cannot "
+            f"be pinned into the analysis pod (cluster_ip={cluster_ip})."
+        )
+        raise ValueError(
+            f"Service {nginx_name} was created without a cluster IP (see logs)"
+        )
 
-    return [client.V1HostAlias(ip=cluster_ip,
-                               hostnames=[nginx_name,
-                                          f"{nginx_name}.{namespace}",
-                                          f"{nginx_name}.{namespace}.svc",
-                                          f"{nginx_name}.{namespace}.svc.cluster.local"])]
+    return [
+        client.V1HostAlias(
+            ip=cluster_ip,
+            hostnames=[
+                nginx_name,
+                f"{nginx_name}.{namespace}",
+                f"{nginx_name}.{namespace}.svc",
+                f"{nginx_name}.{namespace}.svc.cluster.local",
+            ],
+        )
+    ]
 
 
 def _build_net_stats_container(analysis_name: str) -> Optional[client.V1Container]:
@@ -263,7 +349,7 @@ def _build_net_stats_container(analysis_name: str) -> Optional[client.V1Containe
     Controlled by the ``NET_STATS_ENABLED`` env var. Image is read from
     ``NET_STATS_IMAGE``. Emits a single cumulative log on SIGTERM.
     """
-    if os.getenv('NET_STATS_ENABLED', '').lower() not in ('1', 'true'):
+    if os.getenv("NET_STATS_ENABLED", "").lower() not in ("1", "true"):
         return None
 
     _NET_STATS_SCRIPT = """\
@@ -286,16 +372,18 @@ def _build_net_stats_container(analysis_name: str) -> Optional[client.V1Containe
     """
 
     return client.V1Container(
-        name=f'net-stats-{analysis_name}',
-        image=os.getenv('NET_STATS_IMAGE', 'busybox:1.37'),
-        image_pull_policy='IfNotPresent',
-        command=['/bin/sh', '-c', _NET_STATS_SCRIPT],
+        name=f"net-stats-{analysis_name}",
+        image=os.getenv("NET_STATS_IMAGE", "busybox:1.37"),
+        image_pull_policy="IfNotPresent",
+        command=["/bin/sh", "-c", _NET_STATS_SCRIPT],
     )
 
 
-def _create_analysis_nginx_deployment(analysis_name: str,
-                                      analysis_env: Optional[dict[str, str]] = None,
-                                      namespace: str = 'default') -> str:
+def _create_analysis_nginx_deployment(
+    analysis_name: str,
+    analysis_env: Optional[dict[str, str]] = None,
+    namespace: str = "default",
+) -> str:
     """Deploy the nginx reverse-proxy sidecar for an analysis.
 
     Builds the nginx ConfigMap, starts the ``nginx-{analysis_name}`` deployment
@@ -315,70 +403,84 @@ def _create_analysis_nginx_deployment(analysis_name: str,
     containers = []
     nginx_name = f"nginx-{analysis_name}"
 
-    config_map_name = _create_nginx_config_map(analysis_name=analysis_name,
-                                               nginx_name=nginx_name,
-                                               analysis_env=analysis_env,
-                                               namespace=namespace)
+    config_map_name = _create_nginx_config_map(
+        analysis_name=analysis_name,
+        nginx_name=nginx_name,
+        analysis_env=analysis_env,
+        namespace=namespace,
+    )
 
-    liveness_probe = client.V1Probe(http_get=client.V1HTTPGetAction(path="/healthz", port=PORTS['nginx'][0]),
-                                    initial_delay_seconds=15,
-                                    period_seconds=20,
-                                    failure_threshold=1,
-                                    timeout_seconds=5)
+    liveness_probe = client.V1Probe(
+        http_get=client.V1HTTPGetAction(path="/healthz", port=PORTS["nginx"][0]),
+        initial_delay_seconds=15,
+        period_seconds=20,
+        failure_threshold=1,
+        timeout_seconds=5,
+    )
 
     cf_vol = client.V1Volume(
         name="nginx-vol",
-        config_map=client.V1ConfigMapVolumeSource(name=config_map_name,
-                                                  items=[
-                                                      client.V1KeyToPath(
-                                                          key="nginx.conf",
-                                                          path="nginx.conf"
-                                                      )
-                                                  ])
+        config_map=client.V1ConfigMapVolumeSource(
+            name=config_map_name,
+            items=[client.V1KeyToPath(key="nginx.conf", path="nginx.conf")],
+        ),
     )
 
     vol_mount = client.V1VolumeMount(
-        name="nginx-vol",
-        mount_path="/etc/nginx/nginx.conf",
-        sub_path="nginx.conf"
+        name="nginx-vol", mount_path="/etc/nginx/nginx.conf", sub_path="nginx.conf"
     )
-    container = client.V1Container(name=nginx_name,
-                                   image=os.getenv('NGINX_IMAGE', 'nginxinc/nginx-unprivileged:1.31.4-alpine-perl'),
-                                   image_pull_policy="IfNotPresent",
-                                   ports=[client.V1ContainerPort(PORTS['nginx'][0])],
-                                   liveness_probe=liveness_probe,
-                                   volume_mounts=[vol_mount])
+    container = client.V1Container(
+        name=nginx_name,
+        image=os.getenv(
+            "NGINX_IMAGE", "nginxinc/nginx-unprivileged:1.31.4-alpine-perl"
+        ),
+        image_pull_policy="IfNotPresent",
+        ports=[client.V1ContainerPort(PORTS["nginx"][0])],
+        liveness_probe=liveness_probe,
+        volume_mounts=[vol_mount],
+    )
     containers.append(container)
 
-    depl_metadata = client.V1ObjectMeta(name=nginx_name,
-                                        namespace=namespace,
-                                        labels={'app': nginx_name, 'component': 'flame-analysis-nginx'})
-    labels = {'app': nginx_name, 'component': 'flame-analysis-nginx'}
+    depl_metadata = client.V1ObjectMeta(
+        name=nginx_name,
+        namespace=namespace,
+        labels={"app": nginx_name, "component": "flame-analysis-nginx"},
+    )
+    labels = {"app": nginx_name, "component": "flame-analysis-nginx"}
     depl_pod_metadata = client.V1ObjectMeta(labels=labels)
-    depl_selector = client.V1LabelSelector(match_labels={'app': nginx_name})
-    depl_pod_spec = client.V1PodSpec(containers=containers,
-                                     volumes=[cf_vol],
-                                     security_context=client.V1PodSecurityContext(run_as_group=101,
-                                                                                  run_as_non_root=True,
-                                                                                  run_as_user=101)
-                                     )
-    depl_template = client.V1PodTemplateSpec(metadata=depl_pod_metadata, spec=depl_pod_spec)
+    depl_selector = client.V1LabelSelector(match_labels={"app": nginx_name})
+    depl_pod_spec = client.V1PodSpec(
+        containers=containers,
+        volumes=[cf_vol],
+        security_context=client.V1PodSecurityContext(
+            run_as_group=101, run_as_non_root=True, run_as_user=101
+        ),
+    )
+    depl_template = client.V1PodTemplateSpec(
+        metadata=depl_pod_metadata, spec=depl_pod_spec
+    )
 
     depl_spec = client.V1DeploymentSpec(selector=depl_selector, template=depl_template)
-    depl_body = client.V1Deployment(api_version='apps/v1', kind='Deployment', metadata=depl_metadata, spec=depl_spec)
+    depl_body = client.V1Deployment(
+        api_version="apps/v1", kind="Deployment", metadata=depl_metadata, spec=depl_spec
+    )
 
-    app_client.create_namespaced_deployment(async_req=False, namespace=namespace, body=depl_body)
+    app_client.create_namespaced_deployment(
+        async_req=False, namespace=namespace, body=depl_body
+    )
 
-    time.sleep(.1)
+    time.sleep(0.1)
     _create_analysis_network_policy(analysis_name, nginx_name, namespace)
 
     return nginx_name
 
 
-def _create_nginx_config_map(analysis_name: str,
-                             nginx_name: str,
-                             analysis_env: Optional[dict[str, str]] = None,
-                             namespace: str = 'default') -> str:
+def _create_nginx_config_map(
+    analysis_name: str,
+    nginx_name: str,
+    analysis_env: Optional[dict[str, str]] = None,
+    namespace: str = "default",
+) -> str:
     """Build and create the nginx ConfigMap scoped to a single analysis.
 
     Discovers the message broker, pod orchestration, hub adapter, kong, and
@@ -402,47 +504,51 @@ def _create_nginx_config_map(analysis_name: str,
             pod cannot be found.
     """
     if analysis_env is None:
-        logger.error(f"Error creating an nginx failed since no analysis_env containing analysis and poject id was provided.")
-        raise ValueError(f"Error creating an nginx failed since no analysis_env containing analysis and poject id was provided.")
+        logger.error(
+            "Error creating an nginx failed since no analysis_env containing analysis and poject id was provided."
+        )
+        raise ValueError(
+            "Error creating an nginx failed since no analysis_env containing analysis and poject id was provided."
+        )
     core_client = client.CoreV1Api()
 
     # get the service name of the message broker
-    message_broker_service_name = find_k8s_resources('service',
-                                                     'label',
-                                                     'component=flame-message-broker',
-                                                     namespace=namespace)[0]
+    message_broker_service_name = find_k8s_resources(
+        "service", "label", "component=flame-message-broker", namespace=namespace
+    )[0]
 
     # await and get the pod id and name of the message broker
-    message_broker_pod_name = find_k8s_resources('pod',
-                                                 'label',
-                                                 'component=flame-message-broker',
-                                                 namespace=namespace)[0]
+    message_broker_pod_name = find_k8s_resources(
+        "pod", "label", "component=flame-message-broker", namespace=namespace
+    )[0]
     message_broker_pod = None
     while message_broker_pod is None:
-        message_broker_pod = core_client.read_namespaced_pod(name=message_broker_pod_name,
-                                                             namespace=namespace)
+        message_broker_pod = core_client.read_namespaced_pod(
+            name=message_broker_pod_name, namespace=namespace
+        )
         if message_broker_pod is not None:
             message_broker_ip = message_broker_pod.status.pod_ip
         time.sleep(1)
 
     # get the service name of the pod orchestrator
-    po_service_name = find_k8s_resources('service',
-                                         'label',
-                                         'component=flame-po',
-                                         namespace=namespace)[0]
+    po_service_name = find_k8s_resources(
+        "service", "label", "component=flame-po", namespace=namespace
+    )[0]
 
     # await and get the pod ip and name of the pod orchestrator
-    pod_orchestration_name = find_k8s_resources('pod',
-                                                'label',
-                                                'component=flame-po',
-                                                namespace=namespace)[0]
+    pod_orchestration_name = find_k8s_resources(
+        "pod", "label", "component=flame-po", namespace=namespace
+    )[0]
     pod_orchestration_pod = None
     while pod_orchestration_pod is None:
         try:
-            pod_orchestration_pod = core_client.read_namespaced_pod(name=pod_orchestration_name,
-                                                                    namespace=namespace)
-        except:
-            raise ValueError(f"Could not find pod orchestration pod with name {pod_orchestration_name} in namespace {namespace}. ")
+            pod_orchestration_pod = core_client.read_namespaced_pod(
+                name=pod_orchestration_name, namespace=namespace
+            )
+        except Exception as e:
+            raise ValueError(
+                f"Could not find pod orchestration pod with name {pod_orchestration_name} in namespace {namespace}. "
+            ) from e
         if pod_orchestration_pod is not None:
             pod_orchestration_ip = pod_orchestration_pod.status.pod_ip
         time.sleep(1)
@@ -450,28 +556,28 @@ def _create_nginx_config_map(analysis_name: str,
     # await and get analysis pod ip
     analysis_ip = None
     while analysis_ip is None:
-        pod_list_object = core_client.list_namespaced_pod(label_selector=f"app={analysis_name}",
-                                                          watch=False,
-                                                          namespace=namespace)
+        pod_list_object = core_client.list_namespaced_pod(
+            label_selector=f"app={analysis_name}", watch=False, namespace=namespace
+        )
 
         if len(pod_list_object.items) > 0:
             analysis_ip = pod_list_object.items[0].status.pod_ip
         time.sleep(1)
 
     # get the name of the hub adapter, kong proxy, and storage service
-    hub_adapter_service_name = find_k8s_resources('service',
-                                                  'label',
-                                                  'component=flame-hub-adapter',
-                                                  namespace=namespace)[0]
-    kong_proxy_name = find_k8s_resources('service',
-                                         'label',
-                                         'app.kubernetes.io/name=kong',
-                                         manual_name_selector='proxy',
-                                         namespace=namespace)[0]
-    storage_service_name = find_k8s_resources('service',
-                                              'label',
-                                              'component=flame-storage-service',
-                                              namespace=namespace)[0]
+    hub_adapter_service_name = find_k8s_resources(
+        "service", "label", "component=flame-hub-adapter", namespace=namespace
+    )[0]
+    kong_proxy_name = find_k8s_resources(
+        "service",
+        "label",
+        "app.kubernetes.io/name=kong",
+        manual_name_selector="proxy",
+        namespace=namespace,
+    )[0]
+    storage_service_name = find_k8s_resources(
+        "service", "label", "component=flame-storage-service", namespace=namespace
+    )[0]
 
     proxy_timeout = 900
     proxy_connect_timeout = 10
@@ -486,7 +592,7 @@ def _create_nginx_config_map(analysis_name: str,
                 sendfile on;
                 
                  server {{
-                    listen {PORTS['nginx'][0]};
+                    listen {PORTS["nginx"][0]};
                     
                     client_max_body_size 0;
                     chunked_transfer_encoding on;
@@ -527,7 +633,7 @@ def _create_nginx_config_map(analysis_name: str,
                     
                     
                     # egress: analysis deployment to hub-adapter
-                    location /hub-adapter/kong/datastore/{analysis_env['PROJECT_ID']} {{
+                    location /hub-adapter/kong/datastore/{analysis_env["PROJECT_ID"]} {{
                         rewrite     ^/hub-adapter(/.*) $1 break;
                         proxy_pass http://{hub_adapter_service_name}:5000;
                         allow       {analysis_ip};
@@ -536,14 +642,14 @@ def _create_nginx_config_map(analysis_name: str,
                     
                     
                     # egress: analysis deployment to message broker: participants
-                    location ~ ^/message-broker/analyses/{analysis_env['ANALYSIS_ID']}/participants(|/self) {{
+                    location ~ ^/message-broker/analyses/{analysis_env["ANALYSIS_ID"]}/participants(|/self) {{
                         rewrite     ^/message-broker(/.*) $1 break;
                         proxy_pass  http://{message_broker_service_name};
                         allow       {analysis_ip};
                         deny        all;
                     }}
                     # egress: analysis deployment to message broker: analysis message
-                    location ~ ^/message-broker/analyses/{analysis_env['ANALYSIS_ID']}/messages(|/subscriptions) {{
+                    location ~ ^/message-broker/analyses/{analysis_env["ANALYSIS_ID"]}/messages(|/subscriptions) {{
                         rewrite     ^/message-broker(/.*) $1 break;
                         proxy_pass  http://{message_broker_service_name};
                         allow       {analysis_ip};
@@ -588,20 +694,24 @@ def _create_nginx_config_map(analysis_name: str,
     config_map = client.V1ConfigMap(
         api_version="v1",
         kind="ConfigMap",
-        metadata=client.V1ObjectMeta(name=name,
-                                     namespace=namespace,
-                                     labels={'component': 'flame-nginx-analysis-config-map'}),
-        data=data
+        metadata=client.V1ObjectMeta(
+            name=name,
+            namespace=namespace,
+            labels={"component": "flame-nginx-analysis-config-map"},
+        ),
+        data=data,
     )
     core_client.create_namespaced_config_map(namespace=namespace, body=config_map)
     return name
 
 
-def _create_service(name: str,
-                    ports: list[int],
-                    target_ports: list[int],
-                    meta_data_labels: dict[str, str] = None,
-                    namespace: str = 'default') -> client.V1Service:
+def _create_service(
+    name: str,
+    ports: list[int],
+    target_ports: list[int],
+    meta_data_labels: dict[str, str] = None,
+    namespace: str = "default",
+) -> client.V1Service:
     """Create a ClusterIP service selecting pods by the ``app={name}`` label.
 
     Args:
@@ -615,20 +725,30 @@ def _create_service(name: str,
         The created service object, including the assigned cluster IP.
     """
     if meta_data_labels is None:
-        meta_data_labels = {'app': name}
+        meta_data_labels = {"app": name}
 
     core_client = client.CoreV1Api()
-    service_spec = client.V1ServiceSpec(selector={'app': name},
-                                        ports=[client.V1ServicePort(port=port, target_port=target_port)
-                                               for port, target_port in zip(ports, target_ports)])
+    service_spec = client.V1ServiceSpec(
+        selector={"app": name},
+        ports=[
+            client.V1ServicePort(port=port, target_port=target_port)
+            for port, target_port in zip(ports, target_ports)
+        ],
+    )
 
-    service_body = client.V1Service(metadata=client.V1ObjectMeta(name=name, namespace=namespace, labels=meta_data_labels),
-                                    spec=service_spec)
+    service_body = client.V1Service(
+        metadata=client.V1ObjectMeta(
+            name=name, namespace=namespace, labels=meta_data_labels
+        ),
+        spec=service_spec,
+    )
 
     return core_client.create_namespaced_service(body=service_body, namespace=namespace)
 
 
-def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespace: str = 'default') -> None:
+def _create_analysis_network_policy(
+    analysis_name: str, nginx_name: str, namespace: str = "default"
+) -> None:
     """Install the network policy that isolates an analysis pod.
 
     Allows egress only to the nginx sidecar and kube-dns, and ingress only
@@ -642,50 +762,94 @@ def _create_analysis_network_policy(analysis_name: str, nginx_name: str, namespa
     network_client = client.NetworkingV1Api()
 
     # egress to the nginx pod only, on the port it proxies on (ports match the destination pod port, post-DNAT)
-    egress = [client.V1NetworkPolicyEgressRule(
-        to=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_name}))],
-        ports=[client.V1NetworkPolicyPort(port=PORTS['nginx'][0], protocol='TCP')]
-    )]
+    egress = [
+        client.V1NetworkPolicyEgressRule(
+            to=[
+                client.V1NetworkPolicyPeer(
+                    pod_selector=client.V1LabelSelector(
+                        match_labels={"app": nginx_name}
+                    )
+                )
+            ],
+            ports=[client.V1NetworkPolicyPort(port=PORTS["nginx"][0], protocol="TCP")],
+        )
+    ]
 
     # ingress from the nginx pod only, on the analysis port
-    ingress = [client.V1NetworkPolicyIngressRule(
-        _from=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={'app': nginx_name}))],
-        ports=[client.V1NetworkPolicyPort(port=PORTS['analysis'][0], protocol='TCP')]
-    )]
+    ingress = [
+        client.V1NetworkPolicyIngressRule(
+            _from=[
+                client.V1NetworkPolicyPeer(
+                    pod_selector=client.V1LabelSelector(
+                        match_labels={"app": nginx_name}
+                    )
+                )
+            ],
+            ports=[
+                client.V1NetworkPolicyPort(port=PORTS["analysis"][0], protocol="TCP")
+            ],
+        )
+    ]
 
-    policy_types = ['Ingress', 'Egress']
-    pod_selector = client.V1LabelSelector(match_labels={'app': analysis_name})
-    network_spec = client.V1NetworkPolicySpec(pod_selector=pod_selector,
-                                              policy_types=policy_types,
-                                              ingress=ingress,
-                                              egress=egress)
-    network_metadata = client.V1ObjectMeta(name=f'nginx-to-{analysis_name}-policy',
-                                           namespace=namespace,
-                                           labels={'component': 'flame-nginx-to-analysis-policy'})
-    network_body = client.V1NetworkPolicy(api_version='networking.k8s.io/v1',
-                                          kind='NetworkPolicy',
-                                          metadata=network_metadata,
-                                          spec=network_spec)
+    policy_types = ["Ingress", "Egress"]
+    pod_selector = client.V1LabelSelector(match_labels={"app": analysis_name})
+    network_spec = client.V1NetworkPolicySpec(
+        pod_selector=pod_selector,
+        policy_types=policy_types,
+        ingress=ingress,
+        egress=egress,
+    )
+    network_metadata = client.V1ObjectMeta(
+        name=f"nginx-to-{analysis_name}-policy",
+        namespace=namespace,
+        labels={"component": "flame-nginx-to-analysis-policy"},
+    )
+    network_body = client.V1NetworkPolicy(
+        api_version="networking.k8s.io/v1",
+        kind="NetworkPolicy",
+        metadata=network_metadata,
+        spec=network_spec,
+    )
 
-    network_client.create_namespaced_network_policy(namespace=namespace, body=network_body)
+    network_client.create_namespaced_network_policy(
+        namespace=namespace, body=network_body
+    )
 
 
-def _delete_k8s_deployment(app_client: client.AppsV1Api, name: str, namespace: str) -> None:
+def _delete_k8s_deployment(
+    app_client: client.AppsV1Api, name: str, namespace: str
+) -> None:
+    """Delete a Kubernetes deployment by name.
+
+    A missing deployment is logged as a warning rather than raised, so repeated
+    cleanup passes stay idempotent.
+
+    Args:
+        app_client: Apps API client to issue the delete through.
+        name: Name of the deployment.
+        namespace: Namespace holding the deployment.
+    """
     try:
-        app_client.delete_namespaced_deployment(async_req=False,
-                                                name=name,
-                                                namespace=namespace,
-                                                propagation_policy='Background')
+        app_client.delete_namespaced_deployment(
+            async_req=False,
+            name=name,
+            namespace=namespace,
+            propagation_policy="Background",
+        )
     except client.exceptions.ApiException as e:
-        if e.reason == 'Not Found':
+        if e.reason == "Not Found":
             logger.warning(f"Could not find deployment {name} for deletion")
         else:
-            logger.error(f"Unknown error when attempting to delete deployment {name} (reason={e.reason})")
+            logger.error(
+                f"Unknown error when attempting to delete deployment {name} (reason={e.reason})"
+            )
     except Exception as e:
-        logger.error(f"Unexpected error when attempting to delete deployment {name}: {e}")
+        logger.error(
+            f"Unexpected error when attempting to delete deployment {name}: {e}"
+        )
 
 
-def _delete_service(name: str, namespace: str = 'default') -> None:
+def _delete_service(name: str, namespace: str = "default") -> None:
     """Delete a Kubernetes service by name.
 
     Args:
@@ -694,43 +858,82 @@ def _delete_service(name: str, namespace: str = 'default') -> None:
     """
     core_client = client.CoreV1Api()
     try:
-        core_client.delete_namespaced_service(async_req=False, name=name, namespace=namespace, propagation_policy='Background')
+        core_client.delete_namespaced_service(
+            async_req=False,
+            name=name,
+            namespace=namespace,
+            propagation_policy="Background",
+        )
     except client.exceptions.ApiException as e:
-        if e.reason == 'Not Found':
+        if e.reason == "Not Found":
             logger.warning(f"Could not find service {name} for deletion")
         else:
-            logger.error(f"Unknown error when attempting to delete service {name} (reason={e.reason})")
+            logger.error(
+                f"Unknown error when attempting to delete service {name} (reason={e.reason})"
+            )
     except Exception as e:
         logger.error(f"Unexpected error when attempting to delete service {name}: {e}")
 
 
 def _delete_network_policy(name: str, namespace: str) -> None:
+    """Delete an analysis network policy by name.
+
+    A missing policy is logged as a warning rather than raised, so repeated
+    cleanup passes stay idempotent.
+
+    Args:
+        name: Name of the network policy.
+        namespace: Namespace holding the network policy.
+    """
     network_client = client.NetworkingV1Api()
     try:
-        network_client.delete_namespaced_network_policy(name=name, namespace=namespace, propagation_policy='Background')
+        network_client.delete_namespaced_network_policy(
+            name=name, namespace=namespace, propagation_policy="Background"
+        )
     except client.exceptions.ApiException as e:
-        if e.reason == 'Not Found':
+        if e.reason == "Not Found":
             logger.warning(f"Could not find network policy {name} for deletion")
         else:
-            logger.error(f"Unknown error when attempting to delete network policy {name} (reason={e.reason})")
+            logger.error(
+                f"Unknown error when attempting to delete network policy {name} (reason={e.reason})"
+            )
     except Exception as e:
-        logger.error(f"Unexpected error when attempting to delete network policy {name}: {e}")
+        logger.error(
+            f"Unexpected error when attempting to delete network policy {name}: {e}"
+        )
 
 
 def _delete_config_map(name: str, namespace: str) -> None:
+    """Delete a config map by name.
+
+    A missing config map is logged as a warning rather than raised, so repeated
+    cleanup passes stay idempotent.
+
+    Args:
+        name: Name of the config map.
+        namespace: Namespace holding the config map.
+    """
     core_client = client.CoreV1Api()
     try:
-        core_client.delete_namespaced_config_map(name=name, namespace=namespace, propagation_policy='Background')
+        core_client.delete_namespaced_config_map(
+            name=name, namespace=namespace, propagation_policy="Background"
+        )
     except client.exceptions.ApiException as e:
-        if e.reason == 'Not Found':
+        if e.reason == "Not Found":
             logger.warning(f"Could not find config map {name} for deletion")
         else:
-            logger.error(f"Unknown error when attempting to delete config map {name} (reason={e.reason})")
+            logger.error(
+                f"Unknown error when attempting to delete config map {name} (reason={e.reason})"
+            )
     except Exception as e:
-        logger.error(f"Unexpected error when attempting to delete config map {name}: {e}")
+        logger.error(
+            f"Unexpected error when attempting to delete config map {name}: {e}"
+        )
 
 
-def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = 'default') -> list[str]:
+def _get_logs(
+    name: str, pod_ids: Optional[list[str]] = None, namespace: str = "default"
+) -> list[str]:
     """Retrieve and sanitize logs for the pods matching ``app={name}``.
 
     Filters out INFO lines and routine health/webhook access lines, and strips
@@ -746,29 +949,42 @@ def _get_logs(name: str, pod_ids: Optional[list[str]] = None, namespace: str = '
     """
     core_client = client.CoreV1Api()
     # get pods in deployment
-    pods = core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name}')
+    pods = core_client.list_namespaced_pod(
+        namespace=namespace, label_selector=f"app={name}"
+    )
 
     pod_logs = []
     for pod in pods.items:
         if (pod_ids is None) or (pod.metadata.name in pod_ids):
             try:
-                pod_logs.append(core_client.read_namespaced_pod_log(pod.metadata.name, namespace))
+                pod_logs.append(
+                    core_client.read_namespaced_pod_log(pod.metadata.name, namespace)
+                )
             except client.exceptions.ApiException as e:
-                logger.error(f"APIException while trying to retrieve pod logs for pod_name={pod.metadata.name}: "
-                             f"{repr(e)}")
+                logger.error(
+                    f"APIException while trying to retrieve pod logs for pod_name={pod.metadata.name}: "
+                    f"{repr(e)}"
+                )
     # sanitize pod logs
     final_logs = []
     for log in pod_logs:
-        log = ''.join(filter(lambda x: x in string.printable, log))
-        log = '\n'.join([l for l in log.split('\n')
-                         if not l.startswith('INFO:') and
-                         not (l.endswith('"GET /healthz HTTP/1.0" 200 OK') or
-                              l.endswith('"POST /webhook HTTP/1.0" 200 OK'))])
+        log = "".join(filter(lambda x: x in string.printable, log))
+        log = "\n".join(
+            [
+                line
+                for line in log.split("\n")
+                if not line.startswith("INFO:")
+                and not (
+                    line.endswith('"GET /healthz HTTP/1.0" 200 OK')
+                    or line.endswith('"POST /webhook HTTP/1.0" 200 OK')
+                )
+            ]
+        )
         final_logs.append(log)
     return final_logs
 
 
-def _get_pods(name: str, namespace: str = 'default') -> list[str]:
+def _get_pods(name: str, namespace: str = "default") -> list[str]:
     """Return pod names matching the ``app={name}`` label selector.
 
     Args:
@@ -779,5 +995,9 @@ def _get_pods(name: str, namespace: str = 'default') -> list[str]:
         List of matching pod names.
     """
     core_client = client.CoreV1Api()
-    return [pod.metadata.name
-            for pod in core_client.list_namespaced_pod(namespace=namespace, label_selector=f'app={name}').items]
+    return [
+        pod.metadata.name
+        for pod in core_client.list_namespaced_pod(
+            namespace=namespace, label_selector=f"app={name}"
+        ).items
+    ]

@@ -7,8 +7,9 @@ Each analysis runs in a dedicated Kubernetes deployment with an nginx reverse-pr
 ## Features
 
 - REST API to create, stop, delete, and inspect analysis pods
-- Per-analysis Kubernetes `Deployment`, `Service`, `NetworkPolicy`, `ConfigMap`, and Harbor pull secret
-- Background status loop that syncs pod state with the FLAME Hub and auto-restarts stuck pods (up to 10 retries)
+- Per-analysis Kubernetes `Deployment`, `Service`, `NetworkPolicy`, `ConfigMap`, and registry pull secret
+- Optional network-statistics sidecar per analysis (`NET_STATS_ENABLED`)
+- Background status loop that syncs pod state with the FLAME Hub and auto-restarts stuck pods (up to 3 restarts, then `FAILED`)
 - Archival of completed analyses to a separate database table
 - Structured JSON logging with custom log levels (`ACTION`, `STATUS_LOOP`)
 - Keycloak OAuth2 / JWT authentication on all endpoints except `/po/healthz`
@@ -78,7 +79,7 @@ Analyses move through the following states:
 
 ```
 STARTING → STARTED → EXECUTING → EXECUTED | STOPPED | FAILED
-                            ↘ STUCK (transient, auto-restart up to 10x)
+                            ↘ STUCK (transient, auto-restart up to 3x)
 ```
 
 Deployments are named `analysis-{analysis_id}-{restart_counter}`.
@@ -104,7 +105,9 @@ Interactive docs: `/api/docs` (Swagger), `/api/redoc` (ReDoc).
 
 ## Configuration
 
-Configuration is supplied via environment variables. See `.env.template` for the full list.
+Configuration is supplied via environment variables. The tables below list every variable the
+service actually reads; `.env.template` is a starting point for local development and currently
+lags behind them.
 
 ### Required
 
@@ -114,18 +117,22 @@ Configuration is supplied via environment variables. See `.env.template` for the
 | `KEYCLOAK_URL`, `KEYCLOAK_REALM` | Keycloak instance |
 | `RESULT_CLIENT_ID`, `RESULT_CLIENT_SECRET` | Result-service OAuth client |
 | `HUB_CLIENT_ID`, `HUB_CLIENT_SECRET`, `HUB_URL_CORE`, `HUB_URL_AUTH` | FLAME Hub access |
-| `HARBOR_URL`, `HARBOR_USER`, `HARBOR_PW` | Harbor registry for analysis images |
-| `NODE_NAME` | Logical node identifier |
+
+> Registry credentials for analysis images are **not** configured here. They are supplied
+> per analysis in the `POST /po/` request body (`registry_url`, `registry_user`,
+> `registry_password`) and turned into a `dockerconfigjson` pull secret for that analysis.
 
 ### Optional
 
-| Variable | Description |
-|----------|-------------|
-| `NODE_KEY`, `NODE_KEY_PW` | Node private key (path + passphrase) |
-| `PO_HTTP_PROXY`, `PO_HTTPS_PROXY` | Outbound proxy |
-| `HUB_LOGGING` | Enable Hub client logging |
-| `EXTRA_CA_CERTS` | Additional CA bundle path |
-| `STATUS_LOOP_INTERVAL` | Status-loop interval in seconds |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PO_HTTP_PROXY`, `PO_HTTPS_PROXY` | Outbound proxy for Hub traffic | unset |
+| `HUB_LOGGING` | Forward analysis logs to the FLAME Hub | unset |
+| `EXTRA_CA_CERTS` | Additional CA bundle path | unset |
+| `STATUS_LOOP_INTERVAL` | Status-loop interval in seconds | `10` |
+| `NGINX_IMAGE` | Image for the reverse-proxy sidecar | `nginxinc/nginx-unprivileged:1.31.4-alpine-perl` |
+| `NET_STATS_ENABLED` | Enable the network-statistics sidecar (`1` / `true`) | disabled |
+| `NET_STATS_IMAGE` | Image for that sidecar | `busybox:1.37` |
 
 ## Project Layout
 
@@ -146,8 +153,8 @@ src/
 ├── status/
 │   ├── status.py         # Background status loop
 │   └── constants.py      # Status enums and timeouts
-└── utils/                # Logging, tokens, Hub client, helpers
-tests/                    # Pytest suite (see tests/TEST_PLAN.md)
+└── utils/                # Logging, tokens, Hub client, message broker, helpers
+tests/                    # Pytest suite
 ```
 
 ## Development Conventions

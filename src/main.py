@@ -1,3 +1,11 @@
+"""Service entry point.
+
+Wires together the three startup concerns of the Pod Orchestration service:
+loading the in-cluster Kubernetes configuration and ``.env`` overrides,
+initializing the PostgreSQL schema, and launching the two long-running
+threads -- the FastAPI server and the background status monitoring loop.
+"""
+
 import os
 from threading import Thread
 from dotenv import load_dotenv, find_dotenv
@@ -24,17 +32,24 @@ def main():
     spawns the FastAPI server in a background thread, and starts the blocking
     status monitoring loop on the main thread.
     """
-    if not os.getenv('NGINX_IMAGE'):
-        logger.warning("Environment variable 'NGINX_IMAGE' is not set, defaulting to 'nginx:1.29.8'.")
+    if not os.getenv("NGINX_IMAGE"):
+        logger.warning(
+            "Environment variable 'NGINX_IMAGE' is not set, defaulting to "
+            "'nginxinc/nginx-unprivileged:1.31.4-alpine-perl'."
+        )
 
     # init database
     database = Database()
     namespace = get_current_namespace()
-    api_thread = Thread(target=start_po_api, kwargs={'database': database, 'namespace': namespace})
+    api_thread = Thread(
+        target=start_po_api, kwargs={"database": database, "namespace": namespace}
+    )
     api_thread.start()
 
     # start status loop
-    status_loop(database, int(os.getenv('STATUS_LOOP_INTERVAL', '10')), namespace=namespace)
+    status_loop(
+        database, int(os.getenv("STATUS_LOOP_INTERVAL", "10")), namespace=namespace
+    )
 
 
 def start_po_api(database: Database, namespace: str):
@@ -47,6 +62,6 @@ def start_po_api(database: Database, namespace: str):
     PodOrchestrationAPI(database, namespace)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logger.info("Starting server")
     main()

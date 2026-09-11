@@ -1,3 +1,12 @@
+"""Analysis lifecycle business logic.
+
+Sits between the REST API and the Kubernetes / database layers: creates
+analyses and their supporting resources, retrieves status, history and logs,
+stops and deletes analyses, restarts stuck deployments, and cleans up orphaned
+Kubernetes objects and Keycloak clients left behind by analyses the Hub no
+longer knows about.
+"""
+
 import ast
 import time
 from typing import Union
@@ -13,10 +22,11 @@ from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
 from src.k8s.utils import find_k8s_resources, delete_k8s_resource
 from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
-from src.utils.hub_client import (init_hub_client_and_update_hub_status,
-                                  update_hub_status,
-                                  get_node_analysis_id,
-                                  get_analysis_node_statuses)
+from src.utils.hub_client import (
+    init_hub_client_and_update_hub_status,
+    update_hub_status,
+    get_node_analysis_id,
+)
 from src.utils.other import resource_name_to_analysis
 from src.utils.po_logging import get_logger
 from src.utils.other import is_uuid
@@ -28,7 +38,9 @@ logger = get_logger()
 _MAX_UNSTUCK_REATTEMPTS = 10
 
 
-def create_analysis(body: Union[CreateAnalysis, str], database: Database, namespace: str ="default") -> dict[str, str]:
+def create_analysis(
+    body: Union[CreateAnalysis, str], database: Database, namespace: str = "default"
+) -> dict[str, str]:
     """Create and start a new analysis deployment.
 
     Validates the UUIDs, provisions the Harbor pull secret, constructs the
@@ -53,15 +65,24 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database, namesp
     if isinstance(body, str):
         body = database.extract_analysis_body(body)
         if body is None:
-            return {'status': "Analysis ID not found in database."}
+            return {"status": "Analysis ID not found in database."}
         else:
             body = CreateAnalysis(**body)
 
-    if not(is_uuid(body.analysis_id) or is_uuid(body.project_id)):
-        logger.error(f"Received request to create analysis with ID {body.analysis_id} for project {body.project_id}")
-        raise HTTPException(status_code=400, detail="Analysis ID and Project ID must be valid UUIDs.")
+    if not (is_uuid(body.analysis_id) or is_uuid(body.project_id)):
+        logger.error(
+            f"Received request to create analysis with ID {body.analysis_id} for project {body.project_id}"
+        )
+        raise HTTPException(
+            status_code=400, detail="Analysis ID and Project ID must be valid UUIDs."
+        )
 
-    create_harbor_secret(body.registry_url, body.registry_user, body.registry_password, namespace=namespace)
+    create_harbor_secret(
+        body.registry_url,
+        body.registry_user,
+        body.registry_password,
+        namespace=namespace,
+    )
 
     analysis = Analysis(
         analysis_id=body.analysis_id,
@@ -73,17 +94,21 @@ def create_analysis(body: Union[CreateAnalysis, str], database: Database, namesp
         namespace=namespace,
         kong_token=body.kong_token,
         restart_counter=body.restart_counter + 1,
-        progress=body.progress
+        progress=body.progress,
     )
     analysis.start(database=database, namespace=namespace)
 
     # update hub status
-    init_hub_client_and_update_hub_status(body.analysis_id, AnalysisStatus.STARTED.value)
+    init_hub_client_and_update_hub_status(
+        body.analysis_id, AnalysisStatus.STARTED.value
+    )
 
     return {body.analysis_id: analysis.status}
 
 
-def retrieve_history(analysis_id_str: str, database: Database) -> dict[str, dict[str, list[str]]]:
+def retrieve_history(
+    analysis_id_str: str, database: Database
+) -> dict[str, dict[str, list[str]]]:
     """Return the persisted analysis and nginx logs for terminated analyses.
 
     Only deployments in ``STOPPED``, ``EXECUTED``, or ``FAILED`` are included.
@@ -97,7 +122,7 @@ def retrieve_history(analysis_id_str: str, database: Database) -> dict[str, dict
         Nested mapping ``{'analysis': {analysis_id: [...]},
         'nginx': {analysis_id: [...]}}``.
     """
-    if analysis_id_str == 'all':
+    if analysis_id_str == "all":
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
@@ -106,22 +131,26 @@ def retrieve_history(analysis_id_str: str, database: Database) -> dict[str, dict
     for analysis_id in analysis_ids:
         deployment = database.get_latest_deployment(analysis_id)
         if deployment is not None:
-            if deployment.status in [AnalysisStatus.STOPPED.value,
-                                     AnalysisStatus.EXECUTED.value,
-                                     AnalysisStatus.FAILED.value]:
+            if deployment.status in [
+                AnalysisStatus.STOPPED.value,
+                AnalysisStatus.EXECUTED.value,
+                AnalysisStatus.FAILED.value,
+            ]:
                 deployments[analysis_id] = read_db_analysis(deployment)
 
     analysis_logs, nginx_logs = ({}, {})
     for analysis_id, deployment in deployments.items():
         # interpret log string as a dictionary
         log = ast.literal_eval(deployment.log)
-        analysis_logs[analysis_id] = log['analysis'][analysis_id]
-        nginx_logs[analysis_id] = log['nginx'][analysis_id]
+        analysis_logs[analysis_id] = log["analysis"][analysis_id]
+        nginx_logs[analysis_id] = log["nginx"][analysis_id]
 
-    return {'analysis': analysis_logs, 'nginx': nginx_logs}
+    return {"analysis": analysis_logs, "nginx": nginx_logs}
 
 
-def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[str, list[str]]]:
+def retrieve_logs(
+    analysis_id_str: str, database: Database
+) -> dict[str, dict[str, list[str]]]:
     """Return live pod logs for analyses currently in ``EXECUTING``.
 
     Args:
@@ -132,24 +161,28 @@ def retrieve_logs(analysis_id_str: str, database: Database) -> dict[str, dict[st
         Nested mapping ``{'analysis': {...}, 'nginx': {...}}`` returned by
         :func:`get_analysis_logs`.
     """
-    if analysis_id_str == 'all':
+    if analysis_id_str == "all":
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
 
-    namespace = 'default'
+    namespace = "default"
     deployment_names = {}
     for analysis_id in analysis_ids:
         deployment = database.get_latest_deployment(analysis_id)
         if deployment is not None:
             if deployment.status in [AnalysisStatus.EXECUTING.value]:
-                deployment_names[analysis_id] = read_db_analysis(deployment).deployment_name
-            if namespace == 'default':
+                deployment_names[analysis_id] = read_db_analysis(
+                    deployment
+                ).deployment_name
+            if namespace == "default":
                 namespace = deployment.namespace
     return get_analysis_logs(deployment_names, database=database, namespace=namespace)
 
 
-def get_status_and_progress(analysis_id_str: str, database: Database) -> dict[str, dict[str, str]]:
+def get_status_and_progress(
+    analysis_id_str: str, database: Database
+) -> dict[str, dict[str, str]]:
     """Return the latest status and progress for one or all analyses.
 
     Args:
@@ -159,7 +192,7 @@ def get_status_and_progress(analysis_id_str: str, database: Database) -> dict[st
     Returns:
         Mapping ``{analysis_id: {'status': str, 'progress': int}}``.
     """
-    if analysis_id_str == 'all':
+    if analysis_id_str == "all":
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
@@ -170,8 +203,10 @@ def get_status_and_progress(analysis_id_str: str, database: Database) -> dict[st
         if deployment is not None:
             deployments[analysis_id] = read_db_analysis(deployment)
 
-    return {analysis_id: {'status': deployment.status, 'progress': deployment.progress}
-            for analysis_id, deployment in deployments.items()}
+    return {
+        analysis_id: {"status": deployment.status, "progress": deployment.progress}
+        for analysis_id, deployment in deployments.items()
+    }
 
 
 def get_pods(analysis_id_str: str, database: Database) -> dict[str, list[str]]:
@@ -184,11 +219,14 @@ def get_pods(analysis_id_str: str, database: Database) -> dict[str, list[str]]:
     Returns:
         Mapping ``{analysis_id: [pod_id, ...]}``.
     """
-    if analysis_id_str == 'all':
+    if analysis_id_str == "all":
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
-    return {analysis_id: database.get_analysis_pod_ids(analysis_id) for analysis_id in analysis_ids}
+    return {
+        analysis_id: database.get_analysis_pod_ids(analysis_id)
+        for analysis_id in analysis_ids
+    }
 
 
 def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
@@ -210,7 +248,7 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
     Returns:
         Mapping ``{analysis_id: final_status}``.
     """
-    if analysis_id_str == 'all':
+    if analysis_id_str == "all":
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
@@ -223,12 +261,18 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
 
     for analysis_id, deployment in deployments.items():
         # save logs as string to database (will be read as dict in retrieve_history)
-        log = str(get_analysis_logs({analysis_id: deployment.deployment_name},
-                                    database=database,
-                                    namespace=deployment.namespace))
-        if deployment.status in [AnalysisStatus.FAILED.value,
-                                 AnalysisStatus.EXECUTED.value,
-                                 AnalysisStatus.STARTED.value]:
+        log = str(
+            get_analysis_logs(
+                {analysis_id: deployment.deployment_name},
+                database=database,
+                namespace=deployment.namespace,
+            )
+        )
+        if deployment.status in [
+            AnalysisStatus.FAILED.value,
+            AnalysisStatus.EXECUTED.value,
+            AnalysisStatus.STARTED.value,
+        ]:
             deployment.stop(database, log=log, status=deployment.status)
         else:
             deployment.stop(database, log=log)
@@ -236,7 +280,10 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
         # update hub status
         init_hub_client_and_update_hub_status(analysis_id, deployment.status)
 
-    return {analysis_id: deployment.status for analysis_id, deployment in deployments.items()}
+    return {
+        analysis_id: deployment.status
+        for analysis_id, deployment in deployments.items()
+    }
 
 
 def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]:
@@ -252,7 +299,7 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]
     Returns:
         Mapping ``{analysis_id: None}`` acknowledging the deletions.
     """
-    if analysis_id_str == 'all':
+    if analysis_id_str == "all":
         analysis_ids = database.get_analysis_ids()
     else:
         analysis_ids = [analysis_id_str]
@@ -264,7 +311,7 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]
             deployments[analysis_id] = read_db_analysis(deployment)
 
     for analysis_id, deployment in deployments.items():
-        deployment.stop(database, log='')
+        deployment.stop(database, log="")
         delete_keycloak_client(analysis_id)
         database.delete_analysis(analysis_id)
 
@@ -289,18 +336,26 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
                 success = True
                 break
             except Exception as e:
-                logger.warning(f"Failed to stop analysis {analysis_id} ({repr(e)}) "
-                               f"-> Reattempting unstuck ({i + 1} of {_MAX_UNSTUCK_REATTEMPTS})")
+                logger.warning(
+                    f"Failed to stop analysis {analysis_id} ({repr(e)}) "
+                    f"-> Reattempting unstuck ({i + 1} of {_MAX_UNSTUCK_REATTEMPTS})"
+                )
         if not success:
-            logger.error(f"Failed to unstuck analysis {analysis_id} after max reattempts.")
-            database.update_deployment_status(deployment.deployment_name, AnalysisStatus.FAILED.value)
+            logger.error(
+                f"Failed to unstuck analysis {analysis_id} after max reattempts."
+            )
+            database.update_deployment_status(
+                deployment.deployment_name, AnalysisStatus.FAILED.value
+            )
             stop_analysis(analysis_id, database)
 
 
-def cleanup(cleanup_type: str,
-            database: Database,
-            hub_client: CoreClient,
-            namespace: str = 'default') -> dict[str, str]:
+def cleanup(
+    cleanup_type: str,
+    database: Database,
+    hub_client: CoreClient,
+    namespace: str = "default",
+) -> dict[str, str]:
     """Run one or more targeted cleanup passes.
 
     Supported selectors (comma-separated allowed):
@@ -322,52 +377,62 @@ def cleanup(cleanup_type: str,
     Returns:
         Mapping ``{selector: summary_string}``.
     """
-    cleanup_types = cleanup_type.split(',') if ',' in cleanup_type else [cleanup_type]
+    cleanup_types = cleanup_type.split(",") if "," in cleanup_type else [cleanup_type]
 
     response_content = {}
     for cleanup_type in cleanup_types:
-        if cleanup_type in ['all', 'analyzes', 'services', 'mb', 'rs', 'keycloak']:
+        if cleanup_type in ["all", "analyzes", "services", "mb", "rs", "keycloak"]:
             # Analysis cleanup
-            if cleanup_type in ['all', 'analyzes']:
+            if cleanup_type in ["all", "analyzes"]:
                 # cleanup all analysis deployments, associated services, policies and configmaps
-                response_content[cleanup_type] = f"Deleted {len(database.get_analysis_ids())} analysis deployments " + \
-                                                 f"and associated resources from database ({database.get_analysis_ids()})"
+                response_content[cleanup_type] = (
+                    f"Deleted {len(database.get_analysis_ids())} analysis deployments "
+                    + f"and associated resources from database ({database.get_analysis_ids()})"
+                )
                 database.reset_db()
             # Service cleanup/reinit
-            if cleanup_type in ['all', 'services', 'mb']:
+            if cleanup_type in ["all", "services", "mb"]:
                 # reinitialize message-broker pod
-                message_broker_pod_name = find_k8s_resources('pod',
-                                                             'label',
-                                                             "component=flame-message-broker",
-                                                             namespace=namespace)[0]
-                delete_k8s_resource(message_broker_pod_name, 'pod', namespace)
+                message_broker_pod_name = find_k8s_resources(
+                    "pod",
+                    "label",
+                    "component=flame-message-broker",
+                    namespace=namespace,
+                )[0]
+                delete_k8s_resource(message_broker_pod_name, "pod", namespace)
                 response_content[cleanup_type] = "Reset message broker"
-            if cleanup_type in ['all', 'services', 'rs']:
+            if cleanup_type in ["all", "services", "rs"]:
                 # reinitialize storage-service pod
-                storage_service_name = find_k8s_resources('pod',
-                                                          'label',
-                                                          "component=flame-storage-service",
-                                                          namespace=namespace)[0]
-                delete_k8s_resource(storage_service_name, 'pod', namespace)
+                storage_service_name = find_k8s_resources(
+                    "pod",
+                    "label",
+                    "component=flame-storage-service",
+                    namespace=namespace,
+                )[0]
+                delete_k8s_resource(storage_service_name, "pod", namespace)
                 response_content[cleanup_type] = "Reset storage service"
-            if cleanup_type in ['all', 'keycloak']:
+            if cleanup_type in ["all", "keycloak"]:
                 # cleanup keycloak clients without corresponding analysis
                 # if all is all flame clients are deleted because ther are no analyzes in the db
                 analysis_ids = database.get_analysis_ids()
                 for client in _get_all_keycloak_clients():
-                    if (client['clientId'] not in analysis_ids) and client['name'].startswith('flame-'):
-                        delete_keycloak_client(client['clientId'])
+                    if (client["clientId"] not in analysis_ids) and client[
+                        "name"
+                    ].startswith("flame-"):
+                        delete_keycloak_client(client["clientId"])
 
         else:
-            response_content[cleanup_type] = f"Unknown cleanup type: {cleanup_type} (known types: 'zombies', 'all', " + \
-                                             "'analyzes', 'keycloak', 'services', 'mb', and 'rs')"
-    response_content['zombies'] = clean_up_the_rest(database, hub_client, namespace)
+            response_content[cleanup_type] = (
+                f"Unknown cleanup type: {cleanup_type} (known types: 'zombies', 'all', "
+                + "'analyzes', 'keycloak', 'services', 'mb', and 'rs')"
+            )
+    response_content["zombies"] = clean_up_the_rest(database, hub_client, namespace)
     return response_content
 
 
-def clean_up_the_rest(database: Database,
-                      hub_client: CoreClient,
-                      namespace: str = 'default') -> str:
+def clean_up_the_rest(
+    database: Database, hub_client: CoreClient, namespace: str = "default"
+) -> str:
     """Delete orphaned Kubernetes resources whose analysis is no longer tracked.
 
     Iterates over deployments, pods, services, network policies, and config
@@ -385,36 +450,52 @@ def clean_up_the_rest(database: Database,
     """
     known_analysis_ids = database.get_analysis_ids()
     if hub_client is not None:
-        validated_analysis_ids = _validate_analyses_with_hub(known_analysis_ids, hub_client)
+        validated_analysis_ids = _validate_analyses_with_hub(
+            known_analysis_ids, hub_client
+        )
         for id in known_analysis_ids:
             if id not in validated_analysis_ids:
                 database.delete_analysis(id)
         known_analysis_ids = validated_analysis_ids
     else:
-        logger.warning(f"No Hub client found, skipping hub validation for zombie deletion.")
+        logger.warning(
+            "No Hub client found, skipping hub validation for zombie deletion."
+        )
 
     result_str = ""
-    for res, selector_args in {'deployment': ["component=flame-analysis", "component=flame-analysis-nginx"],
-                               'pod': ["component=flame-analysis", "component=flame-analysis-nginx"],
-                               'service': ["component=flame-analysis", "component=flame-analysis-nginx"],
-                               'networkpolicy': ["component=flame-nginx-to-analysis-policy"],
-                               'configmap': ["component=flame-nginx-analysis-config-map"]}.items():
+    for res, selector_args in {
+        "deployment": ["component=flame-analysis", "component=flame-analysis-nginx"],
+        "pod": ["component=flame-analysis", "component=flame-analysis-nginx"],
+        "service": ["component=flame-analysis", "component=flame-analysis-nginx"],
+        "networkpolicy": ["component=flame-nginx-to-analysis-policy"],
+        "configmap": ["component=flame-nginx-analysis-config-map"],
+    }.items():
         for selector_arg in selector_args:
-            resources = find_k8s_resources(res, 'label', selector_arg, namespace=namespace)
-            zombie_resources = [r for r in resources
-                                if (r is not None) and (resource_name_to_analysis(r) not in known_analysis_ids)]
+            resources = find_k8s_resources(
+                res, "label", selector_arg, namespace=namespace
+            )
+            zombie_resources = [
+                r
+                for r in resources
+                if (r is not None)
+                and (resource_name_to_analysis(r) not in known_analysis_ids)
+            ]
             for z in zombie_resources:
                 delete_k8s_resource(z, res, namespace=namespace)
-            result_str += f"Deleted {len(zombie_resources)} zombie " + \
-                          f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
+            result_str += (
+                f"Deleted {len(zombie_resources)} zombie "
+                + f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
+            )
     return result_str
 
 
-def stream_logs(log_entity: CreateLogEntity,
-                node_id: str,
-                enable_hub_logging: bool,
-                database: Database,
-                hub_core_client: CoreClient) -> None:
+def stream_logs(
+    log_entity: CreateLogEntity,
+    node_id: str,
+    enable_hub_logging: bool,
+    database: Database,
+    hub_core_client: CoreClient,
+) -> None:
     """Persist a log line and mirror status/progress into the FLAME Hub.
 
     * Appends the serialized log to the analysis row in the database.
@@ -431,33 +512,55 @@ def stream_logs(log_entity: CreateLogEntity,
         hub_core_client: Initialized Hub core client.
     """
     try:
-        database.update_analysis_log(log_entity.analysis_id, str(log_entity.to_log_entity()))
+        database.update_analysis_log(
+            log_entity.analysis_id, str(log_entity.to_log_entity())
+        )
     except IndexError as e:
         logger.error(f"Failed to update analysis log in database: {repr(e)}")
 
     # log to hub
     if enable_hub_logging:
-        hub_core_client.create_analysis_node_log(analysis_id=log_entity.analysis_id,
-                                                 node_id=node_id,
-                                                 status=log_entity.status,
-                                                 level=log_entity.log_type,
-                                                 message=log_entity.log)
+        hub_core_client.create_analysis_node_log(
+            analysis_id=log_entity.analysis_id,
+            node_id=node_id,
+            status=log_entity.status,
+            level=log_entity.log_type,
+            message=log_entity.log,
+        )
 
-    node_analysis_id = get_node_analysis_id(hub_core_client, log_entity.analysis_id, node_id)
+    node_analysis_id = get_node_analysis_id(
+        hub_core_client, log_entity.analysis_id, node_id
+    )
     if isinstance(node_analysis_id, str):
         if database.progress_valid(log_entity.analysis_id, log_entity.progress):
-            database.update_analysis_progress(log_entity.analysis_id, log_entity.progress)
-            update_hub_status(hub_core_client,
-                              node_analysis_id,
-                              run_status=log_entity.status,
-                              run_progress=log_entity.progress)
+            database.update_analysis_progress(
+                log_entity.analysis_id, log_entity.progress
+            )
+            update_hub_status(
+                hub_core_client,
+                node_analysis_id,
+                run_status=log_entity.status,
+                run_progress=log_entity.progress,
+            )
         else:
-            update_hub_status(hub_core_client,
-                              node_analysis_id,
-                              run_status=log_entity.status)
+            update_hub_status(
+                hub_core_client, node_analysis_id, run_status=log_entity.status
+            )
 
 
-def _validate_analyses_with_hub(analysis_ids: list[str], hub_client: CoreClient) -> list[str]:
+def _validate_analyses_with_hub(
+    analysis_ids: list[str], hub_client: CoreClient
+) -> list[str]:
+    """Keep only the analysis ids the Hub still knows about on this node.
+
+    Args:
+        analysis_ids: Candidate analysis ids to check.
+        hub_client: Authenticated Hub client used for the lookup.
+
+    Returns:
+        The subset of ``analysis_ids`` for which the Hub returns at least one
+        node analysis entry.
+    """
     validated_ids = []
     for analysis_id in analysis_ids:
         if get_node_analysis_id(hub_client, analysis_id) != []:

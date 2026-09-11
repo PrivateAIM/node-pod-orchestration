@@ -206,25 +206,25 @@ class TestDeleteK8sResourceTypes:
     def test_delete_service(self, mock_k8s_clients):
         delete_k8s_resource("my-svc", "service")
         mock_k8s_clients.core_v1.delete_namespaced_service.assert_called_once_with(
-            name="my-svc", namespace="default"
+            name="my-svc", namespace="default", propagation_policy="Background"
         )
 
     def test_delete_pod(self, mock_k8s_clients):
         delete_k8s_resource("my-pod", "pod")
         mock_k8s_clients.core_v1.delete_namespaced_pod.assert_called_once_with(
-            name="my-pod", namespace="default"
+            name="my-pod", namespace="default", propagation_policy="Background"
         )
 
     def test_delete_configmap(self, mock_k8s_clients):
         delete_k8s_resource("my-cm", "configmap")
         mock_k8s_clients.core_v1.delete_namespaced_config_map.assert_called_once_with(
-            name="my-cm", namespace="default"
+            name="my-cm", namespace="default", propagation_policy="Background"
         )
 
     def test_delete_networkpolicy(self, mock_k8s_clients):
         delete_k8s_resource("my-policy", "networkpolicy")
         mock_k8s_clients.networking_v1.delete_namespaced_network_policy.assert_called_once_with(
-            name="my-policy", namespace="default"
+            name="my-policy", namespace="default", propagation_policy="Background"
         )
 
     def test_delete_job(self, mock_k8s_clients):

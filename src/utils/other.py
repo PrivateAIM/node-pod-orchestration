@@ -1,28 +1,38 @@
+"""Small helpers shared across the service.
+
+Environment variable extraction, UUID validation, and conversion between
+Kubernetes resource names and the analysis ids embedded in them.
+"""
+
 from typing import Optional, Union
 import os
 import uuid
 
 
-def extract_hub_envs() -> tuple[Optional[str],
-                                Optional[str],
-                                Optional[str],
-                                Optional[str],
-                                bool,
-                                Optional[str],
-                                Optional[str]]:
+def extract_hub_envs() -> tuple[
+    Optional[str],
+    Optional[str],
+    Optional[str],
+    Optional[str],
+    bool,
+    Optional[str],
+    Optional[str],
+]:
     """Read the FLAME-Hub related environment variables into a tuple.
 
     Returns:
         Tuple ``(client_id, client_secret, hub_url_core, hub_url_auth,
         hub_logging_enabled, http_proxy, https_proxy)``.
     """
-    return (os.getenv('HUB_CLIENT_ID'),
-            os.getenv('HUB_CLIENT_SECRET'),
-            os.getenv('HUB_URL_CORE'),
-            os.getenv('HUB_URL_AUTH'),
-            os.getenv('HUB_LOGGING') in ['True', 'true', '1', 't'],
-            os.getenv('PO_HTTP_PROXY'),
-            os.getenv('PO_HTTPS_PROXY'))
+    return (
+        os.getenv("HUB_CLIENT_ID"),
+        os.getenv("HUB_CLIENT_SECRET"),
+        os.getenv("HUB_URL_CORE"),
+        os.getenv("HUB_URL_AUTH"),
+        os.getenv("HUB_LOGGING") in ["True", "true", "1", "t"],
+        os.getenv("PO_HTTP_PROXY"),
+        os.getenv("PO_HTTPS_PROXY"),
+    )
 
 
 def resource_name_to_analysis(deployment_name: str) -> str:
@@ -38,7 +48,7 @@ def resource_name_to_analysis(deployment_name: str) -> str:
     Returns:
         The analysis id portion of the name.
     """
-    return '-'.join(deployment_name.split("analysis-")[-1].split('-', 5)[:-1])
+    return "-".join(deployment_name.split("analysis-")[-1].split("-", 5)[:-1])
 
 
 def is_uuid(test_str: Union[str, uuid.UUID], version: int = 4):
@@ -54,7 +64,7 @@ def is_uuid(test_str: Union[str, uuid.UUID], version: int = 4):
     """
     try:
         uuid.UUID(str(test_str), version=version)
-        return len(rreplace(str(test_str), '-', '', 4)) == 32
+        return len(rreplace(str(test_str), "-", "", 4)) == 32
     except ValueError:
         return False
 

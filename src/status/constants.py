@@ -1,3 +1,10 @@
+"""Status enums and timeout constants for the monitoring loop.
+
+:class:`AnalysisStatus` is the canonical set of analysis states; the private
+module constants bound how long the loop waits for an analysis to answer its
+internal status endpoint and how often a stuck analysis may be restarted.
+"""
+
 from enum import Enum
 
 
@@ -15,14 +22,14 @@ class AnalysisStatus(Enum):
     ``STUCK`` status that is only observed via the internal health endpoint.
     """
 
-    STARTING = 'starting'
-    STARTED = 'started'
+    STARTING = "starting"
+    STARTED = "started"
 
-    STUCK = 'stuck'         # internal analysis status only
+    STUCK = "stuck"  # internal analysis status only
 
-    STOPPING = 'stopping'
-    STOPPED = 'stopped'
+    STOPPING = "stopping"
+    STOPPED = "stopped"
 
-    EXECUTING = 'executing'
-    EXECUTED = 'executed'
-    FAILED = 'failed'
+    EXECUTING = "executing"
+    EXECUTED = "executed"
+    FAILED = "failed"
