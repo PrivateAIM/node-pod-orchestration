@@ -12,7 +12,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from src.k8s.kubernetes import create_analysis_deployment, delete_deployment
-from src.utils.token import create_analysis_tokens
+from src.utils.token import AnalysisTokenError, create_analysis_tokens
 from src.resources.database.db_models import AnalysisDB
 from src.resources.database.entity import Database
 from src.status.constants import AnalysisStatus
@@ -48,13 +48,17 @@ class Analysis(BaseModel):
     def start(self, database: Database, namespace: str = "default") -> None:
         """Deploy the analysis on Kubernetes and persist it in the database.
 
-        Generates the deployment name, mints the Kong and Keycloak tokens,
+        Generates the deployment name, mints the Kong and Authup tokens,
         assembles the analysis env, creates the Kubernetes resources, and then
         writes an ``AnalysisDB`` row tracking the new deployment.
 
         Args:
             database: Database wrapper used to persist the new deployment.
             namespace: Namespace the Kubernetes resources are created in.
+
+        Raises:
+            AnalysisTokenError: If no Authup token could be minted; nothing is
+                persisted or deployed in that case.
         """
         self.status = AnalysisStatus.STARTED.value
         self.deployment_name = (
@@ -63,6 +67,13 @@ class Analysis(BaseModel):
         self.tokens = create_analysis_tokens(
             kong_token=self.kong_token, analysis_id=self.analysis_id
         )
+        if self.tokens.get("AUTHUP_TOKEN") is None:
+            # Never deploy an analysis without its Authup token: fail the
+            # start loudly instead of running a container that cannot auth.
+            raise AnalysisTokenError(
+                f"Failed to mint an Authup access token for analysis {self.analysis_id} "
+                "(see previous log entries); analysis not deployed."
+            )
         self.analysis_config = self.tokens
         self.analysis_config["ANALYSIS_ID"] = self.analysis_id
         self.analysis_config["PROJECT_ID"] = self.project_id
@@ -121,7 +132,7 @@ class Analysis(BaseModel):
             kong_token=self.kong_token, analysis_id=self.analysis_id
         )
         delete_subscription(
-            self.analysis_id, self.tokens["KEYCLOAK_TOKEN"], namespace=self.namespace
+            self.analysis_id, self.tokens["AUTHUP_TOKEN"], namespace=self.namespace
         )
 
 

@@ -7,7 +7,6 @@ All external dependencies are mocked:
   - get_analysis_logs
   - init_hub_client_and_update_hub_status
   - find_k8s_resources / delete_k8s_resource
-  - _get_all_keycloak_clients / delete_keycloak_client
   - update_hub_status / get_node_analysis_id
   - time.sleep / resource_name_to_analysis
 """
@@ -360,9 +359,8 @@ class TestStopAnalysis:
 # ─── delete_analysis ──────────────────────────────────────────────────────────
 
 class TestDeleteAnalysis:
-    @patch("src.resources.utils.delete_keycloak_client")
     @patch("src.resources.utils.read_db_analysis")
-    def test_stopped_analysis_also_stopped(self, mock_read, mock_keycloak, mock_database):
+    def test_stopped_analysis_also_stopped(self, mock_read, mock_database):
         """New behavior: delete_analysis unconditionally calls stop() on the deployment."""
         from src.resources.utils import delete_analysis
 
@@ -372,12 +370,10 @@ class TestDeleteAnalysis:
         delete_analysis(_ANALYSIS_ID, mock_database)
 
         mock_deployment.stop.assert_called_once_with(mock_database, log="")
-        mock_keycloak.assert_called_once_with(_ANALYSIS_ID)
         mock_database.delete_analysis.assert_called_once_with(_ANALYSIS_ID)
 
-    @patch("src.resources.utils.delete_keycloak_client")
     @patch("src.resources.utils.read_db_analysis")
-    def test_running_analysis_stopped_then_deleted(self, mock_read, mock_keycloak, mock_database):
+    def test_running_analysis_stopped_then_deleted(self, mock_read, mock_database):
         from src.resources.utils import delete_analysis
 
         mock_deployment = _analysis_mock(status=AnalysisStatus.STARTED.value)
@@ -386,7 +382,6 @@ class TestDeleteAnalysis:
         delete_analysis(_ANALYSIS_ID, mock_database)
 
         mock_deployment.stop.assert_called_once_with(mock_database, log="")
-        mock_keycloak.assert_called_once_with(_ANALYSIS_ID)
         mock_database.delete_analysis.assert_called_once_with(_ANALYSIS_ID)
 
     def test_not_found_returns_empty(self, mock_database):
@@ -398,9 +393,8 @@ class TestDeleteAnalysis:
 
         assert result == {}
 
-    @patch("src.resources.utils.delete_keycloak_client")
     @patch("src.resources.utils.read_db_analysis")
-    def test_all_analyses(self, mock_read, mock_keycloak, mock_database):
+    def test_all_analyses(self, mock_read, mock_database):
         from src.resources.utils import delete_analysis
 
         mock_deployment = _analysis_mock(status=AnalysisStatus.STOPPED.value)
@@ -487,24 +481,6 @@ class TestCleanup:
         )
         mock_delete.assert_called_once_with("flame-storage-service-pod", "pod", "default")
         assert result["rs"] == "Reset storage service"
-
-    @patch("src.resources.utils.clean_up_the_rest", return_value="")
-    @patch("src.resources.utils.delete_keycloak_client")
-    @patch("src.resources.utils._get_all_keycloak_clients")
-    def test_keycloak_deletes_orphaned_clients(self, mock_get_clients, mock_delete, mock_cztr, mock_database):
-        from src.resources.utils import cleanup
-
-        mock_database.get_analysis_ids.return_value = ["existing_analysis"]
-        mock_get_clients.return_value = [
-            {"clientId": "orphaned_analysis", "name": "flame-orphaned_analysis"},
-            {"clientId": "existing_analysis", "name": "flame-existing_analysis"},
-            {"clientId": "non_flame_client", "name": "other-client"},
-        ]
-
-        cleanup("keycloak", mock_database, None)
-
-        # Only the orphaned flame client should be deleted; existing and non-flame skipped.
-        mock_delete.assert_called_once_with("orphaned_analysis")
 
     @patch("src.resources.utils.clean_up_the_rest", return_value="")
     def test_unknown_type_returns_error_message(self, mock_cztr, mock_database):

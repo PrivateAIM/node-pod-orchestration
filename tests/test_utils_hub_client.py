@@ -101,6 +101,37 @@ class TestInitHubClientWithClient:
 
 # ─── TestGetSslContext ────────────────────────────────────────────────────────
 
+class TestProxiedHttpClient:
+    def test_proxy_mounts_none_without_both_proxies(self):
+        from src.utils.hub_client import get_proxy_mounts
+        assert get_proxy_mounts("", "", MagicMock()) is None
+        assert get_proxy_mounts("http://proxy:3128", None, MagicMock()) is None
+
+    def test_proxy_mounts_with_both_proxies(self):
+        ssl_ctx = MagicMock()
+        with patch("src.utils.hub_client.HTTPTransport") as mock_transport:
+            from src.utils.hub_client import get_proxy_mounts
+            mounts = get_proxy_mounts("http://p:1", "http://p:2", ssl_ctx)
+        assert set(mounts) == {"http://", "https://"}
+        mock_transport.assert_any_call(proxy="http://p:1")
+        mock_transport.assert_any_call(proxy="http://p:2", verify=ssl_ctx)
+
+    def test_init_proxied_http_client_uses_po_proxies_and_ssl_context(self, monkeypatch):
+        monkeypatch.setenv("PO_HTTP_PROXY", "http://p:1")
+        monkeypatch.setenv("PO_HTTPS_PROXY", "http://p:2")
+        ssl_ctx = MagicMock()
+        with (
+            patch("src.utils.hub_client.get_ssl_context", return_value=ssl_ctx),
+            patch("src.utils.hub_client.get_proxy_mounts", return_value={"m": 1}) as mock_mounts,
+            patch("src.utils.hub_client.Client") as mock_client,
+        ):
+            from src.utils.hub_client import init_proxied_http_client
+            result = init_proxied_http_client(timeout=5)
+        mock_mounts.assert_called_once_with("http://p:1", "http://p:2", ssl_ctx)
+        mock_client.assert_called_once_with(mounts={"m": 1}, verify=ssl_ctx, timeout=5)
+        assert result is mock_client.return_value
+
+
 class TestGetSslContext:
     def setup_method(self):
         from src.utils.hub_client import get_ssl_context
