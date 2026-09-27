@@ -121,7 +121,7 @@ class Analysis(BaseModel):
             kong_token=self.kong_token, analysis_id=self.analysis_id
         )
         delete_subscription(
-            self.analysis_id, self.tokens["KEYCLOAK_TOKEN"], namespace=self.namespace
+            self.analysis_id, self.tokens["AUTHUP_TOKEN"], namespace=self.namespace
         )
 
 

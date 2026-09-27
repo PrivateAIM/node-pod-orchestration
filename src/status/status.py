@@ -40,7 +40,7 @@ from src.utils.hub_client import (
     update_hub_status,
 )
 from src.utils.other import extract_hub_envs
-from src.utils.token import get_keycloak_token
+from src.utils.token import get_analysis_token
 from src.utils.po_logging import get_logger
 
 
@@ -397,7 +397,7 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
         response.json()["token_remaining_time"],
     )
     # Check if token needs refresh, do so if needed
-    _refresh_keycloak_token(
+    _refresh_analysis_token(
         deployment_name=deployment_name,
         analysis_id=analysis_id,
         token_remaining_time=analysis_token_remaining_time,
@@ -417,10 +417,10 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
     return health_status
 
 
-def _refresh_keycloak_token(
+def _refresh_analysis_token(
     deployment_name: str, analysis_id: str, token_remaining_time: int
 ) -> None:
-    """Push a fresh Keycloak token to the analysis if the current one is near expiry.
+    """Push a fresh Authup token to the analysis if the current one is near expiry.
 
     Refresh is triggered when the remaining lifetime is less than two status
     loop intervals plus one second.
@@ -428,25 +428,25 @@ def _refresh_keycloak_token(
     Args:
         deployment_name: Name of the analysis deployment (used to resolve
             the nginx sidecar URL).
-        analysis_id: Analysis id used to mint a new Keycloak token.
+        analysis_id: Analysis id used to mint a new Authup token.
         token_remaining_time: Remaining token lifetime in seconds as reported
             by the analysis health endpoint.
     """
     if token_remaining_time < (int(os.getenv("STATUS_LOOP_INTERVAL", "10")) * 2 + 1):
-        keycloak_token = get_keycloak_token(analysis_id)
+        analysis_token = get_analysis_token(analysis_id)
         client = Client(
             base_url=f"http://nginx-{deployment_name}:{PORTS['service'][0]}"
         )
         try:
             response = client.post(
                 "/analysis/token_refresh",
-                json={"token": keycloak_token},
+                json={"token": analysis_token},
                 headers=[("Connection", "close")],
             )
             response.raise_for_status()
         except HTTPStatusError as e:
             logger.error(
-                f"Failed to refresh keycloak token in deployment {deployment_name}: {repr(e)}"
+                f"Failed to refresh analysis token in deployment {deployment_name}: {repr(e)}"
             )
         client.close()
 

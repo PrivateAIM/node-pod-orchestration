@@ -2,7 +2,7 @@
 
 Does NOT test status_loop itself (infinite loop — untestable without mocking time).
 Tests all helper functions: _decide_status_action, _get_analysis_status,
-_get_internal_deployment_status, _refresh_keycloak_token,
+_get_internal_deployment_status, _refresh_analysis_token,
 inform_analysis_of_partner_statuses, _fix_stuck_status,
 _update_running_status, _update_finished_status, _set_analysis_hub_status.
 """
@@ -18,7 +18,7 @@ from src.status.status import (
     _fix_stuck_status,
     _get_analysis_status,
     _get_internal_deployment_status,
-    _refresh_keycloak_token,
+    _refresh_analysis_token,
     _set_analysis_hub_status,
     _update_finished_status,
     _update_running_status,
@@ -103,7 +103,7 @@ class TestGetAnalysisStatus:
 # ─── TestGetInternalDeploymentStatus ─────────────────────────────────────────
 
 class TestGetInternalDeploymentStatus:
-    @patch("src.status.status._refresh_keycloak_token")
+    @patch("src.status.status._refresh_analysis_token")
     @patch("src.status.status.Client")
     def test_executing_status_returned(self, mock_client_cls, mock_refresh):
         mock_response = MagicMock()
@@ -114,7 +114,7 @@ class TestGetInternalDeploymentStatus:
 
         assert result == AnalysisStatus.EXECUTING.value
 
-    @patch("src.status.status._refresh_keycloak_token")
+    @patch("src.status.status._refresh_analysis_token")
     @patch("src.status.status.Client")
     def test_executed_status_returned(self, mock_client_cls, mock_refresh):
         mock_response = MagicMock()
@@ -138,26 +138,26 @@ class TestGetInternalDeploymentStatus:
         assert result == AnalysisStatus.FAILED.value
 
 
-# ─── TestRefreshKeycloakToken ─────────────────────────────────────────────────
+# ─── TestRefreshAnalysisToken ─────────────────────────────────────────────────
 
-class TestRefreshKeycloakToken:
-    @patch("src.status.status.get_keycloak_token")
+class TestRefreshAnalysisToken:
+    @patch("src.status.status.get_analysis_token")
     @patch("src.status.status.Client")
     def test_no_refresh_when_token_valid(self, mock_client_cls, mock_get_token, monkeypatch):
         monkeypatch.setenv("STATUS_LOOP_INTERVAL", "30")
         # threshold = 30*2+1 = 61; 9999 >= 61 → no refresh
-        _refresh_keycloak_token("dep-name", "analysis_id", 9999)
+        _refresh_analysis_token("dep-name", "analysis_id", 9999)
         mock_get_token.assert_not_called()
         mock_client_cls.assert_not_called()
 
-    @patch("src.status.status.get_keycloak_token", return_value="new-token")
+    @patch("src.status.status.get_analysis_token", return_value="new-token")
     @patch("src.status.status.Client")
     def test_refresh_when_token_expiring(self, mock_client_cls, mock_get_token, monkeypatch):
         monkeypatch.setenv("STATUS_LOOP_INTERVAL", "30")
         # threshold = 30*2+1 = 61; 10 < 61 → refresh
         mock_client_cls.return_value.post.return_value = MagicMock()
 
-        _refresh_keycloak_token("dep-name", "analysis_id", 10)
+        _refresh_analysis_token("dep-name", "analysis_id", 10)
 
         mock_get_token.assert_called_once_with("analysis_id")
         mock_client_cls.return_value.post.assert_called_once()

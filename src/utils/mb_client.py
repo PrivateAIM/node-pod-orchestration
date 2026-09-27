@@ -19,7 +19,7 @@ logger = get_logger()
 
 
 def delete_subscription(
-    analysis_id: str, keycloak_token: str, namespace: str = "default"
+    analysis_id: str, auth_token: str, namespace: str = "default"
 ) -> None:
     """Remove an analysis' subscription from the node's message broker.
 
@@ -28,7 +28,7 @@ def delete_subscription(
 
     Args:
         analysis_id: Analysis whose subscription should be removed.
-        keycloak_token: Bearer token authorizing the call.
+        auth_token: Bearer token authorizing the call.
         namespace: Namespace the message broker service runs in.
     """
     try:
@@ -39,7 +39,7 @@ def delete_subscription(
         mb_client = Client(
             base_url=f"http://{message_broker_service_name}",
             headers={
-                "Authorization": f"Bearer {keycloak_token}",
+                "Authorization": f"Bearer {auth_token}",
                 "accept": "application/json",
             },
             follow_redirects=True,

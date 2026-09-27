@@ -182,7 +182,7 @@ class TestAnalysisStop:
     def test_stop_sets_status_to_stopped(self, started_analysis, mock_database):
         with (
             patch("src.resources.analysis.entity.delete_deployment"),
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
             patch("src.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database)
@@ -191,7 +191,7 @@ class TestAnalysisStop:
     def test_stop_with_custom_status(self, started_analysis, mock_database):
         with (
             patch("src.resources.analysis.entity.delete_deployment"),
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
             patch("src.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database, status=AnalysisStatus.FAILED.value)
@@ -200,7 +200,7 @@ class TestAnalysisStop:
     def test_stop_sets_log_when_provided(self, started_analysis, mock_database):
         with (
             patch("src.resources.analysis.entity.delete_deployment"),
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
             patch("src.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database, log="something went wrong")
@@ -210,7 +210,7 @@ class TestAnalysisStop:
         started_analysis.log = "original log"
         with (
             patch("src.resources.analysis.entity.delete_deployment"),
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
             patch("src.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database)
@@ -219,7 +219,7 @@ class TestAnalysisStop:
     def test_stop_calls_delete_deployment(self, started_analysis, mock_database):
         with (
             patch("src.resources.analysis.entity.delete_deployment") as mock_del,
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
             patch("src.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database)
@@ -228,7 +228,7 @@ class TestAnalysisStop:
     def test_stop_updates_database_deployment_status(self, started_analysis, mock_database):
         with (
             patch("src.resources.analysis.entity.delete_deployment"),
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
             patch("src.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database)
@@ -241,7 +241,7 @@ class TestAnalysisStop:
     def test_stop_updates_database_deployment_log(self, started_analysis, mock_database):
         with (
             patch("src.resources.analysis.entity.delete_deployment"),
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"KEYCLOAK_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
             patch("src.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database, log="bye")
