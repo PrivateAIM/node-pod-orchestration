@@ -115,6 +115,7 @@ lags behind them.
 |----------|-------------|
 | `POSTGRES_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | PostgreSQL connection |
 | `KEYCLOAK_URL`, `KEYCLOAK_REALM` | Keycloak instance |
+| `AUTHUP_JWKS_URL` | Global Authup JWKS endpoint, used to verify `AUTHUP_TOKEN`s presented by analysis containers on `/stream_logs` |
 | `RESULT_CLIENT_ID`, `RESULT_CLIENT_SECRET` | Result-service OAuth client |
 | `HUB_CLIENT_ID`, `HUB_CLIENT_SECRET`, `HUB_URL_CORE`, `HUB_URL_AUTH` | FLAME Hub access |
 

@@ -46,3 +46,45 @@ class TestValidAccessToken:
 
         assert exc_info.value.status_code == 401
         assert "Not authenticated" in exc_info.value.detail
+
+
+# ─── TestValidAnalysisToken ───────────────────────────────────────────────────
+
+class TestValidAnalysisToken:
+    def test_valid_token_returns_decoded_payload(self):
+        from fastapi.security import HTTPAuthorizationCredentials
+        from src.api.oauth import valid_analysis_token
+
+        fake_credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="valid.jwt.token")
+        fake_payload = {"sub": "analysis-client-id"}
+
+        mock_signing_key = MagicMock()
+        mock_signing_key.key = "fake-key"
+
+        mock_jwks_client = MagicMock()
+        mock_jwks_client.get_signing_key_from_jwt.return_value = mock_signing_key
+
+        with (
+            patch("src.api.oauth.PyJWKClient", return_value=mock_jwks_client),
+            patch("src.api.oauth.jwt.decode", return_value=fake_payload),
+        ):
+            result = valid_analysis_token(fake_credentials)
+
+        assert result == fake_payload
+
+    def test_invalid_token_raises_401(self):
+        import jwt as jwt_lib
+        from fastapi.security import HTTPAuthorizationCredentials
+        from src.api.oauth import valid_analysis_token
+
+        fake_credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="bad.token.here")
+
+        mock_jwks_client = MagicMock()
+        mock_jwks_client.get_signing_key_from_jwt.side_effect = jwt_lib.exceptions.InvalidTokenError("bad token")
+
+        with patch("src.api.oauth.PyJWKClient", return_value=mock_jwks_client):
+            with pytest.raises(HTTPException) as exc_info:
+                valid_analysis_token(fake_credentials)
+
+        assert exc_info.value.status_code == 401
+        assert "Not authenticated" in exc_info.value.detail
