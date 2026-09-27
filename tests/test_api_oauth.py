@@ -65,7 +65,7 @@ class TestValidAnalysisToken:
         mock_jwks_client.get_signing_key_from_jwt.return_value = mock_signing_key
 
         with (
-            patch("src.api.oauth.PyJWKClient", return_value=mock_jwks_client),
+            patch("src.api.oauth._authup_jwks_client", mock_jwks_client),
             patch("src.api.oauth.jwt.decode", return_value=fake_payload),
         ):
             result = valid_analysis_token(fake_credentials)
@@ -82,9 +82,39 @@ class TestValidAnalysisToken:
         mock_jwks_client = MagicMock()
         mock_jwks_client.get_signing_key_from_jwt.side_effect = jwt_lib.exceptions.InvalidTokenError("bad token")
 
-        with patch("src.api.oauth.PyJWKClient", return_value=mock_jwks_client):
+        with patch("src.api.oauth._authup_jwks_client", mock_jwks_client):
             with pytest.raises(HTTPException) as exc_info:
                 valid_analysis_token(fake_credentials)
 
         assert exc_info.value.status_code == 401
         assert "Not authenticated" in exc_info.value.detail
+
+    def test_client_is_reused_across_calls(self):
+        from fastapi.security import HTTPAuthorizationCredentials
+        from src.api.oauth import valid_analysis_token
+
+        fake_credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="valid.jwt.token")
+        mock_jwks_client = MagicMock()
+
+        with (
+            patch("src.api.oauth._authup_jwks_client", mock_jwks_client),
+            patch("src.api.oauth.PyJWKClient") as mock_ctor,
+            patch("src.api.oauth.jwt.decode", return_value={"sub": "x"}),
+        ):
+            valid_analysis_token(fake_credentials)
+            valid_analysis_token(fake_credentials)
+
+        mock_ctor.assert_not_called()
+        assert mock_jwks_client.get_signing_key_from_jwt.call_count == 2
+
+    def test_unconfigured_jwks_url_raises_500(self):
+        from fastapi.security import HTTPAuthorizationCredentials
+        from src.api.oauth import valid_analysis_token
+
+        fake_credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="valid.jwt.token")
+
+        with patch("src.api.oauth._authup_jwks_client", None):
+            with pytest.raises(HTTPException) as exc_info:
+                valid_analysis_token(fake_credentials)
+
+        assert exc_info.value.status_code == 500

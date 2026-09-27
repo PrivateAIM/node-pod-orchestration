@@ -57,6 +57,9 @@ def valid_access_token(token: Annotated[str, Depends(_oauth2_scheme)]) -> dict:
 
 
 _AUTHUP_JWKS_URL = os.getenv("AUTHUP_JWKS_URL")
+# Created once so PyJWKClient's JWK-set cache and kid LRU persist across
+# requests, instead of fetching Authup's JWKS on every /po/stream_logs call.
+_authup_jwks_client = PyJWKClient(_AUTHUP_JWKS_URL) if _AUTHUP_JWKS_URL else None
 _analysis_token_scheme = HTTPBearer()
 
 
@@ -79,10 +82,13 @@ def valid_analysis_token(
 
     Raises:
         HTTPException: 401 if the token is invalid, expired, or cannot be
-            verified against Authup's signing keys.
+            verified against Authup's signing keys; 500 if
+            ``AUTHUP_JWKS_URL`` is not configured.
     """
+    if _authup_jwks_client is None:
+        raise HTTPException(status_code=500, detail="AUTHUP_JWKS_URL is not configured")
     try:
-        sig_key = PyJWKClient(_AUTHUP_JWKS_URL).get_signing_key_from_jwt(credentials.credentials)
+        sig_key = _authup_jwks_client.get_signing_key_from_jwt(credentials.credentials)
         return jwt.decode(
             credentials.credentials,
             key=sig_key,
