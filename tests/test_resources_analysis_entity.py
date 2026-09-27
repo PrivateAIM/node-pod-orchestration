@@ -78,7 +78,7 @@ class TestAnalysisStart:
         )
 
     def test_start_sets_status_to_started(self, analysis, mock_database):
-        mock_tokens = {"RESULT_TOKEN": "result-tok", "ANALYSIS_TOKEN": "analysis-tok"}
+        mock_tokens = {"DATA_SOURCE_TOKEN": "kong-tok", "AUTHUP_TOKEN": "authup-tok"}
         with (
             patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
             patch("src.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
@@ -87,7 +87,7 @@ class TestAnalysisStart:
         assert analysis.status == AnalysisStatus.STARTED.value
 
     def test_start_sets_deployment_name(self, analysis, mock_database):
-        mock_tokens = {"RESULT_TOKEN": "r", "ANALYSIS_TOKEN": "a"}
+        mock_tokens = {"DATA_SOURCE_TOKEN": "k", "AUTHUP_TOKEN": "a"}
         with (
             patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
             patch("src.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
@@ -106,7 +106,7 @@ class TestAnalysisStart:
             kong_token="tok",
             restart_counter=3,
         )
-        mock_tokens = {"RESULT_TOKEN": "r", "ANALYSIS_TOKEN": "a"}
+        mock_tokens = {"DATA_SOURCE_TOKEN": "k", "AUTHUP_TOKEN": "a"}
         with (
             patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
             patch("src.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
@@ -115,7 +115,7 @@ class TestAnalysisStart:
         assert analysis.deployment_name == "analysis-test-analysis-3"
 
     def test_start_sets_analysis_config_with_ids(self, analysis, mock_database):
-        mock_tokens = {"RESULT_TOKEN": "result-tok", "ANALYSIS_TOKEN": "analysis-tok"}
+        mock_tokens = {"DATA_SOURCE_TOKEN": "kong-tok", "AUTHUP_TOKEN": "authup-tok"}
         with (
             patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
             patch("src.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
@@ -126,7 +126,7 @@ class TestAnalysisStart:
         assert analysis.analysis_config["DEPLOYMENT_NAME"] == "analysis-test-analysis-0"
 
     def test_start_stores_pod_ids(self, analysis, mock_database):
-        mock_tokens = {"RESULT_TOKEN": "r", "ANALYSIS_TOKEN": "a"}
+        mock_tokens = {"DATA_SOURCE_TOKEN": "k", "AUTHUP_TOKEN": "a"}
         with (
             patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
             patch(
@@ -138,7 +138,7 @@ class TestAnalysisStart:
         assert analysis.pod_ids == ["pod-1", "pod-2"]
 
     def test_start_calls_database_create_analysis(self, analysis, mock_database):
-        mock_tokens = {"RESULT_TOKEN": "r", "ANALYSIS_TOKEN": "a"}
+        mock_tokens = {"DATA_SOURCE_TOKEN": "k", "AUTHUP_TOKEN": "a"}
         with (
             patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
             patch("src.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
@@ -150,7 +150,7 @@ class TestAnalysisStart:
         assert call_kwargs["status"] == AnalysisStatus.STARTED.value
 
     def test_start_uses_provided_namespace(self, analysis, mock_database):
-        mock_tokens = {"RESULT_TOKEN": "r", "ANALYSIS_TOKEN": "a"}
+        mock_tokens = {"DATA_SOURCE_TOKEN": "k", "AUTHUP_TOKEN": "a"}
         with (
             patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
             patch("src.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
@@ -159,6 +159,19 @@ class TestAnalysisStart:
         assert analysis.namespace == "flame-ns"
         call_kwargs = mock_database.create_analysis.call_args.kwargs
         assert call_kwargs["namespace"] == "flame-ns"
+
+    def test_start_raises_and_deploys_nothing_without_authup_token(self, analysis, mock_database):
+        from src.utils.token import AnalysisTokenError
+
+        mock_tokens = {"DATA_SOURCE_TOKEN": "k", "AUTHUP_TOKEN": None}
+        with (
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
+            patch("src.resources.analysis.entity.create_analysis_deployment") as mock_deploy,
+        ):
+            with pytest.raises(AnalysisTokenError):
+                analysis.start(database=mock_database)
+        mock_deploy.assert_not_called()
+        mock_database.create_analysis.assert_not_called()
 
 
 # ─── Analysis.stop() ──────────────────────────────────────────────────────────

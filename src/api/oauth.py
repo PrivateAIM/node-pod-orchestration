@@ -12,8 +12,12 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2AuthorizationCodeBearer
 
 from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientConnectionError
 import jwt
-from typing import Annotated
+from httpx2 import HTTPError
+from typing import Annotated, Any
+
+from src.utils.hub_client import init_proxied_http_client
 
 
 _KEYCLOAK_URL = os.getenv("KEYCLOAK_URL")
@@ -56,10 +60,34 @@ def valid_access_token(token: Annotated[str, Depends(_oauth2_scheme)]) -> dict:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
 
+class _ProxiedPyJWKClient(PyJWKClient):
+    """PyJWKClient that fetches the JWK set through the node's Hub proxy/CA settings.
+
+    The global Authup instance lives next to the Hub, so it is only reachable
+    the way the Hub client reaches it (``PO_HTTP(S)_PROXY`` mounts and
+    ``EXTRA_CA_CERTS``); PyJWKClient's default urllib fetch honours neither.
+    """
+
+    def fetch_data(self) -> Any:
+        try:
+            with init_proxied_http_client(timeout=self.timeout) as http_client:
+                response = http_client.get(self.uri, headers=self.headers)
+                response.raise_for_status()
+                jwk_set = response.json()
+        except (HTTPError, ValueError) as e:
+            raise PyJWKClientConnectionError(
+                f'Fail to fetch data from the url, err: "{e}"'
+            ) from e
+        # Same cache contract as PyJWKClient.fetch_data: only cache successes.
+        if self.jwk_set_cache is not None:
+            self.jwk_set_cache.put(jwk_set)
+        return jwk_set
+
+
 _AUTHUP_JWKS_URL = os.getenv("AUTHUP_JWKS_URL")
 # Created once so PyJWKClient's JWK-set cache and kid LRU persist across
 # requests, instead of fetching Authup's JWKS on every /po/stream_logs call.
-_authup_jwks_client = PyJWKClient(_AUTHUP_JWKS_URL) if _AUTHUP_JWKS_URL else None
+_authup_jwks_client = _ProxiedPyJWKClient(_AUTHUP_JWKS_URL) if _AUTHUP_JWKS_URL else None
 _analysis_token_scheme = HTTPBearer()
 
 

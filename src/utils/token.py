@@ -9,12 +9,11 @@ an analysis container.
 import os
 from typing import Optional
 
-import requests
-from httpx2 import ConnectError, ConnectTimeout, HTTPStatusError
+from httpx2 import ConnectError, ConnectTimeout, HTTPError, HTTPStatusError
 
 import flame_hub
 
-from src.utils.hub_client import init_hub_client
+from src.utils.hub_client import init_hub_client, init_proxied_http_client
 from src.utils.other import extract_hub_envs
 from src.utils.po_logging import get_logger
 
@@ -22,6 +21,10 @@ from src.utils.po_logging import get_logger
 logger = get_logger()
 
 _AUTHUP_TOKEN_URL = os.getenv("AUTHUP_TOKEN_URL")
+
+
+class AnalysisTokenError(RuntimeError):
+    """Raised when no Authup access token could be minted for an analysis."""
 
 
 def create_analysis_tokens(kong_token: str, analysis_id: str) -> dict[str, str]:
@@ -34,6 +37,8 @@ def create_analysis_tokens(kong_token: str, analysis_id: str) -> dict[str, str]:
     Returns:
         Dict with ``DATA_SOURCE_TOKEN`` (the Kong token) and ``AUTHUP_TOKEN``
         (a freshly minted access token for the analysis's Authup client).
+        ``AUTHUP_TOKEN`` is ``None`` if minting failed; callers deploying an
+        analysis must treat that as fatal (see ``Analysis.start``).
     """
     tokens = {
         "DATA_SOURCE_TOKEN": kong_token,
@@ -48,7 +53,8 @@ def get_analysis_token(analysis_id: str) -> Optional[str]:
     Rotates and fetches the analysis's OAuth2 client credentials from the Hub
     Core API (``update_analysis_client_credentials`` with ``secret=None``
     always returns a fresh, plaintext secret), then exchanges them for an
-    access token against the global Authup instance's token endpoint.
+    access token against the global Authup instance's token endpoint, reached
+    through the node's Hub proxy and CA settings.
 
     Args:
         analysis_id: Analysis id, used as the Hub Core API path parameter.
@@ -90,10 +96,17 @@ def get_analysis_token(analysis_id: str) -> Optional[str]:
         "client_secret": credentials.secret,
     }
 
+    if not _AUTHUP_TOKEN_URL:
+        logger.error("AUTHUP_TOKEN_URL is not configured. Cannot retrieve analysis token.")
+        return None
+
+    # Authup lives next to the Hub, so reach it through the same proxy/CA
+    # settings as the Hub client.
     try:
-        response = requests.post(_AUTHUP_TOKEN_URL, data=data)
-        response.raise_for_status()
-        return response.json()["access_token"]
-    except requests.exceptions.RequestException as e:
+        with init_proxied_http_client() as http_client:
+            response = http_client.post(_AUTHUP_TOKEN_URL, data=data)
+            response.raise_for_status()
+            return response.json()["access_token"]
+    except (HTTPError, ValueError, KeyError) as e:
         logger.error(f"Failed to retrieve Authup token for analysis {analysis_id}: {repr(e)}")
         return None

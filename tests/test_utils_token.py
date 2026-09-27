@@ -1,5 +1,5 @@
 from unittest.mock import patch, MagicMock
-import requests
+import httpx2
 
 
 class TestCreateAnalysisTokens:
@@ -23,6 +23,17 @@ class TestCreateAnalysisTokens:
         assert result["AUTHUP_TOKEN"] == "authup-abc"
 
 
+def _http_client_ctor(response=None, side_effect=None):
+    """Mock for init_proxied_http_client whose context-managed client posts."""
+    http_client = MagicMock()
+    http_client.__enter__.return_value = http_client
+    if side_effect is not None:
+        http_client.post.side_effect = side_effect
+    else:
+        http_client.post.return_value = response
+    return MagicMock(return_value=http_client), http_client
+
+
 class TestGetAnalysisToken:
     def test_success_returns_access_token(self):
         mock_hub_client = MagicMock()
@@ -35,7 +46,7 @@ class TestGetAnalysisToken:
         with (
             patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
             patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
-            patch("src.utils.token.requests.post", return_value=mock_response),
+            patch("src.utils.token.init_proxied_http_client", _http_client_ctor(mock_response)[0]),
             patch("src.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
         ):
             from src.utils.token import get_analysis_token
@@ -51,17 +62,19 @@ class TestGetAnalysisToken:
 
         mock_response = MagicMock()
         mock_response.json.return_value = {"access_token": "tok"}
+        ctor, http_client = _http_client_ctor(mock_response)
 
         with (
             patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
             patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
-            patch("src.utils.token.requests.post", return_value=mock_response) as mock_post,
+            patch("src.utils.token.init_proxied_http_client", ctor),
             patch("src.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
         ):
             from src.utils.token import get_analysis_token
             get_analysis_token("analysis-1")
 
-        mock_post.assert_called_once_with(
+        ctor.assert_called_once_with()
+        http_client.post.assert_called_once_with(
             "http://authup:8080/realms/master/token",
             data={
                 "grant_type": "client_credentials",
@@ -106,8 +119,8 @@ class TestGetAnalysisToken:
             patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
             patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
             patch(
-                "src.utils.token.requests.post",
-                side_effect=requests.exceptions.RequestException("conn refused"),
+                "src.utils.token.init_proxied_http_client",
+                _http_client_ctor(side_effect=httpx2.ConnectError("conn refused"))[0],
             ),
             patch("src.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
         ):
@@ -122,15 +135,34 @@ class TestGetAnalysisToken:
         mock_hub_client.update_analysis_client_credentials.return_value = mock_creds
 
         mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("401")
+        mock_response.raise_for_status.side_effect = httpx2.HTTPStatusError(
+            "401", request=MagicMock(), response=MagicMock()
+        )
 
         with (
             patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
             patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
-            patch("src.utils.token.requests.post", return_value=mock_response),
+            patch("src.utils.token.init_proxied_http_client", _http_client_ctor(mock_response)[0]),
             patch("src.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
         ):
             from src.utils.token import get_analysis_token
             result = get_analysis_token("analysis-1")
 
         assert result is None
+
+    def test_unconfigured_token_url_returns_none(self):
+        mock_hub_client = MagicMock()
+        mock_hub_client.update_analysis_client_credentials.return_value = MagicMock(id="c", secret="s")
+        ctor, _ = _http_client_ctor()
+
+        with (
+            patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
+            patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
+            patch("src.utils.token.init_proxied_http_client", ctor),
+            patch("src.utils.token._AUTHUP_TOKEN_URL", None),
+        ):
+            from src.utils.token import get_analysis_token
+            result = get_analysis_token("analysis-1")
+
+        assert result is None
+        ctor.assert_not_called()
