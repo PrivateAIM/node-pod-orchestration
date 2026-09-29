@@ -473,6 +473,11 @@ def _create_nginx_config_map(analysis_name: str,
                                               'component=flame-storage-service',
                                               namespace=namespace)[0]
 
+    nextflow_launcher_locations = _build_nextflow_launcher_locations(analysis_name=analysis_name,
+                                                                     analysis_ip=analysis_ip,
+                                                                     analysis_env=analysis_env,
+                                                                     namespace=namespace)
+
     proxy_timeout = 900
     proxy_connect_timeout = 10
 
@@ -569,8 +574,9 @@ def _create_nginx_config_map(analysis_name: str,
                         proxy_read_timeout    120s;
                         send_timeout          120s;
                     }}
-                    
-                    
+
+                    {nextflow_launcher_locations}
+
                     # ingress: message-broker/pod-orchestration to analysis deployment
                     location /analysis {{
                         rewrite     ^/analysis(/.*) $1 break;
@@ -595,6 +601,94 @@ def _create_nginx_config_map(analysis_name: str,
     )
     core_client.create_namespaced_config_map(namespace=namespace, body=config_map)
     return name
+
+
+def _build_nextflow_launcher_locations(analysis_name: str,
+                                       analysis_ip: str,
+                                       analysis_env: dict[str, str],
+                                       namespace: str = 'default') -> str:
+    """Render the nginx locations connecting an analysis to the Nextflow launcher.
+
+    The launcher is optional: if no service labeled
+    ``component=flame-nextflow-launcher`` exists in the namespace, an empty
+    string is returned and the nginx config is unchanged.
+
+    Egress allows the analysis to start runs and stop its own runs only; the
+    launcher's internal endpoints (e.g. ``/nextflow/conclude``) stay
+    unreachable. The analysis and project id are injected as headers so the
+    launcher can trust them instead of the request body. Ingress allows the
+    launcher pod to report run results to ``/analysis/nextflow`` only.
+
+    Args:
+        analysis_name: Name of the analysis deployment (ingress target).
+        analysis_ip: Pod IP of the analysis, whitelisted for egress.
+        analysis_env: Analysis config containing ``ANALYSIS_ID`` and
+            ``PROJECT_ID``.
+        namespace: Namespace to search for the launcher.
+
+    Returns:
+        The nginx ``location`` blocks, or an empty string if no launcher is
+        deployed.
+    """
+    nextflow_launcher_service_name = find_k8s_resources('service',
+                                                        'label',
+                                                        'component=flame-nextflow-launcher',
+                                                        namespace=namespace)[0]
+    if nextflow_launcher_service_name is None:
+        return ""
+
+    core_client = client.CoreV1Api()
+    nextflow_launcher_service = core_client.read_namespaced_service(name=nextflow_launcher_service_name,
+                                                                    namespace=namespace)
+    nextflow_launcher_port = nextflow_launcher_service.spec.ports[0].port
+
+    proxy_headers = f"""
+                        proxy_set_header Host $host;
+                        proxy_set_header X-Real-IP $remote_addr;
+                        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                        proxy_set_header X-Forwarded-Proto $scheme;
+                        proxy_set_header X-Flame-Analysis-Id {analysis_env['ANALYSIS_ID']};
+                        proxy_set_header X-Flame-Project-Id {analysis_env['PROJECT_ID']};"""
+
+    locations = f"""
+                    # egress: analysis deployment to nextflow launcher: start run
+                    location = /nextflow/run {{
+                        proxy_pass  http://{nextflow_launcher_service_name}:{nextflow_launcher_port};
+                        allow       {analysis_ip};
+                        deny        all;{proxy_headers}
+                    }}
+                    # egress: analysis deployment to nextflow launcher: stop own runs
+                    location = /nextflow/stop/{analysis_env['ANALYSIS_ID']} {{
+                        proxy_pass  http://{nextflow_launcher_service_name}:{nextflow_launcher_port};
+                        allow       {analysis_ip};
+                        deny        all;{proxy_headers}
+                    }}
+                    """
+
+    # the launcher pod may be restarting; skip ingress rather than block analysis creation
+    nextflow_launcher_pod_name = find_k8s_resources('pod',
+                                                    'label',
+                                                    'component=flame-nextflow-launcher',
+                                                    namespace=namespace)[0]
+    nextflow_launcher_ip = None
+    if nextflow_launcher_pod_name is not None:
+        nextflow_launcher_pod = core_client.read_namespaced_pod(name=nextflow_launcher_pod_name,
+                                                                namespace=namespace)
+        nextflow_launcher_ip = nextflow_launcher_pod.status.pod_ip
+    if nextflow_launcher_ip is None:
+        logger.warning(f"Nextflow launcher service {nextflow_launcher_service_name} found, but no running pod. "
+                       f"Analysis {analysis_name} will not receive nextflow run results.")
+        return locations
+
+    return locations + f"""
+                    # ingress: nextflow launcher to analysis deployment: run results
+                    location /analysis/nextflow {{
+                        rewrite     ^/analysis(/.*) $1 break;
+                        proxy_pass  http://{analysis_name};
+                        allow       {nextflow_launcher_ip};
+                        deny        all;
+                    }}
+                    """
 
 
 def _create_service(name: str,

@@ -4,6 +4,7 @@ Tests for src/k8s/kubernetes.py
 Covers:
   - create_harbor_secret: success, first-call failure -> delete+retry, Conflict re-raises
   - create_analysis_deployment: full chain (deployment + service + nginx + network policy)
+  - _build_nextflow_launcher_locations: optional launcher routes in the nginx config
   - delete_deployment: all resources cleaned up, Not-Found exceptions handled silently
   - get_analysis_logs: structure, pod_id filtering, ApiException returns []
   - get_pod_status: ready/waiting/terminated/no pods
@@ -21,6 +22,7 @@ from src.k8s.kubernetes import (
     delete_deployment,
     get_analysis_logs,
     get_pod_status,
+    _build_nextflow_launcher_locations,
 )
 
 
@@ -100,7 +102,7 @@ class TestCreateAnalysisDeployment:
     """Tests for the full deployment chain.
 
     _create_nginx_config_map contains while-loops waiting for pod IPs and calls
-    find_k8s_resources 7 times, so we patch both aggressively.
+    find_k8s_resources 8 times, so we patch both aggressively.
     """
 
     _ENV = {
@@ -140,6 +142,7 @@ class TestCreateAnalysisDeployment:
             "hub-adapter-svc",      # service/label/component=flame-hub-adapter
             "kong-proxy",           # service/label/app.kubernetes.io/name=kong
             "storage-svc",          # service/label/component=flame-storage-service
+            [None],                 # service/label/component=flame-nextflow-launcher (not deployed)
         ]
 
     def test_creates_analysis_deployment(self, mock_k8s_clients, _setup_pod_reads):
@@ -219,6 +222,58 @@ class TestCreateAnalysisDeployment:
         ]
         for ns in all_namespaces:
             assert ns == "flame-ns"
+
+
+# ─── _build_nextflow_launcher_locations ─────────────────────────────────────
+
+class TestBuildNextflowLauncherLocations:
+    _ENV = {
+        "PROJECT_ID": "project-123",
+        "ANALYSIS_ID": "analysis-456",
+    }
+
+    @pytest.fixture
+    def _launcher_deployed(self, mock_k8s_clients):
+        service = MagicMock()
+        service.spec.ports = [MagicMock(port=8000)]
+        mock_k8s_clients.core_v1.read_namespaced_service.return_value = service
+        mock_k8s_clients.core_v1.read_namespaced_pod.return_value = _make_pod_item("launcher-pod", pod_ip="10.0.0.9")
+        return mock_k8s_clients
+
+    def _build(self, find_results):
+        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=find_results):
+            return _build_nextflow_launcher_locations("analysis-my-dep", "10.0.0.3", self._ENV)
+
+    def test_no_launcher_returns_empty(self, mock_k8s_clients):
+        assert self._build([[None]]) == ""
+
+    def test_egress_routes_only_run_and_own_stop(self, _launcher_deployed):
+        locations = self._build([["nextflow-launcher"], ["launcher-pod"]])
+
+        assert "location = /nextflow/run {" in locations
+        assert "location = /nextflow/stop/analysis-456 {" in locations
+        assert "conclude" not in locations
+        assert locations.count("proxy_pass  http://nextflow-launcher:8000;") == 2
+        assert locations.count("allow       10.0.0.3;") == 2
+
+    def test_egress_injects_analysis_and_project_id(self, _launcher_deployed):
+        locations = self._build([["nextflow-launcher"], ["launcher-pod"]])
+
+        assert locations.count("proxy_set_header X-Flame-Analysis-Id analysis-456;") == 2
+        assert locations.count("proxy_set_header X-Flame-Project-Id project-123;") == 2
+
+    def test_ingress_allows_launcher_pod(self, _launcher_deployed):
+        locations = self._build([["nextflow-launcher"], ["launcher-pod"]])
+
+        assert "location /analysis/nextflow {" in locations
+        assert "proxy_pass  http://analysis-my-dep;" in locations
+        assert "allow       10.0.0.9;" in locations
+
+    def test_launcher_pod_missing_skips_ingress(self, _launcher_deployed):
+        locations = self._build([["nextflow-launcher"], [None]])
+
+        assert "location = /nextflow/run {" in locations
+        assert "/analysis/nextflow" not in locations
 
 
 # ─── delete_deployment ───────────────────────────────────────────────────────
