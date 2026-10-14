@@ -238,6 +238,21 @@ class TestAnalysisStop:
             started_analysis.stop(database=mock_database)
         mock_del.assert_called_once_with("analysis-test-analysis-0", namespace="default")
 
+    def test_stop_skips_delete_subscription_without_authup_token(self, started_analysis, mock_database):
+        with (
+            patch("src.resources.analysis.entity.delete_deployment") as mock_del,
+            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": None, "DATA_SOURCE_TOKEN": "tok"}),
+            patch("src.resources.analysis.entity.delete_subscription") as mock_unsub,
+            patch("src.resources.analysis.entity.logger") as mock_logger,
+        ):
+            started_analysis.stop(database=mock_database, log="final log")
+        mock_unsub.assert_not_called()
+        mock_logger.error.assert_called_once()
+        mock_del.assert_called_once_with("analysis-test-analysis-0", namespace="default")
+        mock_database.update_deployment.assert_any_call("analysis-test-analysis-0", status=AnalysisStatus.STOPPED.value)
+        mock_database.update_deployment.assert_any_call("analysis-test-analysis-0", log="final log")
+        assert started_analysis.status == AnalysisStatus.STOPPED.value
+
     def test_stop_updates_database_deployment_status(self, started_analysis, mock_database):
         with (
             patch("src.resources.analysis.entity.delete_deployment"),

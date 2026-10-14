@@ -13,6 +13,7 @@ import os
 from typing import Optional
 from httpx2 import (
     Client,
+    HTTPError,
     HTTPStatusError,
     ConnectError,
     ConnectTimeout,
@@ -434,6 +435,13 @@ def _refresh_analysis_token(
     """
     if token_remaining_time < (int(os.getenv("STATUS_LOOP_INTERVAL", "10")) * 2 + 1):
         analysis_token = get_analysis_token(analysis_id)
+        if analysis_token is None:
+            # Keep the analysis's current (still valid) token until the next loop.
+            logger.error(
+                f"Failed to mint a refreshed Authup token for analysis {analysis_id}; "
+                f"keeping the current token in deployment {deployment_name}"
+            )
+            return
         client = Client(
             base_url=f"http://nginx-{deployment_name}:{PORTS['service'][0]}"
         )
@@ -444,7 +452,7 @@ def _refresh_analysis_token(
                 headers=[("Connection", "close")],
             )
             response.raise_for_status()
-        except HTTPStatusError as e:
+        except HTTPError as e:
             logger.error(
                 f"Failed to refresh analysis token in deployment {deployment_name}: {repr(e)}"
             )

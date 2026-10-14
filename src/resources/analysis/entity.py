@@ -17,6 +17,10 @@ from src.resources.database.db_models import AnalysisDB
 from src.resources.database.entity import Database
 from src.status.constants import AnalysisStatus
 from src.utils.mb_client import delete_subscription
+from src.utils.po_logging import get_logger
+
+
+logger = get_logger()
 
 
 class Analysis(BaseModel):
@@ -131,6 +135,12 @@ class Analysis(BaseModel):
         self.tokens = create_analysis_tokens(
             kong_token=self.kong_token, analysis_id=self.analysis_id
         )
+        if self.tokens["AUTHUP_TOKEN"] is None:
+            logger.error(
+                f"Failed to mint an Authup token for analysis {self.analysis_id}; "
+                "skipping message-broker subscription deletion"
+            )
+            return
         delete_subscription(
             self.analysis_id, self.tokens["AUTHUP_TOKEN"], namespace=self.namespace
         )

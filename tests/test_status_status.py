@@ -162,6 +162,30 @@ class TestRefreshAnalysisToken:
         mock_get_token.assert_called_once_with("analysis_id")
         mock_client_cls.return_value.post.assert_called_once()
 
+    @patch("src.status.status.logger")
+    @patch("src.status.status.get_analysis_token", return_value=None)
+    @patch("src.status.status.Client")
+    def test_failed_mint_does_not_post(self, mock_client_cls, mock_get_token, mock_logger, monkeypatch):
+        monkeypatch.setenv("STATUS_LOOP_INTERVAL", "30")
+
+        _refresh_analysis_token("dep-name", "analysis_id", 10)
+
+        mock_get_token.assert_called_once_with("analysis_id")
+        mock_client_cls.assert_not_called()
+        mock_logger.error.assert_called_once()
+
+    @patch("src.status.status.logger")
+    @patch("src.status.status.get_analysis_token", return_value="new-token")
+    @patch("src.status.status.Client")
+    def test_connect_error_is_swallowed_and_logged(self, mock_client_cls, mock_get_token, mock_logger, monkeypatch):
+        monkeypatch.setenv("STATUS_LOOP_INTERVAL", "30")
+        mock_client_cls.return_value.post.side_effect = ConnectError("refused")
+
+        _refresh_analysis_token("dep-name", "analysis_id", 10)
+
+        mock_logger.error.assert_called_once()
+        mock_client_cls.return_value.close.assert_called_once()
+
 
 # ─── TestInformAnalysisOfPartnerStatuses ─────────────────────────────────────
 

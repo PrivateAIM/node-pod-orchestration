@@ -12,13 +12,16 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2AuthorizationCodeBearer
 
 from jwt import PyJWKClient
-from jwt.exceptions import PyJWKClientConnectionError
+from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
 import jwt
 from httpx2 import HTTPError
 from typing import Annotated, Any
 
 from src.utils.hub_client import init_proxied_http_client
+from src.utils.po_logging import get_logger
 
+
+logger = get_logger()
 
 _KEYCLOAK_URL = os.getenv("KEYCLOAK_URL")
 _REALM = os.getenv("KEYCLOAK_REALM", "flame")
@@ -101,6 +104,10 @@ def valid_analysis_token(
     global Authup instance — a different issuer than the node-local Keycloak
     ``valid_access_token`` verifies against.
 
+    Besides signature and expiration (``exp`` is required), the token must be
+    an Authup *client* token (``sub_kind == "client"``), as minted via the
+    client_credentials grant for an analysis; Authup user tokens are rejected.
+
     Args:
         credentials: The bearer token extracted from the ``Authorization``
             header.
@@ -109,18 +116,33 @@ def valid_analysis_token(
         The decoded JWT claims as a dictionary.
 
     Raises:
-        HTTPException: 401 if the token is invalid, expired, or cannot be
-            verified against Authup's signing keys; 500 if
-            ``AUTHUP_JWKS_URL`` is not configured.
+        HTTPException: 401 if the token is invalid, expired, lacks ``exp``,
+            is not a client token, or cannot be matched to/verified against
+            Authup's signing keys; 503 if Authup's JWKS cannot be fetched;
+            500 if ``AUTHUP_JWKS_URL`` is not configured.
     """
     if _authup_jwks_client is None:
         raise HTTPException(status_code=500, detail="AUTHUP_JWKS_URL is not configured")
     try:
         sig_key = _authup_jwks_client.get_signing_key_from_jwt(credentials.credentials)
-        return jwt.decode(
+        claims = jwt.decode(
             credentials.credentials,
             key=sig_key,
-            options={"verify_signature": True, "verify_aud": False, "verify_exp": True},
+            options={
+                "verify_signature": True,
+                "verify_aud": False,
+                "verify_exp": True,
+                "require": ["exp"],
+            },
         )
+    except PyJWKClientConnectionError as e:
+        logger.error(f"Failed to fetch Authup JWKS: {repr(e)}")
+        raise HTTPException(status_code=503, detail="Authup JWKS unavailable") from e
+    except PyJWKClientError:
+        # e.g. no signing key matches the token's kid
+        raise HTTPException(status_code=401, detail="Not authenticated") from None
     except jwt.exceptions.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Not authenticated") from None
+    if claims.get("sub_kind") != "client":
         raise HTTPException(status_code=401, detail="Not authenticated")
+    return claims

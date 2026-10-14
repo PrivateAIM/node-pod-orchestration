@@ -157,7 +157,7 @@ class TestGetAnalysisToken:
 
         with (
             patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
-            patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
+            patch("src.utils.token.init_hub_client", return_value=mock_hub_client) as mock_init_hub,
             patch("src.utils.token.init_proxied_http_client", ctor),
             patch("src.utils.token._AUTHUP_TOKEN_URL", None),
         ):
@@ -166,3 +166,6 @@ class TestGetAnalysisToken:
 
         assert result is None
         ctor.assert_not_called()
+        # The Hub must not rotate the client secret when the token can't be minted.
+        mock_init_hub.assert_not_called()
+        mock_hub_client.update_analysis_client_credentials.assert_not_called()

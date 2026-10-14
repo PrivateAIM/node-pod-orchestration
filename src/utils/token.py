@@ -62,6 +62,12 @@ def get_analysis_token(analysis_id: str) -> Optional[str]:
     Returns:
         The access token, or ``None`` on failure.
     """
+    # Checked before contacting the Hub, which would otherwise rotate the
+    # analysis's client secret for a token that can never be minted.
+    if not _AUTHUP_TOKEN_URL:
+        logger.error("AUTHUP_TOKEN_URL is not configured. Cannot retrieve analysis token.")
+        return None
+
     client_id, client_secret, hub_url_core, hub_auth, _, http_proxy, https_proxy = (
         extract_hub_envs()
     )
@@ -95,10 +101,6 @@ def get_analysis_token(analysis_id: str) -> Optional[str]:
         "client_id": str(credentials.id),
         "client_secret": credentials.secret,
     }
-
-    if not _AUTHUP_TOKEN_URL:
-        logger.error("AUTHUP_TOKEN_URL is not configured. Cannot retrieve analysis token.")
-        return None
 
     # Authup lives next to the Hub, so reach it through the same proxy/CA
     # settings as the Hub client.
