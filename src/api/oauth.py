@@ -1,18 +1,27 @@
-"""Keycloak OAuth2 bearer token validation.
+"""Bearer token validation for the Pod Orchestration API.
 
 Provides the :func:`valid_access_token` FastAPI dependency, which verifies
-incoming JWTs against the realm's JWKS endpoint and returns the decoded
-claims. Injected into every protected route of the Pod Orchestration API.
+incoming JWTs against the Keycloak realm's JWKS endpoint and returns the
+decoded claims. Injected into every protected route except
+``POST /po/stream_logs``, which uses :func:`valid_analysis_token` to verify
+Authup-issued analysis tokens instead.
 """
 
 import os
 from fastapi import Depends, HTTPException
-from fastapi.security import OAuth2AuthorizationCodeBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2AuthorizationCodeBearer
 
 from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
 import jwt
-from typing import Annotated
+from httpx2 import HTTPError
+from typing import Annotated, Any
 
+from src.utils.hub_client import init_proxied_http_client
+from src.utils.po_logging import get_logger
+
+
+logger = get_logger()
 
 _KEYCLOAK_URL = os.getenv("KEYCLOAK_URL")
 _REALM = os.getenv("KEYCLOAK_REALM", "flame")
@@ -52,3 +61,88 @@ def valid_access_token(token: Annotated[str, Depends(_oauth2_scheme)]) -> dict:
         )
     except jwt.exceptions.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+
+class _ProxiedPyJWKClient(PyJWKClient):
+    """PyJWKClient that fetches the JWK set through the node's Hub proxy/CA settings.
+
+    The global Authup instance lives next to the Hub, so it is only reachable
+    the way the Hub client reaches it (``PO_HTTP(S)_PROXY`` mounts and
+    ``EXTRA_CA_CERTS``); PyJWKClient's default urllib fetch honours neither.
+    """
+
+    def fetch_data(self) -> Any:
+        try:
+            with init_proxied_http_client(timeout=self.timeout) as http_client:
+                response = http_client.get(self.uri, headers=self.headers)
+                response.raise_for_status()
+                jwk_set = response.json()
+        except (HTTPError, ValueError) as e:
+            raise PyJWKClientConnectionError(
+                f'Fail to fetch data from the url, err: "{e}"'
+            ) from e
+        # Same cache contract as PyJWKClient.fetch_data: only cache successes.
+        if self.jwk_set_cache is not None:
+            self.jwk_set_cache.put(jwk_set)
+        return jwk_set
+
+
+_AUTHUP_JWKS_URL = os.getenv("AUTHUP_JWKS_URL")
+# Created once so PyJWKClient's JWK-set cache and kid LRU persist across
+# requests, instead of fetching Authup's JWKS on every /po/stream_logs call.
+_authup_jwks_client = _ProxiedPyJWKClient(_AUTHUP_JWKS_URL) if _AUTHUP_JWKS_URL else None
+_analysis_token_scheme = HTTPBearer()
+
+
+def valid_analysis_token(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(_analysis_token_scheme)]
+) -> dict:
+    """FastAPI dependency that validates an Authup-issued analysis bearer token.
+
+    Analysis containers call ``POST /po/stream_logs`` directly (via their
+    nginx sidecar) using the ``AUTHUP_TOKEN`` minted for them against the
+    global Authup instance — a different issuer than the node-local Keycloak
+    ``valid_access_token`` verifies against.
+
+    Besides signature and expiration (``exp`` is required), the token must be
+    an Authup *client* token (``sub_kind == "client"``), as minted via the
+    client_credentials grant for an analysis; Authup user tokens are rejected.
+
+    Args:
+        credentials: The bearer token extracted from the ``Authorization``
+            header.
+
+    Returns:
+        The decoded JWT claims as a dictionary.
+
+    Raises:
+        HTTPException: 401 if the token is invalid, expired, lacks ``exp``,
+            is not a client token, or cannot be matched to/verified against
+            Authup's signing keys; 503 if Authup's JWKS cannot be fetched;
+            500 if ``AUTHUP_JWKS_URL`` is not configured.
+    """
+    if _authup_jwks_client is None:
+        raise HTTPException(status_code=500, detail="AUTHUP_JWKS_URL is not configured")
+    try:
+        sig_key = _authup_jwks_client.get_signing_key_from_jwt(credentials.credentials)
+        claims = jwt.decode(
+            credentials.credentials,
+            key=sig_key,
+            options={
+                "verify_signature": True,
+                "verify_aud": False,
+                "verify_exp": True,
+                "require": ["exp"],
+            },
+        )
+    except PyJWKClientConnectionError as e:
+        logger.error(f"Failed to fetch Authup JWKS: {repr(e)}")
+        raise HTTPException(status_code=503, detail="Authup JWKS unavailable") from e
+    except PyJWKClientError:
+        # e.g. no signing key matches the token's kid
+        raise HTTPException(status_code=401, detail="Not authenticated") from None
+    except jwt.exceptions.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Not authenticated") from None
+    if claims.get("sub_kind") != "client":
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return claims
