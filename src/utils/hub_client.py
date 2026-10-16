@@ -14,6 +14,8 @@ from pathlib import Path
 from functools import lru_cache
 from json import JSONDecodeError
 from typing import Optional, Union
+
+import httpx2
 from httpx2 import Client, HTTPTransport, HTTPStatusError, ConnectError, ConnectTimeout
 import truststore
 
@@ -145,11 +147,11 @@ def get_node_analysis_id(
             node_analyzes = hub_client.find_analysis_nodes(
                 filter={"analysis_id": analysis_id}
             )
-    except (HTTPStatusError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
+    except (flame_hub._exceptions.HubAPIError, AttributeError, httpx2.HTTPError) as e:
         logger.error(
             f"Failed to retrieve node analyzes from hub python client: {repr(e)}"
         )
-        node_analyzes = None
+        return None
 
     if node_analyzes:
         if node_id_object_id is not None:
