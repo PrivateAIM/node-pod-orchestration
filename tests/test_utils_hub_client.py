@@ -238,7 +238,7 @@ class TestGetNodeAnalysisId:
         from src.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id")
 
-        assert result == []
+        assert result is None
 
     def test_hub_api_error_returns_empty_list(self, mock_hub_client):
         import flame_hub
@@ -249,7 +249,7 @@ class TestGetNodeAnalysisId:
         from src.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id")
 
-        assert result == []
+        assert result is None
 
     def test_attribute_error_returns_empty_list(self, mock_hub_client):
         mock_hub_client.find_analysis_nodes.side_effect = AttributeError("no attr")
@@ -257,7 +257,7 @@ class TestGetNodeAnalysisId:
         from src.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id")
 
-        assert result == []
+        assert result is None
 
 
 # ─── TestUpdateHubStatus ──────────────────────────────────────────────────────
