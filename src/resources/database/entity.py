@@ -1,3 +1,12 @@
+"""Database access layer for analyses.
+
+:class:`Database` wraps the PostgreSQL connection and exposes the CRUD
+operations the rest of the service needs. Every method opens a short-lived
+session, commits, and closes it, so callers never share sessions across
+threads -- important because the API server and the status loop run
+concurrently.
+"""
+
 import json
 import os
 import time
@@ -23,19 +32,21 @@ class Database:
 
     def __init__(self) -> None:
         """Connect to PostgreSQL using ``POSTGRES_*`` env vars and create tables."""
-        host = os.getenv('POSTGRES_HOST')
+        host = os.getenv("POSTGRES_HOST")
         port = "5432"
-        user = os.getenv('POSTGRES_USER')
-        password = os.getenv('POSTGRES_PASSWORD')
-        database = os.getenv('POSTGRES_DB')
+        user = os.getenv("POSTGRES_USER")
+        password = os.getenv("POSTGRES_PASSWORD")
+        database = os.getenv("POSTGRES_DB")
         conn_uri = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
 
-        logger.debug(f"Connecting to database at postgresql+psycopg2://{user}:*******@{host}:{port}/{database}")
+        logger.debug(
+            f"Connecting to database at postgresql+psycopg2://{user}:*******@{host}:{port}/{database}"
+        )
 
-        self.engine = create_engine(conn_uri,
-                                    pool_pre_ping=True,
-                                    pool_recycle=3600)
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        self.engine = create_engine(conn_uri, pool_pre_ping=True, pool_recycle=3600)
+        self.SessionLocal = sessionmaker(
+            autocommit=False, autoflush=False, bind=self.engine
+        )
         Base.metadata.create_all(bind=self.engine)
 
     def reset_db(self) -> None:
@@ -46,12 +57,21 @@ class Database:
     def get_deployment(self, deployment_name: str) -> Optional[AnalysisDB]:
         """Return the deployment row with the given unique name, or ``None``."""
         with self.SessionLocal() as session:
-            return session.query(AnalysisDB).filter_by(**{'deployment_name': deployment_name}).first()
+            return (
+                session.query(AnalysisDB)
+                .filter_by(**{"deployment_name": deployment_name})
+                .first()
+            )
 
     def get_latest_deployment(self, analysis_id: str) -> Optional[AnalysisDB]:
         """Return the most recently created deployment for an analysis, or ``None``."""
         with self.SessionLocal() as session:
-            deployment = session.query(AnalysisDB).filter_by(**{'analysis_id': analysis_id}).order_by(AnalysisDB.time_created.desc()).first()
+            deployment = (
+                session.query(AnalysisDB)
+                .filter_by(**{"analysis_id": analysis_id})
+                .order_by(AnalysisDB.time_created.desc())
+                .first()
+            )
             return deployment
 
     def analysis_is_running(self, analysis_id: str) -> bool:
@@ -61,51 +81,61 @@ class Database:
         """
         latest_deployment = self.get_latest_deployment(analysis_id)
         if latest_deployment is not None:
-            return latest_deployment.status not in [AnalysisStatus.EXECUTED.value,
-                                                    AnalysisStatus.STOPPED.value,
-                                                    AnalysisStatus.FAILED.value]
+            return latest_deployment.status not in [
+                AnalysisStatus.EXECUTED.value,
+                AnalysisStatus.STOPPED.value,
+                AnalysisStatus.FAILED.value,
+            ]
         return False
 
     def get_deployments(self, analysis_id: str) -> list[AnalysisDB]:
         """Return every deployment row recorded for an analysis (all restarts)."""
         with self.SessionLocal() as session:
-            return session.query(AnalysisDB).filter_by(**{'analysis_id': analysis_id}).all()
+            return (
+                session.query(AnalysisDB)
+                .filter_by(**{"analysis_id": analysis_id})
+                .all()
+            )
 
-    def create_analysis(self,
-                        analysis_id: str,
-                        deployment_name: str,
-                        project_id: str,
-                        pod_ids: Optional[list[str]],
-                        status: str,
-                        log: Optional[str],
-                        registry_url: str,
-                        image_url: str,
-                        registry_user: str,
-                        registry_password: str,
-                        kong_token: str,
-                        restart_counter: int,
-                        progress: int,
-                        namespace: str = 'default') -> AnalysisDB:
+    def create_analysis(
+        self,
+        analysis_id: str,
+        deployment_name: str,
+        project_id: str,
+        pod_ids: Optional[list[str]],
+        status: str,
+        log: Optional[str],
+        registry_url: str,
+        image_url: str,
+        registry_user: str,
+        registry_password: str,
+        kong_token: str,
+        restart_counter: int,
+        progress: int,
+        namespace: str = "default",
+    ) -> AnalysisDB:
         """Insert a new analysis deployment row and return the persisted object.
 
         ``pod_ids`` is stored JSON-encoded and ``time_created`` is stamped with
         the current Unix time.
         """
-        analysis = AnalysisDB(analysis_id=analysis_id,
-                              deployment_name=deployment_name,
-                              project_id=project_id,
-                              pod_ids=json.dumps(pod_ids),
-                              status=status,
-                              log=log,
-                              registry_url=registry_url,
-                              image_url=image_url,
-                              registry_user=registry_user,
-                              registry_password=registry_password,
-                              namespace=namespace,
-                              kong_token=kong_token,
-                              restart_counter=restart_counter,
-                              progress=progress,
-                              time_created=time.time())
+        analysis = AnalysisDB(
+            analysis_id=analysis_id,
+            deployment_name=deployment_name,
+            project_id=project_id,
+            pod_ids=json.dumps(pod_ids),
+            status=status,
+            log=log,
+            registry_url=registry_url,
+            image_url=image_url,
+            registry_user=registry_user,
+            registry_password=registry_password,
+            namespace=namespace,
+            kong_token=kong_token,
+            restart_counter=restart_counter,
+            progress=progress,
+            time_created=time.time(),
+        )
         with self.SessionLocal() as session:
             session.add(analysis)
             session.commit()
@@ -123,7 +153,11 @@ class Database:
             The list of updated deployment rows.
         """
         with self.SessionLocal() as session:
-            analysis = session.query(AnalysisDB).filter_by(**{'analysis_id': analysis_id}).all()
+            analysis = (
+                session.query(AnalysisDB)
+                .filter_by(**{"analysis_id": analysis_id})
+                .all()
+            )
             for deployment in analysis:
                 if deployment:
                     for key, value in kwargs.items():
@@ -143,7 +177,11 @@ class Database:
             The updated deployment row.
         """
         with self.SessionLocal() as session:
-            deployment = session.query(AnalysisDB).filter_by(**{'deployment_name': deployment_name}).first()
+            deployment = (
+                session.query(AnalysisDB)
+                .filter_by(**{"deployment_name": deployment_name})
+                .first()
+            )
             for key, value in kwargs.items():
                 setattr(deployment, key, value)
             session.commit()
@@ -152,7 +190,11 @@ class Database:
     def delete_analysis(self, analysis_id: str) -> None:
         """Delete every deployment row belonging to an analysis."""
         with self.SessionLocal() as session:
-            analysis = session.query(AnalysisDB).filter_by(**{'analysis_id': analysis_id}).all()
+            analysis = (
+                session.query(AnalysisDB)
+                .filter_by(**{"analysis_id": analysis_id})
+                .all()
+            )
             for deployment in analysis:
                 if deployment:
                     session.delete(deployment)
@@ -161,7 +203,11 @@ class Database:
     def delete_deployment(self, deployment_name: str) -> None:
         """Delete a single deployment row by its unique name."""
         with self.SessionLocal() as session:
-            deployment = session.query(AnalysisDB).filter_by(deployment_name=deployment_name).first()
+            deployment = (
+                session.query(AnalysisDB)
+                .filter_by(deployment_name=deployment_name)
+                .first()
+            )
             if deployment:
                 session.delete(deployment)
                 session.commit()
@@ -174,12 +220,20 @@ class Database:
     def get_analysis_ids(self) -> list[str]:
         """Return every analysis id currently tracked in the database."""
         with self.SessionLocal() as session:
-            return [analysis.analysis_id for analysis in session.query(AnalysisDB).all() if analysis is not None]
+            return [
+                analysis.analysis_id
+                for analysis in session.query(AnalysisDB).all()
+                if analysis is not None
+            ]
 
     def get_deployment_ids(self) -> list[str]:
         """Return every deployment name currently tracked in the database."""
         with self.SessionLocal() as session:
-            return [analysis.deployment_name for analysis in session.query(AnalysisDB).all() if analysis is not None]
+            return [
+                analysis.deployment_name
+                for analysis in session.query(AnalysisDB).all()
+                if analysis is not None
+            ]
 
     def get_deployment_pod_ids(self, deployment_name: str) -> list[str]:
         """Return the JSON-encoded pod id list recorded for a single deployment."""
@@ -187,7 +241,11 @@ class Database:
 
     def get_analysis_pod_ids(self, analysis_id: str) -> list[str]:
         """Return the JSON-encoded pod id list for each deployment of an analysis."""
-        return [deployment.pod_ids for deployment in self.get_deployments(analysis_id) if deployment is not None]
+        return [
+            deployment.pod_ids
+            for deployment in self.get_deployments(analysis_id)
+            if deployment is not None
+        ]
 
     def get_analysis_log(self, analysis_id: str) -> str:
         """Return the accumulated log string for the latest deployment, or ``""``."""
@@ -250,16 +308,18 @@ class Database:
         analysis = self.get_deployments(analysis_id)
         if analysis:
             analysis = analysis[0]
-            return {'analysis_id': analysis.analysis_id,
-                    'project_id': analysis.project_id,
-                    'registry_url': analysis.registry_url,
-                    'image_url': analysis.image_url,
-                    'registry_user': analysis.registry_user,
-                    'registry_password': analysis.registry_password,
-                    'namespace': analysis.namespace,
-                    'kong_token': analysis.kong_token,
-                    'restart_counter': analysis.restart_counter,
-                    'progress': 0}
+            return {
+                "analysis_id": analysis.analysis_id,
+                "project_id": analysis.project_id,
+                "registry_url": analysis.registry_url,
+                "image_url": analysis.image_url,
+                "registry_user": analysis.registry_user,
+                "registry_password": analysis.registry_password,
+                "namespace": analysis.namespace,
+                "kong_token": analysis.kong_token,
+                "restart_counter": analysis.restart_counter,
+                "progress": 0,
+            }
         return None
 
     def delete_old_deployments_from_db(self, analysis_id: str) -> None:

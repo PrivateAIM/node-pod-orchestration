@@ -1,3 +1,11 @@
+"""Structured JSON logging setup.
+
+Configures the root logger to emit one JSON object per line via
+:class:`JsonFormatter`, and registers the service's two custom levels --
+``ACTION`` (21) and ``STATUS_LOOP`` (22) -- so lifecycle actions and status
+loop passes can be filtered apart from ordinary ``INFO`` output.
+"""
+
 import json
 import logging
 import sys
@@ -37,8 +45,8 @@ def get_logger() -> logging.Logger:
     Returns:
         A :class:`logging.Logger` ready for use.
     """
-    _set_custom_log_level(21, 'ACTION')
-    _set_custom_log_level(22, 'STATUS_LOOP')
+    _set_custom_log_level(21, "ACTION")
+    _set_custom_log_level(22, "STATUS_LOOP")
 
     root = logging.getLogger()
     if not any(isinstance(h.formatter, JsonFormatter) for h in root.handlers):
@@ -62,11 +70,14 @@ def _set_custom_log_level(level, level_name):
         level_name: Human-readable name; used uppercase as the level name and
             lowercase as the method/function name.
     """
+
     def logForLevel(self, message, *args, **kws):
+        """Log ``message`` at the custom level when the logger is enabled for it."""
         if self.isEnabledFor(level):
             self._log(level, message, args, **kws)
 
     def logToRoot(message, *args, **kwargs):
+        """Log ``message`` at the custom level on the root logger."""
         logging.log(level, message, *args, **kwargs)
 
     logging.addLevelName(level, level_name.upper())

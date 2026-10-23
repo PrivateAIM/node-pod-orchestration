@@ -1,3 +1,11 @@
+"""SQLAlchemy ORM models for the analysis database.
+
+:class:`AnalysisDB` holds the live state of a running or recently finished
+analysis; :class:`ArchiveDB` keeps a condensed record of analyses that have
+reached a terminal status. Both derive their table name from the class name
+via the shared declarative :class:`Base`.
+"""
+
 from typing import Any
 from sqlalchemy import JSON, Column, Integer, String, Float
 from sqlalchemy.ext.declarative import as_declarative, declared_attr
@@ -61,4 +69,3 @@ class ArchiveDB(Base):
     progress = Column(Integer, nullable=True, default=0)
     time_created = Column(Float, nullable=True)
     time_updated = Column(Float, nullable=True)
-

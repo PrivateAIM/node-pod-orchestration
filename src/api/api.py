@@ -1,3 +1,12 @@
+"""FastAPI application exposing the Pod Orchestration REST API.
+
+Defines :class:`PodOrchestrationAPI`, which mounts every ``/po`` endpoint used
+to create, inspect, stop and delete analyses. All routes except
+``GET /po/healthz`` require a valid Keycloak bearer token. The class also owns
+the FLAME Hub client and the resolved ``node_id``, re-initializing them on
+demand so Hub status updates keep working across Hub restarts.
+"""
+
 import time
 import uvicorn
 from typing import Optional
@@ -12,15 +21,17 @@ from src.api.oauth import valid_access_token
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import CreateAnalysis
 from src.resources.log.entity import CreateLogEntity, AnalysisStoppedLog
-from src.resources.utils import (create_analysis,
-                                 retrieve_history,
-                                 retrieve_logs,
-                                 get_status_and_progress,
-                                 get_pods,
-                                 stop_analysis,
-                                 delete_analysis,
-                                 cleanup,
-                                 stream_logs)
+from src.resources.utils import (
+    create_analysis,
+    retrieve_history,
+    retrieve_logs,
+    get_status_and_progress,
+    get_pods,
+    stop_analysis,
+    delete_analysis,
+    cleanup,
+    stream_logs,
+)
 from src.utils.po_logging import get_logger
 
 logger = get_logger()
@@ -42,7 +53,7 @@ class PodOrchestrationAPI:
         namespace: Kubernetes namespace the API operates within.
     """
 
-    def __init__(self, database: Database, namespace: str = 'default'):
+    def __init__(self, database: Database, namespace: str = "default"):
         """Build the FastAPI app, register routes, and start the uvicorn server.
 
         Args:
@@ -57,10 +68,12 @@ class PodOrchestrationAPI:
         self._set_node_id_and_hub_client(max_attempts=100)
 
         self.namespace = namespace
-        app = FastAPI(title="FLAME PO",
-                      docs_url="/api/docs",
-                      redoc_url="/api/redoc",
-                      openapi_url="/api/v1/openapi.json")
+        app = FastAPI(
+            title="FLAME PO",
+            docs_url="/api/docs",
+            redoc_url="/api/redoc",
+            openapi_url="/api/v1/openapi.json",
+        )
 
         origins = [
             "http://localhost:8080",
@@ -74,85 +87,114 @@ class PodOrchestrationAPI:
             allow_headers=["*"],
         )
         router = APIRouter()
-        router.add_api_route("/",
-                             self.create_analysis_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["POST"],
-                             response_class=JSONResponse)
-        router.add_api_route("/history",
-                             self.retrieve_all_history_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["GET"],
-                             response_class=JSONResponse)
-        router.add_api_route("/history/{analysis_id}",
-                             self.retrieve_history_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["GET"],
-                             response_class=JSONResponse)
-        router.add_api_route("/logs",
-                             self.retrieve_all_logs_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["GET"],
-                             response_class=JSONResponse)
-        router.add_api_route("/logs/{analysis_id}",
-                             self.retrieve_logs_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["GET"],
-                             response_class=JSONResponse)
-        router.add_api_route("/status",
-                             self.get_all_status_and_progress_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["GET"],
-                             response_class=JSONResponse)
-        router.add_api_route("/status/{analysis_id}",
-                             self.get_status_and_progress_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["GET"],
-                             response_class=JSONResponse)
-        router.add_api_route("/pods",
-                             self.get_all_pods_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["GET"],
-                             response_class=JSONResponse)
-        router.add_api_route("/pods/{analysis_id}",
-                             self.get_pods_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["GET"],
-                             response_class=JSONResponse)
-        router.add_api_route("/stop",
-                             self.stop_all_analysis_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["PUT"],
-                             response_class=JSONResponse)
-        router.add_api_route("/stop/{analysis_id}",
-                             self.stop_analysis_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["PUT"],
-                             response_class=JSONResponse)
-        router.add_api_route("/delete",
-                             self.delete_all_analysis_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["DELETE"],
-                             response_class=JSONResponse)
-        router.add_api_route("/delete/{analysis_id}",
-                             self.delete_analysis_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["DELETE"],
-                             response_class=JSONResponse)
-        router.add_api_route("/cleanup/{cleanup_type}",
-                             self.cleanup_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["DELETE"],
-                             response_class=JSONResponse)
-        router.add_api_route("/stream_logs",
-                             self.stream_logs_call,
-                             dependencies=[Depends(valid_access_token)],
-                             methods=["POST"],
-                             response_class=JSONResponse)
-        router.add_api_route("/healthz",
-                             self.health_call,
-                             methods=["GET"],
-                             response_class=JSONResponse)
+        router.add_api_route(
+            "/",
+            self.create_analysis_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["POST"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/history",
+            self.retrieve_all_history_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["GET"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/history/{analysis_id}",
+            self.retrieve_history_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["GET"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/logs",
+            self.retrieve_all_logs_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["GET"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/logs/{analysis_id}",
+            self.retrieve_logs_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["GET"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/status",
+            self.get_all_status_and_progress_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["GET"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/status/{analysis_id}",
+            self.get_status_and_progress_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["GET"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/pods",
+            self.get_all_pods_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["GET"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/pods/{analysis_id}",
+            self.get_pods_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["GET"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/stop",
+            self.stop_all_analysis_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["PUT"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/stop/{analysis_id}",
+            self.stop_analysis_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["PUT"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/delete",
+            self.delete_all_analysis_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["DELETE"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/delete/{analysis_id}",
+            self.delete_analysis_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["DELETE"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/cleanup/{cleanup_type}",
+            self.cleanup_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["DELETE"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/stream_logs",
+            self.stream_logs_call,
+            dependencies=[Depends(valid_access_token)],
+            methods=["POST"],
+            response_class=JSONResponse,
+        )
+        router.add_api_route(
+            "/healthz", self.health_call, methods=["GET"], response_class=JSONResponse
+        )
 
         app.include_router(
             router,
@@ -178,7 +220,9 @@ class PodOrchestrationAPI:
             return create_analysis(body, self.database, self.namespace)
         except Exception as e:
             logger.error(f"Error creating analysis: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error creating analysis (see po logs).")
+            raise HTTPException(
+                status_code=500, detail="Error creating analysis (see po logs)."
+            )
 
     def retrieve_all_history_call(self):
         """``GET /po/history`` — return archived logs for every analysis.
@@ -191,10 +235,13 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            return retrieve_history('all', self.database)
+            return retrieve_history("all", self.database)
         except Exception as e:
             logger.error(f"Error retrieving ALL history data: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error retrieving ALL history data (see po logs).")
+            raise HTTPException(
+                status_code=500,
+                detail="Error retrieving ALL history data (see po logs).",
+            )
 
     def retrieve_history_call(self, analysis_id: str):
         """``GET /po/history/{analysis_id}`` — return archived logs for a single analysis.
@@ -213,7 +260,9 @@ class PodOrchestrationAPI:
             return retrieve_history(analysis_id, self.database)
         except Exception as e:
             logger.error(f"Error retrieving history data: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error retrieving history data (see po logs).")
+            raise HTTPException(
+                status_code=500, detail="Error retrieving history data (see po logs)."
+            )
 
     def retrieve_all_logs_call(self):
         """``GET /po/logs`` — return live pod logs for every executing analysis.
@@ -225,10 +274,12 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            return retrieve_logs('all', self.database)
+            return retrieve_logs("all", self.database)
         except Exception as e:
             logger.error(f"Error retrieving ALL logs data: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error retrieving ALL logs data (see po logs).")
+            raise HTTPException(
+                status_code=500, detail="Error retrieving ALL logs data (see po logs)."
+            )
 
     def retrieve_logs_call(self, analysis_id: str):
         """``GET /po/logs/{analysis_id}`` — return live pod logs for a single analysis.
@@ -246,7 +297,9 @@ class PodOrchestrationAPI:
             return retrieve_logs(analysis_id, self.database)
         except Exception as e:
             logger.error(f"Error retrieving logs data: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error retrieving logs data (see po logs).")
+            raise HTTPException(
+                status_code=500, detail="Error retrieving logs data (see po logs)."
+            )
 
     def get_all_status_and_progress_call(self):
         """``GET /po/status`` — return status and progress for every analysis.
@@ -258,10 +311,13 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            return get_status_and_progress('all', self.database)
+            return get_status_and_progress("all", self.database)
         except Exception as e:
             logger.error(f"Error retrieving ALL status data: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error retrieving ALL status data (see po logs).")
+            raise HTTPException(
+                status_code=500,
+                detail="Error retrieving ALL status data (see po logs).",
+            )
 
     def get_status_and_progress_call(self, analysis_id: str):
         """``GET /po/status/{analysis_id}`` — return status and progress for a single analysis.
@@ -279,7 +335,9 @@ class PodOrchestrationAPI:
             return get_status_and_progress(analysis_id, self.database)
         except Exception as e:
             logger.error(f"Error retrieving status data: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error retrieving status data (see po logs).")
+            raise HTTPException(
+                status_code=500, detail="Error retrieving status data (see po logs)."
+            )
 
     def get_all_pods_call(self):
         """``GET /po/pods`` — return the pod ids backing every analysis deployment.
@@ -291,10 +349,12 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            return get_pods('all', self.database)
+            return get_pods("all", self.database)
         except Exception as e:
             logger.error(f"Error retrieving ALL pod names: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error retrieving ALL pod names (see po logs).")
+            raise HTTPException(
+                status_code=500, detail="Error retrieving ALL pod names (see po logs)."
+            )
 
     def get_pods_call(self, analysis_id: str):
         """``GET /po/pods/{analysis_id}`` — return pod ids for a single analysis.
@@ -312,7 +372,9 @@ class PodOrchestrationAPI:
             return get_pods(analysis_id, self.database)
         except Exception as e:
             logger.error(f"Error retrieving pod name: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error retrieving pod name (see po logs).")
+            raise HTTPException(
+                status_code=500, detail="Error retrieving pod name (see po logs)."
+            )
 
     def stop_all_analysis_call(self):
         """``PUT /po/stop`` — stop every analysis and push a stop log to the Hub.
@@ -325,21 +387,25 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            response = stop_analysis('all', self.database)
+            response = stop_analysis("all", self.database)
             self._set_node_id_and_hub_client(max_attempts=5)
             if self.node_id is not None:
                 for analysis_id in self.database.get_analysis_ids():
-                    stream_logs(AnalysisStoppedLog(analysis_id),
-                                self.node_id,
-                                self.enable_hub_logging,
-                                self.database,
-                                self.hub_client)
+                    stream_logs(
+                        AnalysisStoppedLog(analysis_id),
+                        self.node_id,
+                        self.enable_hub_logging,
+                        self.database,
+                        self.hub_client,
+                    )
             else:
-                logger.warning(f"Couldn't forward logs for stopped analyses.")
+                logger.warning("Couldn't forward logs for stopped analyses.")
             return response
         except Exception as e:
             logger.error(f"Error stopping ALL analyzes: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error stopping ALL analyzes (see po logs).")
+            raise HTTPException(
+                status_code=500, detail="Error stopping ALL analyzes (see po logs)."
+            )
 
     def stop_analysis_call(self, analysis_id: str):
         """``PUT /po/stop/{analysis_id}`` — stop a single analysis and push a stop log to the Hub.
@@ -357,17 +423,21 @@ class PodOrchestrationAPI:
             response = stop_analysis(analysis_id, self.database)
             self._set_node_id_and_hub_client(max_attempts=5)
             if self.node_id is not None:
-                stream_logs(AnalysisStoppedLog(analysis_id),
-                            self.node_id,
-                            self.enable_hub_logging,
-                            self.database,
-                            self.hub_client)
+                stream_logs(
+                    AnalysisStoppedLog(analysis_id),
+                    self.node_id,
+                    self.enable_hub_logging,
+                    self.database,
+                    self.hub_client,
+                )
             else:
-                logger.warning(f"Couldn't forward logs for stopped analysis.")
+                logger.warning("Couldn't forward logs for stopped analysis.")
             return response
         except Exception as e:
             logger.error(f"Error stopping analysis: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error stopping analysis (see po logs).")
+            raise HTTPException(
+                status_code=500, detail="Error stopping analysis (see po logs)."
+            )
 
     def delete_all_analysis_call(self):
         """``DELETE /po/delete`` — stop and permanently remove every analysis.
@@ -381,10 +451,12 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            return delete_analysis('all', self.database)
+            return delete_analysis("all", self.database)
         except Exception as e:
             logger.error(f"Error deleting ALL analyzes: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error deleting ALL analyzes (see po logs).")
+            raise HTTPException(
+                status_code=500, detail="Error deleting ALL analyzes (see po logs)."
+            )
 
     def delete_analysis_call(self, analysis_id: str):
         """``DELETE /po/delete/{analysis_id}`` — stop and permanently remove a single analysis.
@@ -402,7 +474,9 @@ class PodOrchestrationAPI:
             return delete_analysis(analysis_id, self.database)
         except Exception as e:
             logger.error(f"Error deleting analysis: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error deleting analysis (see po logs).")
+            raise HTTPException(
+                status_code=500, detail="Error deleting analysis (see po logs)."
+            )
 
     def cleanup_call(self, cleanup_type: str):
         """``DELETE /po/cleanup/{cleanup_type}`` — run a targeted cleanup pass.
@@ -420,13 +494,12 @@ class PodOrchestrationAPI:
         """
         try:
             self._set_node_id_and_hub_client(max_attempts=5)
-            return cleanup(cleanup_type,
-                           self.database,
-                           self.hub_client,
-                           self.namespace)
+            return cleanup(cleanup_type, self.database, self.hub_client, self.namespace)
         except Exception as e:
             logger.error(f"Error cleaning up: {repr(e)}")
-            raise HTTPException(status_code=500, detail=f"Error cleaning up (see po logs).")
+            raise HTTPException(
+                status_code=500, detail="Error cleaning up (see po logs)."
+            )
 
     def stream_logs_call(self, body: CreateLogEntity):
         """``POST /po/stream_logs`` — accept a log line from an analysis pod.
@@ -444,13 +517,23 @@ class PodOrchestrationAPI:
         try:
             self._set_node_id_and_hub_client(max_attempts=5)
             if self.node_id is not None:
-                return stream_logs(body, self.node_id, self.enable_hub_logging, self.database, self.hub_client)
+                return stream_logs(
+                    body,
+                    self.node_id,
+                    self.enable_hub_logging,
+                    self.database,
+                    self.hub_client,
+                )
             else:
                 raise Exception
         except Exception:
-            logger.error(f"Error streaming logs: node_id={self.node_id}, "
-                         f"hub_client={self.hub_client}.")
-            raise HTTPException(status_code=500, detail=f"Error streaming logs (see po logs).")
+            logger.error(
+                f"Error streaming logs: node_id={self.node_id}, "
+                f"hub_client={self.hub_client}."
+            )
+            raise HTTPException(
+                status_code=500, detail="Error streaming logs (see po logs)."
+            )
 
     def health_call(self):
         """``GET /po/healthz`` — unauthenticated liveness probe.
@@ -465,28 +548,56 @@ class PodOrchestrationAPI:
         if not main_alive:
             raise RuntimeError("Main thread is not alive.")
         else:
-            return {'status': "ok"}
+            return {"status": "ok"}
 
     def _set_node_id_and_hub_client(self, max_attempts: Optional[int] = None) -> None:
+        """Ensure a usable Hub client and a resolved ``node_id`` are available.
+
+        Re-initializes the client if it is missing or no longer resolves a node id
+        (e.g. after the Hub restarted or credentials rotated), retrying with a short
+        delay until it succeeds.
+
+        Args:
+            max_attempts: Stop retrying after this many attempts. ``None`` retries
+                indefinitely, which is the behaviour used at service start-up.
+        """
         current_attempt = 1
-        client_id, client_secret, hub_url_core, hub_auth, enable_hub_logging, http_proxy, https_proxy = extract_hub_envs()
-        if (self.hub_client is None) or (get_node_id_by_client(self.hub_client, client_id) is None):
+        (
+            client_id,
+            client_secret,
+            hub_url_core,
+            hub_auth,
+            enable_hub_logging,
+            http_proxy,
+            https_proxy,
+        ) = extract_hub_envs()
+        if (self.hub_client is None) or (
+            get_node_id_by_client(self.hub_client, client_id) is None
+        ):
             self.node_id = None
             while self.node_id is None:
                 self.enable_hub_logging = enable_hub_logging
-                self.hub_client = init_hub_client(client_id,
-                                                  client_secret,
-                                                  hub_url_core,
-                                                  hub_auth,
-                                                  http_proxy,
-                                                  https_proxy)
-                self.node_id = get_node_id_by_client(self.hub_client, client_id) if self.hub_client else None
+                self.hub_client = init_hub_client(
+                    client_id,
+                    client_secret,
+                    hub_url_core,
+                    hub_auth,
+                    http_proxy,
+                    https_proxy,
+                )
+                self.node_id = (
+                    get_node_id_by_client(self.hub_client, client_id)
+                    if self.hub_client
+                    else None
+                )
 
                 if (max_attempts is not None) and (current_attempt >= max_attempts):
                     break
                 else:
                     current_attempt += 1
                     if current_attempt % 60 == 59:
-                        logger.warning(f"Unable to connect to Hub, attempt {current_attempt}"
-                                       f"{'/' + str(max_attempts) if max_attempts is not None else ''}.")
+                        logger.warning(
+                            f"Unable to connect to Hub, attempt {current_attempt}"
+                            f"{'/' + str(max_attempts) if max_attempts is not None else ''}."
+                        )
                     time.sleep(1)

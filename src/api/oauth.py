@@ -1,3 +1,10 @@
+"""Keycloak OAuth2 bearer token validation.
+
+Provides the :func:`valid_access_token` FastAPI dependency, which verifies
+incoming JWTs against the realm's JWKS endpoint and returns the decoded
+claims. Injected into every protected route of the Pod Orchestration API.
+"""
+
 import os
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2AuthorizationCodeBearer
@@ -38,8 +45,10 @@ def valid_access_token(token: Annotated[str, Depends(_oauth2_scheme)]) -> dict:
     """
     try:
         sig_key = PyJWKClient(f"{_REALM_BASE}/certs").get_signing_key_from_jwt(token)
-        return jwt.decode(token,
-                          key=sig_key,
-                          options={'verify_signature': True, 'verify_aud': False, 'verify_exp': True})
+        return jwt.decode(
+            token,
+            key=sig_key,
+            options={"verify_signature": True, "verify_aud": False, "verify_exp": True},
+        )
     except jwt.exceptions.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Not authenticated")
