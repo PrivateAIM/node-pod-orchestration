@@ -230,7 +230,7 @@ def api_test_client(mock_database, mock_hub_client, mock_k8s_clients):
     Bypasses OAuth via FastAPI dependency_overrides.
     """
     from starlette.testclient import TestClient
-    from src.api.oauth import valid_access_token
+    from src.api.oauth import valid_access_token, valid_analysis_token
 
     captured_app = None
 
@@ -270,6 +270,9 @@ def api_test_client(mock_database, mock_hub_client, mock_k8s_clients):
     captured_app.dependency_overrides[valid_access_token] = lambda: {
         "sub": "test-user",
         "preferred_username": "tester",
+    }
+    captured_app.dependency_overrides[valid_analysis_token] = lambda: {
+        "sub": "test-analysis-client",
     }
 
     # starlette 0.36.x / httpx2 incompatibility: starlette passes `app=` to
