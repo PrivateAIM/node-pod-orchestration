@@ -550,6 +550,8 @@ def _validate_analyses_with_hub(
     """
     validated_ids = []
     for analysis_id in analysis_ids:
-        if get_node_analysis_id(hub_client, analysis_id) != []:
+        node_analysis_ids = get_node_analysis_id(hub_client, analysis_id)
+        # None means the Hub lookup failed, keep the analysis rather than treat it as orphaned.
+        if node_analysis_ids is None or node_analysis_ids:
             validated_ids.append(analysis_id)
     return validated_ids

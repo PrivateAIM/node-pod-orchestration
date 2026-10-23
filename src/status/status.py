@@ -49,7 +49,9 @@ logger = get_logger()
 
 
 def status_loop(
-    database: Database, status_loop_interval: int, namespace: str = "default"
+        database: Database,
+        status_loop_interval: int,
+        namespace: str = "default"
 ) -> None:
     """Run the blocking background loop that reconciles analyses with the Hub.
 
@@ -66,6 +68,7 @@ def status_loop(
     Args:
         database: Database wrapper used for all persistence.
         status_loop_interval: Seconds between iterations.
+        namespace: deployment namespace.
     """
     hub_client = None
     node_id = None
@@ -222,10 +225,10 @@ def status_loop(
 
 
 def inform_analysis_of_partner_statuses(
-    database: Database,
-    hub_client: flame_hub.CoreClient,
-    analysis_id: str,
-    node_analysis_id: str,
+        database: Database,
+        hub_client: flame_hub.CoreClient,
+        analysis_id: str,
+        node_analysis_id: str,
 ) -> Optional[dict[str, str]]:
     """Push partner-node statuses into the local analysis' ``/partner_status`` endpoint.
 
@@ -268,7 +271,7 @@ def inform_analysis_of_partner_statuses(
 
 
 def _get_analysis_status(
-    analysis_id: str, database: Database
+        analysis_id: str, database: Database
 ) -> Optional[dict[str, str]]:
     """Combine DB and internal status for an analysis and pick the next action.
 
@@ -317,22 +320,22 @@ def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
     when no action is needed.
     """
     is_stuck = (db_status not in [AnalysisStatus.FAILED.value]) and (
-        int_status in [AnalysisStatus.STUCK.value]
+            int_status in [AnalysisStatus.STUCK.value]
     )
     is_slow = (db_status in [AnalysisStatus.STARTED.value]) and (
-        int_status in [AnalysisStatus.FAILED.value]
+            int_status in [AnalysisStatus.FAILED.value]
     )
     newly_running = (db_status in [AnalysisStatus.STARTED.value]) and (
-        int_status in [AnalysisStatus.EXECUTING.value]
+            int_status in [AnalysisStatus.EXECUTING.value]
     )
     speedy_finished = (db_status in [AnalysisStatus.STARTED.value]) and (
-        int_status in [AnalysisStatus.EXECUTED.value]
+            int_status in [AnalysisStatus.EXECUTED.value]
     )
     newly_ended = (
-        db_status in [AnalysisStatus.EXECUTING.value, AnalysisStatus.FAILED.value]
-    ) and (int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value])
+                          db_status in [AnalysisStatus.EXECUTING.value, AnalysisStatus.FAILED.value]
+                  ) and (int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value])
     firmly_stuck = (db_status in [AnalysisStatus.FAILED.value]) and (
-        int_status in [AnalysisStatus.STUCK.value]
+            int_status in [AnalysisStatus.STUCK.value]
     )
     was_stopped = int_status == AnalysisStatus.STOPPED.value
     if is_stuck or is_slow:
@@ -460,11 +463,11 @@ def _refresh_analysis_token(
 
 
 def _fix_stuck_status(
-    database: Database,
-    analysis_status: dict[str, str],
-    node_id: str,
-    enable_hub_logging: bool,
-    hub_client: flame_hub.CoreClient,
+        database: Database,
+        analysis_status: dict[str, str],
+        node_id: str,
+        enable_hub_logging: bool,
+        hub_client: flame_hub.CoreClient,
 ) -> None:
     """Restart a stuck/slow analysis or mark it failed once ``_MAX_RESTARTS`` is hit.
 
@@ -478,7 +481,7 @@ def _fix_stuck_status(
     analysis = database.get_latest_deployment(analysis_status["analysis_id"])
     if analysis is not None:
         is_slow = (analysis_status["db_status"] in [AnalysisStatus.STARTED.value]) and (
-            analysis_status["int_status"] in [AnalysisStatus.FAILED.value]
+                analysis_status["int_status"] in [AnalysisStatus.FAILED.value]
         )
 
         # Tracking restarts
@@ -497,12 +500,12 @@ def _fix_stuck_status(
 
 
 def _stream_stuck_logs(
-    analysis: AnalysisDB,
-    node_id: str,
-    enable_hub_logging: bool,
-    database: Database,
-    hub_client: flame_hub.CoreClient,
-    is_slow: bool,
+        analysis: AnalysisDB,
+        node_id: str,
+        enable_hub_logging: bool,
+        database: Database,
+        hub_client: flame_hub.CoreClient,
+        is_slow: bool,
 ) -> None:
     """Emit a startup-error log matching the observed failure mode.
 
@@ -566,7 +569,7 @@ def _update_running_status(database: Database, analysis_status: dict[str, str]) 
 
 
 def _update_finished_status(
-    database: Database, analysis_status: dict[str, str]
+        database: Database, analysis_status: dict[str, str]
 ) -> None:
     """Record the final internal status and either delete or stop the analysis.
 
@@ -593,9 +596,9 @@ def _update_finished_status(
 
 
 def _set_analysis_hub_status(
-    hub_client: flame_hub.CoreClient,
-    node_analysis_id: str,
-    analysis_status: dict[str, str],
+        hub_client: flame_hub.CoreClient,
+        node_analysis_id: str,
+        analysis_status: dict[str, str],
 ) -> str:
     """Push the reconciled status to the Hub and return what was submitted.
 

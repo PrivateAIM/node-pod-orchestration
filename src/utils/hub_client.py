@@ -14,7 +14,7 @@ from pathlib import Path
 from functools import lru_cache
 from json import JSONDecodeError
 from typing import Optional, Union
-from httpx2 import Client, HTTPTransport, HTTPStatusError, ConnectError, ConnectTimeout
+from httpx2 import Client, HTTPError, HTTPTransport, HTTPStatusError, ConnectError, ConnectTimeout
 import truststore
 
 import flame_hub
@@ -28,12 +28,12 @@ logger = get_logger()
 
 
 def init_hub_client(
-    client_id: str,
-    client_secret: str,
-    hub_url_core: str,
-    hub_auth: str,
-    http_proxy: str,
-    https_proxy: str,
+        client_id: str,
+        client_secret: str,
+        hub_url_core: str,
+        hub_auth: str,
+        http_proxy: str,
+        https_proxy: str,
 ) -> Optional[flame_hub.CoreClient]:
     """Authenticate and build a :class:`flame_hub.CoreClient` talking to the FLAME Hub.
 
@@ -132,7 +132,7 @@ def get_ssl_context() -> ssl.SSLContext:
 
 
 def get_node_id_by_client(
-    hub_client: flame_hub.CoreClient, client_id: str
+        hub_client: flame_hub.CoreClient, client_id: str
 ) -> Optional[str]:
     """Look up the Hub node id associated with an OAuth2 client id.
 
@@ -146,11 +146,11 @@ def get_node_id_by_client(
     try:
         node_id_object = hub_client.find_nodes(filter={"client_id": client_id})[0]
     except (
-        HTTPStatusError,
-        JSONDecodeError,
-        ConnectTimeout,
-        flame_hub._exceptions.HubAPIError,
-        AttributeError,
+            HTTPStatusError,
+            JSONDecodeError,
+            ConnectTimeout,
+            flame_hub._exceptions.HubAPIError,
+            AttributeError,
     ) as e:
         logger.error(
             f"Failed to retrieve node id object from hub python client {client_id}: {repr(e)}"
@@ -160,9 +160,9 @@ def get_node_id_by_client(
 
 
 def get_node_analysis_id(
-    hub_client: flame_hub.CoreClient,
-    analysis_id: str,
-    node_id_object_id: Optional[str] = None,
+        hub_client: flame_hub.CoreClient,
+        analysis_id: str,
+        node_id_object_id: Optional[str] = None,
 ) -> Optional[Union[str, list[str]]]:
     """Look up the Hub analysis-node id for a (analysis, node) pair.
 
@@ -184,11 +184,11 @@ def get_node_analysis_id(
             node_analyzes = hub_client.find_analysis_nodes(
                 filter={"analysis_id": analysis_id}
             )
-    except (HTTPStatusError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
+    except (HTTPError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
         logger.error(
             f"Failed to retrieve node analyzes from hub python client: {repr(e)}"
         )
-        node_analyzes = None
+        return None
 
     if node_analyzes:
         if node_id_object_id is not None:
@@ -200,10 +200,10 @@ def get_node_analysis_id(
 
 
 def update_hub_status(
-    hub_client: flame_hub.CoreClient,
-    node_analysis_id: str,
-    run_status: str,
-    run_progress: Optional[int] = None,
+        hub_client: flame_hub.CoreClient,
+        node_analysis_id: str,
+        run_status: str,
+        run_progress: Optional[int] = None,
 ) -> None:
     """Update the execution status (and optionally progress) of an analysis-node in the Hub.
 
@@ -230,10 +230,10 @@ def update_hub_status(
                 execution_progress=run_progress,
             )
     except (
-        HTTPStatusError,
-        ConnectError,
-        flame_hub._exceptions.HubAPIError,
-        AttributeError,
+            HTTPStatusError,
+            ConnectError,
+            flame_hub._exceptions.HubAPIError,
+            AttributeError,
     ) as e:
         logger.error(
             f"Failed to update hub status for node_analysis_id {node_analysis_id}: {repr(e)}"
@@ -241,7 +241,7 @@ def update_hub_status(
 
 
 def get_analysis_node_statuses(
-    hub_client: flame_hub.CoreClient, analysis_id: str
+        hub_client: flame_hub.CoreClient, analysis_id: str
 ) -> Optional[dict[str, str]]:
     """Return the execution status of every node participating in an analysis.
 
@@ -270,7 +270,7 @@ def get_analysis_node_statuses(
 
 
 def get_partner_node_statuses(
-    hub_client: flame_hub.CoreClient, analysis_id: str, node_analysis_id: str
+        hub_client: flame_hub.CoreClient, analysis_id: str, node_analysis_id: str
 ) -> Optional[dict[str, str]]:
     """Return :func:`get_analysis_node_statuses` with the local node filtered out.
 
