@@ -31,8 +31,14 @@ from src.resources.utils import (
     delete_analysis,
     stream_logs,
     clean_up_the_rest,
+    refresh_registry_credentials,
 )
-from src.status.constants import AnalysisStatus, _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
+from src.status.constants import (
+    AnalysisStatus,
+    _MAX_RESTARTS,
+    _INTERNAL_STATUS_TIMEOUT,
+    _REGISTRY_CREDENTIALS_REFRESH_INTERVAL,
+)
 from src.utils.hub_client import (
     init_hub_client,
     get_node_id_by_client,
@@ -73,6 +79,7 @@ def status_loop(
     hub_client = None
     node_id = None
     node_analysis_ids = {}
+    registry_credentials_checked_at = None
 
     (
         client_id,
@@ -129,6 +136,14 @@ def status_loop(
             ]
             logger.action(f"Checking for running analyzes...{running_analyzes}")
             if running_analyzes:
+                # Only running analyses need a valid pull secret; a new start
+                # resolves the credentials itself.
+                if (registry_credentials_checked_at is None) or (
+                    time.time() - registry_credentials_checked_at
+                    >= _REGISTRY_CREDENTIALS_REFRESH_INTERVAL
+                ):
+                    refresh_registry_credentials(hub_client, node_id, namespace)
+                    registry_credentials_checked_at = time.time()
                 for analysis_id in running_analyzes:
                     logger.status_loop(f"Current analysis id: {analysis_id}")
                     # Get node analysis id

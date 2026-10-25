@@ -12,6 +12,7 @@ _INTERNAL_STATUS_TIMEOUT = 60  # Time in seconds to wait for internal status res
 
 
 _MAX_RESTARTS = 3  # Maximum number of restarts for a stuck analysis
+_REGISTRY_CREDENTIALS_REFRESH_INTERVAL = 300  # Seconds between registry credential checks
 
 
 class AnalysisStatus(Enum):

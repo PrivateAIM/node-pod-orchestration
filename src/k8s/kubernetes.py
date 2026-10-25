@@ -108,6 +108,36 @@ def create_harbor_secret(
                 )
 
 
+def get_harbor_secret_auth(
+    name: str = "flame-harbor-credentials",
+    namespace: str = "default",
+) -> Optional[tuple[str, str, str]]:
+    """Return the registry host, user and password stored in the pull secret.
+
+    Args:
+        name: Name of the Kubernetes secret.
+        namespace: Namespace of the secret.
+
+    Returns:
+        ``(host, user, password)`` of the first registry in the secret's
+        ``.dockerconfigjson``, or ``None`` if the secret does not exist or
+        cannot be parsed.
+    """
+    core_client = client.CoreV1Api()
+    try:
+        secret = core_client.read_namespaced_secret(name=name, namespace=namespace)
+    except client.exceptions.ApiException as e:
+        if e.status == 404:
+            return None
+        raise
+    try:
+        config = json.loads(base64.b64decode(secret.data[".dockerconfigjson"]))
+        host, auth = next(iter(config["auths"].items()))
+        return host, auth["username"], auth["password"]
+    except (TypeError, KeyError, ValueError, StopIteration):
+        return None
+
+
 def create_analysis_deployment(
     name: str,
     image: str,
