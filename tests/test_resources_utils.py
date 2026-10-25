@@ -482,6 +482,53 @@ class TestDeleteAnalysis:
         mock_database.delete_analysis.assert_called_once_with(_ANALYSIS_ID)
 
 
+# ─── refresh_registry_credentials ─────────────────────────────────────────────
+
+class TestRefreshRegistryCredentials:
+    @patch("src.resources.utils.create_harbor_secret")
+    @patch(
+        "src.resources.utils.get_harbor_secret_auth",
+        return_value=("harbor.privateaim", "robot$node_project", "old_secret"),
+    )
+    def test_rotated_secret_rewrites_pull_secret(self, mock_read, mock_harbor, mock_hub_client):
+        from src.resources.utils import refresh_registry_credentials
+
+        assert refresh_registry_credentials(mock_hub_client, "node-id", "ns") is True
+        mock_harbor.assert_called_once_with(
+            "harbor.privateaim", "robot$node_project", "robot_secret", namespace="ns"
+        )
+
+    @patch("src.resources.utils.create_harbor_secret")
+    @patch(
+        "src.resources.utils.get_harbor_secret_auth",
+        return_value=("harbor.privateaim", "robot$node_project", "robot_secret"),
+    )
+    def test_unchanged_secret_is_left_alone(self, mock_read, mock_harbor, mock_hub_client):
+        from src.resources.utils import refresh_registry_credentials
+
+        assert refresh_registry_credentials(mock_hub_client, "node-id", "ns") is False
+        mock_harbor.assert_not_called()
+
+    @patch("src.resources.utils.create_harbor_secret")
+    @patch("src.resources.utils.get_harbor_secret_auth", return_value=None)
+    def test_missing_secret_is_created(self, mock_read, mock_harbor, mock_hub_client):
+        from src.resources.utils import refresh_registry_credentials
+
+        assert refresh_registry_credentials(mock_hub_client, "node-id", "ns") is True
+        mock_harbor.assert_called_once()
+
+    @patch("src.resources.utils.create_harbor_secret")
+    @patch("src.resources.utils.get_harbor_secret_auth")
+    def test_hub_failure_never_raises(self, mock_read, mock_harbor, mock_hub_client):
+        from src.resources.utils import refresh_registry_credentials
+
+        mock_hub_client.get_node_registry_credentials.side_effect = ConnectionError("down")
+
+        assert refresh_registry_credentials(mock_hub_client, "node-id", "ns") is False
+        mock_read.assert_not_called()
+        mock_harbor.assert_not_called()
+
+
 # ─── unstuck_analysis_deployments ─────────────────────────────────────────────
 
 class TestUnstuckAnalysisDeployments:

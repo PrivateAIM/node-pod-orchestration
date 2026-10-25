@@ -18,7 +18,11 @@ from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
 from src.resources.log.entity import CreateLogEntity
 from src.status.constants import AnalysisStatus
-from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
+from src.k8s.kubernetes import (
+    create_harbor_secret,
+    get_analysis_logs,
+    get_harbor_secret_auth,
+)
 from src.k8s.utils import find_k8s_resources, delete_k8s_resource
 from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
@@ -127,6 +131,45 @@ def create_analysis(
     )
 
     return {body.analysis_id: analysis.status}
+
+
+def refresh_registry_credentials(
+    hub_client: Optional[CoreClient],
+    node_id: Optional[str],
+    namespace: str = "default",
+) -> bool:
+    """Update the pull secret if the Hub rotated the node's robot account.
+
+    The Hub issues a new robot secret when the node reconnects to its
+    registry, which invalidates the secret running analyses were started
+    with. Kubernetes pulls again whenever a pod is rescheduled, so the
+    shared pull secret is kept current instead of waiting for the pull to
+    fail. Never raises: a failure is logged and retried on the next call.
+
+    Args:
+        hub_client: Initialized Hub core client.
+        node_id: This node's id in the FLAME Hub.
+        namespace: Namespace of the pull secret.
+
+    Returns:
+        ``True`` if the pull secret was rewritten, else ``False``.
+    """
+    try:
+        credentials = get_registry_credentials(hub_client, node_id)
+        current = (
+            credentials.host,
+            credentials.account_name,
+            credentials.account_secret,
+        )
+        if get_harbor_secret_auth(namespace=namespace) == current:
+            return False
+        create_harbor_secret(*current, namespace=namespace)
+    except Exception as e:
+        logger.warning(f"Failed to refresh the registry credentials: {repr(e)}")
+        return False
+
+    logger.info("Registry credentials changed in the Hub, updated the pull secret.")
+    return True
 
 
 def retrieve_history(
