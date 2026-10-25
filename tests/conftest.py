@@ -80,10 +80,7 @@ def sample_analysis_db():
             "deployment_name": "analysis-analysis_id-0",
             "analysis_id": "analysis_id",
             "project_id": "project_id",
-            "registry_url": "harbor.privateaim",
             "image_url": "harbor.privateaim/node_id/analysis_id",
-            "registry_user": "robot_user",
-            "registry_password": "default_pw",
             "status": "started",
             "log": None,
             "pod_ids": json.dumps(["pod-1"]),
@@ -130,10 +127,7 @@ def mock_database(sample_analysis_db):
     mock_db.extract_analysis_body.return_value = {
         "analysis_id": "analysis_id",
         "project_id": "project_id",
-        "registry_url": "harbor.privateaim",
         "image_url": "harbor.privateaim/node_id/analysis_id",
-        "registry_user": "robot_user",
-        "registry_password": "default_pw",
         "namespace": "default",
         "kong_token": "default_kong_token",
         "restart_counter": 0,
@@ -173,6 +167,15 @@ def mock_hub_client():
     mock_client.find_analysis_nodes.return_value = [mock_analysis_node]
 
     mock_client.update_analysis_node.return_value = None
+
+    from flame_hub.models import NodeRegistryCredentials
+
+    mock_client.get_node_registry_credentials.return_value = NodeRegistryCredentials(
+        host="harbor.privateaim",
+        externalName="node_project",
+        accountName="robot$node_project",
+        accountSecret="robot_secret",
+    )
 
     return mock_client
 

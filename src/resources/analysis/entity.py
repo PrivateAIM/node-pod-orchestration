@@ -33,10 +33,7 @@ class Analysis(BaseModel):
 
     analysis_id: str
     project_id: str
-    registry_url: str
     image_url: str
-    registry_user: str
-    registry_password: str
     namespace: str = "default"
     kong_token: str
 
@@ -90,10 +87,7 @@ class Analysis(BaseModel):
             pod_ids=None,
             status=self.status,
             log=self.log,
-            registry_url=self.registry_url,
             image_url=self.image_url,
-            registry_user=self.registry_user,
-            registry_password=self.registry_password,
             namespace=self.namespace,
             kong_token=self.kong_token,
             restart_counter=self.restart_counter,
@@ -155,10 +149,7 @@ def read_db_analysis(analysis: AnalysisDB) -> Analysis:
         analysis_id=analysis.analysis_id,
         deployment_name=analysis.deployment_name,
         project_id=analysis.project_id,
-        registry_url=analysis.registry_url,
         image_url=analysis.image_url,
-        registry_user=analysis.registry_user,
-        registry_password=analysis.registry_password,
         status=analysis.status,
         pod_ids=json.loads(analysis.pod_ids),
         log=analysis.log,
@@ -170,14 +161,16 @@ def read_db_analysis(analysis: AnalysisDB) -> Analysis:
 
 
 class CreateAnalysis(BaseModel):
-    """Request body accepted by ``POST /po/`` to create a new analysis."""
+    """Request body accepted by ``POST /po/`` to create a new analysis.
+
+    The image and its registry credentials are resolved from the Hub, not
+    taken from the request (see :func:`~src.resources.utils.create_analysis`).
+    Clients that still send ``registry_*`` / ``image_url`` fields are
+    accepted; the fields are ignored.
+    """
 
     analysis_id: str
     project_id: str
-    registry_url: str
-    image_url: str
-    registry_user: str
-    registry_password: str
     kong_token: str
     restart_counter: int = 0
     progress: int = 0

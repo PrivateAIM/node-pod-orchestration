@@ -489,7 +489,9 @@ def _fix_stuck_status(
             _stream_stuck_logs(
                 analysis, node_id, enable_hub_logging, database, hub_client, is_slow
             )
-            unstuck_analysis_deployments(analysis_status["analysis_id"], database)
+            unstuck_analysis_deployments(
+                analysis_status["analysis_id"], database, hub_client, node_id
+            )
         else:
             database.update_deployment_status(
                 analysis.deployment_name, status=AnalysisStatus.FAILED.value

@@ -43,10 +43,7 @@ def _insert(db, analysis_id="a1", deployment_name="analysis-a1-0", **kwargs):
         pod_ids=["pod-1"],
         status="started",
         log=None,
-        registry_url="harbor.test",
         image_url="harbor.test/img",
-        registry_user="user",
-        registry_password="pw",
         kong_token="token",
         restart_counter=0,
         progress=0,
@@ -304,8 +301,7 @@ class TestStopAndExtract:
         body = db.extract_analysis_body("a1")
         assert body is not None
         for key in (
-            "analysis_id", "project_id", "registry_url", "image_url",
-            "registry_user", "registry_password", "namespace",
+            "analysis_id", "project_id", "image_url", "namespace",
             "kong_token", "restart_counter", "progress",
         ):
             assert key in body
@@ -353,3 +349,42 @@ class TestDeleteOldDeployments:
         remaining = db.get_deployments("a1")
         assert len(remaining) == 1
         assert remaining[0].deployment_name == "analysis-a1-2"
+
+
+# ─── legacy registry columns ─────────────────────────────────────────────────
+
+
+class TestLegacyRegistryColumns:
+    def test_drops_registry_credential_columns_from_existing_tables(self):
+        from sqlalchemy import create_engine as real_create_engine
+        from sqlalchemy import inspect, text
+
+        sqlite_engine = real_create_engine(
+            "sqlite:///:memory:", connect_args={"check_same_thread": False}
+        )
+        Base.metadata.create_all(bind=sqlite_engine)
+        with sqlite_engine.begin() as connection:
+            for table in ("analysis", "archive"):
+                for column in ("registry_url", "registry_user", "registry_password"):
+                    connection.execute(
+                        text(f"ALTER TABLE {table} ADD COLUMN {column} VARCHAR")
+                    )
+            connection.execute(
+                text(
+                    "INSERT INTO analysis (deployment_name, analysis_id, registry_password) "
+                    "VALUES ('analysis-a1-0', 'a1', 'secret')"
+                )
+            )
+
+        with patch("src.resources.database.entity.create_engine", return_value=sqlite_engine):
+            from src.resources.database.entity import Database
+
+            database = Database()
+
+        inspector = inspect(sqlite_engine)
+        for table in ("analysis", "archive"):
+            columns = {column["name"] for column in inspector.get_columns(table)}
+            assert columns.isdisjoint({"registry_url", "registry_user", "registry_password"})
+        assert database.get_deployment("analysis-a1-0").analysis_id == "a1"
+
+        Base.metadata.drop_all(bind=sqlite_engine)

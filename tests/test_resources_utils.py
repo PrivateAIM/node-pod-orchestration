@@ -55,23 +55,29 @@ def _analysis_mock(
 
 class TestCreateAnalysis:
     _VALID_UUID = "123e4567-e89b-42d3-a456-426614174000"
+    _NODE_ID = "test-node-id"
 
     def _valid_body_kwargs(self):
         return {
             "analysis_id": self._VALID_UUID,
             "project_id": self._VALID_UUID,
-            "registry_url": "harbor.privateaim",
-            "image_url": "harbor.privateaim/node_id/analysis_id",
-            "registry_user": "robot_user",
-            "registry_password": "default_pw",
             "kong_token": "default_kong_token",
+        }
+
+    def _stored_body(self):
+        return {
+            **self._valid_body_kwargs(),
+            "image_url": "harbor.privateaim/node_project/stored",
+            "namespace": "default",
+            "restart_counter": 0,
+            "progress": 0,
         }
 
     @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.Analysis")
     @patch("src.resources.utils.create_harbor_secret")
     def test_from_create_analysis_body(
-        self, mock_harbor, mock_analysis_cls, mock_hub, mock_database
+        self, mock_harbor, mock_analysis_cls, mock_hub, mock_database, mock_hub_client
     ):
         from src.resources.utils import create_analysis
 
@@ -81,9 +87,17 @@ class TestCreateAnalysis:
         mock_analysis_cls.return_value = mock_inst
 
         body = CreateAnalysis(**self._valid_body_kwargs())
-        result = create_analysis(body, mock_database, namespace="default")
+        result = create_analysis(
+            body, mock_database, mock_hub_client, self._NODE_ID, namespace="default"
+        )
 
-        mock_harbor.assert_called_once()
+        mock_hub_client.get_node_registry_credentials.assert_called_once_with(self._NODE_ID)
+        mock_harbor.assert_called_once_with(
+            "harbor.privateaim", "robot$node_project", "robot_secret", namespace="default"
+        )
+        assert mock_analysis_cls.call_args.kwargs["image_url"] == (
+            f"harbor.privateaim/node_project/{self._VALID_UUID}"
+        )
         mock_inst.start.assert_called_once_with(database=mock_database, namespace="default")
         mock_hub.assert_called_once_with(self._VALID_UUID, AnalysisStatus.STARTED.value)
         assert result == {self._VALID_UUID: AnalysisStatus.STARTED.value}
@@ -91,32 +105,87 @@ class TestCreateAnalysis:
     @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.Analysis")
     @patch("src.resources.utils.create_harbor_secret")
-    def test_from_string_extracts_body_and_restarts(
-        self, mock_harbor, mock_analysis_cls, mock_hub, mock_database
+    def test_from_string_refreshes_credentials_on_restart(
+        self, mock_harbor, mock_analysis_cls, mock_hub, mock_database, mock_hub_client
     ):
-        """When body is a string, extract_analysis_body is called and the analysis is restarted."""
+        """A restart resolves the credentials again instead of reusing stored ones."""
         from src.resources.utils import create_analysis
 
         mock_inst = _analysis_mock(
             analysis_id=self._VALID_UUID, status=AnalysisStatus.STARTED.value
         )
         mock_analysis_cls.return_value = mock_inst
-        mock_database.extract_analysis_body.return_value = self._valid_body_kwargs()
+        mock_database.extract_analysis_body.return_value = self._stored_body()
 
-        result = create_analysis(self._VALID_UUID, mock_database, namespace="default")
+        result = create_analysis(
+            self._VALID_UUID, mock_database, mock_hub_client, self._NODE_ID, namespace="default"
+        )
 
         mock_database.extract_analysis_body.assert_called_once_with(self._VALID_UUID)
-        mock_harbor.assert_called_once()
+        mock_harbor.assert_called_once_with(
+            "harbor.privateaim", "robot$node_project", "robot_secret", namespace="default"
+        )
+        assert mock_analysis_cls.call_args.kwargs["image_url"] == (
+            f"harbor.privateaim/node_project/{self._VALID_UUID}"
+        )
         mock_hub.assert_called_once()
         assert self._VALID_UUID in result
 
-    def test_from_string_not_found_returns_status_message(self, mock_database):
+    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
+    @patch("src.resources.utils.Analysis")
+    @patch("src.resources.utils.create_harbor_secret")
+    def test_restart_without_hub_keeps_existing_secret_and_image(
+        self, mock_harbor, mock_analysis_cls, mock_hub, mock_database
+    ):
+        from src.resources.utils import create_analysis
+
+        mock_analysis_cls.return_value = _analysis_mock(
+            analysis_id=self._VALID_UUID, status=AnalysisStatus.STARTED.value
+        )
+        mock_database.extract_analysis_body.return_value = self._stored_body()
+
+        create_analysis(self._VALID_UUID, mock_database, None, None, namespace="default")
+
+        mock_harbor.assert_not_called()
+        assert mock_analysis_cls.call_args.kwargs["image_url"] == (
+            "harbor.privateaim/node_project/stored"
+        )
+
+    @patch("src.resources.utils.Analysis")
+    @patch("src.resources.utils.create_harbor_secret")
+    def test_new_analysis_without_credentials_raises(
+        self, mock_harbor, mock_analysis_cls, mock_database, mock_hub_client
+    ):
+        from flame_hub._exceptions import HubAPIError
+
+        from src.resources.utils import create_analysis
+        from src.utils.hub_client import RegistryCredentialsError
+
+        mock_hub_client.get_node_registry_credentials.side_effect = HubAPIError(
+            "forbidden", request=MagicMock()
+        )
+
+        with pytest.raises(RegistryCredentialsError):
+            create_analysis(
+                CreateAnalysis(**self._valid_body_kwargs()),
+                mock_database,
+                mock_hub_client,
+                self._NODE_ID,
+                namespace="default",
+            )
+
+        mock_harbor.assert_not_called()
+        mock_analysis_cls.assert_not_called()
+
+    def test_from_string_not_found_returns_status_message(self, mock_database, mock_hub_client):
         """When extract_analysis_body returns None, return a status error dict."""
         from src.resources.utils import create_analysis
 
         mock_database.extract_analysis_body.return_value = None
 
-        result = create_analysis("nonexistent_id", mock_database, namespace="default")
+        result = create_analysis(
+            "nonexistent_id", mock_database, mock_hub_client, self._NODE_ID, namespace="default"
+        )
 
         assert result == {"status": "Analysis ID not found in database."}
 
@@ -416,12 +485,17 @@ class TestUnstuckAnalysisDeployments:
     def test_restartable_analysis(self, mock_sleep, mock_stop, mock_create, mock_database):
         from src.resources.utils import unstuck_analysis_deployments
 
-        unstuck_analysis_deployments(_ANALYSIS_ID, mock_database)
+        hub_client = MagicMock()
+        unstuck_analysis_deployments(_ANALYSIS_ID, mock_database, hub_client, "node-id")
 
         mock_stop.assert_called_once_with(_ANALYSIS_ID, mock_database)
         mock_sleep.assert_called_once_with(10)
         mock_create.assert_called_once_with(
-            _ANALYSIS_ID, mock_database, mock_database.get_latest_deployment.return_value.namespace
+            _ANALYSIS_ID,
+            mock_database,
+            hub_client,
+            "node-id",
+            mock_database.get_latest_deployment.return_value.namespace,
         )
         mock_database.delete_old_deployments_from_db.assert_called_once_with(_ANALYSIS_ID)
 
@@ -431,7 +505,7 @@ class TestUnstuckAnalysisDeployments:
         mock_database.get_latest_deployment.return_value = None
 
         with patch("src.resources.utils.stop_analysis") as mock_stop:
-            unstuck_analysis_deployments("nonexistent_id", mock_database)
+            unstuck_analysis_deployments("nonexistent_id", mock_database, None, None)
             mock_stop.assert_not_called()
 
 

@@ -9,10 +9,7 @@ _SHARED_COLUMNS = [
     "deployment_name",
     "analysis_id",
     "project_id",
-    "registry_url",
     "image_url",
-    "registry_user",
-    "registry_password",
     "status",
     "log",
     "pod_ids",
@@ -80,7 +77,7 @@ class TestAnalysisDB:
 
     def test_nullable_string_columns(self):
         nullable_cols = [
-            "registry_url", "image_url", "registry_user", "registry_password",
+            "image_url",
             "status", "log", "namespace", "kong_token",
         ]
         for name in nullable_cols:
@@ -144,7 +141,7 @@ class TestArchiveDB:
 
     def test_nullable_string_columns(self):
         nullable_cols = [
-            "registry_url", "image_url", "registry_user", "registry_password",
+            "image_url",
             "status", "log", "namespace", "kong_token",
         ]
         for name in nullable_cols:

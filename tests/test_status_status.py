@@ -258,7 +258,9 @@ class TestFixStuckStatus:
         _fix_stuck_status(mock_database, analysis_status, "node-id", False, mock_hub_client)
 
         mock_database.update_deployment_status.assert_not_called()
-        mock_unstuck.assert_called_once_with("analysis_id", mock_database)
+        mock_unstuck.assert_called_once_with(
+            "analysis_id", mock_database, mock_hub_client, "node-id"
+        )
         mock_stream.assert_called_once()
 
     @patch("src.status.status.unstuck_analysis_deployments")
