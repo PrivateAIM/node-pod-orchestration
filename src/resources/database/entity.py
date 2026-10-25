@@ -62,6 +62,10 @@ class Database:
         account secrets of past deployments would stay in the database.
         """
         inspector = inspect(self.engine)
+        # Another PO process may drop the same column between the inspection
+        # and the DROP; IF EXISTS keeps that from aborting startup. SQLite
+        # (tests only) has no IF EXISTS for columns.
+        if_exists = "IF EXISTS " if self.engine.dialect.name == "postgresql" else ""
         with self.engine.begin() as connection:
             for table in (AnalysisDB.__tablename__, ArchiveDB.__tablename__):
                 existing = {column["name"] for column in inspector.get_columns(table)}
@@ -69,7 +73,7 @@ class Database:
                     if column in existing:
                         logger.info(f"Dropping legacy column {table}.{column}")
                         connection.execute(
-                            text(f"ALTER TABLE {table} DROP COLUMN {column}")
+                            text(f"ALTER TABLE {table} DROP COLUMN {if_exists}{column}")
                         )
 
     def reset_db(self) -> None:

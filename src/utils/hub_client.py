@@ -153,9 +153,8 @@ def get_registry_credentials(
     try:
         credentials = hub_client.get_node_registry_credentials(node_id)
     except (
-        HTTPStatusError,
-        ConnectError,
-        ConnectTimeout,
+        HTTPError,
+        JSONDecodeError,
         flame_hub._exceptions.HubAPIError,
     ) as e:
         raise RegistryCredentialsError(
@@ -164,6 +163,10 @@ def get_registry_credentials(
 
     if credentials is None:
         raise RegistryCredentialsError(f"Node {node_id} not found in the Hub.")
+    if not credentials.host or not credentials.external_name:
+        raise RegistryCredentialsError(
+            f"The Hub returned no registry host or project for node {node_id}."
+        )
     if not credentials.account_name or not credentials.account_secret:
         raise RegistryCredentialsError(
             f"The registry project of node {node_id} has no robot account yet."

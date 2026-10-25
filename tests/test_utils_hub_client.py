@@ -3,7 +3,7 @@ from json import JSONDecodeError
 from unittest.mock import MagicMock, patch, call
 
 import pytest
-from httpx2 import HTTPStatusError, ConnectError, ConnectTimeout
+from httpx2 import HTTPStatusError, ConnectError, ConnectTimeout, ReadTimeout
 
 
 # ─── TestInitHubClientWithClient ─────────────────────────────────────────────
@@ -231,7 +231,9 @@ class TestGetRegistryCredentials:
         [
             ConnectError("down"),
             ConnectTimeout("slow"),
+            ReadTimeout("slow read"),
             HTTPStatusError("502", request=MagicMock(), response=MagicMock()),
+            JSONDecodeError("bad body", "", 0),
         ],
     )
     def test_transport_errors_raise(self, mock_hub_client, error):
@@ -258,6 +260,24 @@ class TestGetRegistryCredentials:
         from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
 
         mock_hub_client.get_node_registry_credentials.return_value = None
+
+        with pytest.raises(RegistryCredentialsError):
+            get_registry_credentials(mock_hub_client, "node-uuid")
+
+    @pytest.mark.parametrize(
+        "host, external_name", [("", "node_project"), ("harbor.privateaim", "")]
+    )
+    def test_empty_host_or_project_raises(self, mock_hub_client, host, external_name):
+        from flame_hub.models import NodeRegistryCredentials
+
+        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+
+        mock_hub_client.get_node_registry_credentials.return_value = NodeRegistryCredentials(
+            host=host,
+            externalName=external_name,
+            accountName="robot$node_project",
+            accountSecret="robot_secret",
+        )
 
         with pytest.raises(RegistryCredentialsError):
             get_registry_credentials(mock_hub_client, "node-uuid")
