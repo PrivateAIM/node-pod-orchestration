@@ -87,6 +87,25 @@ class TestCreateAnalysis:
         data = response.json()
         assert "analysis_id" in data
         assert data["analysis_id"] == AnalysisStatus.STARTING.value
+        body, _, hub_client, node_id, _ = mock_create.call_args.args
+        assert hub_client is not None
+        assert node_id is not None
+        assert not hasattr(body, "registry_password")
+
+    def test_create_502_when_registry_credentials_unavailable(self, api_test_client):
+        from src.utils.hub_client import RegistryCredentialsError
+
+        with patch(
+            "src.api.api.create_analysis",
+            side_effect=RegistryCredentialsError("no robot account"),
+        ):
+            response = api_test_client.post("/po/", json={
+                "analysis_id": "analysis_id",
+                "project_id": "project_id",
+                "kong_token": "token",
+            })
+
+        assert response.status_code == 502
 
 
 # ─── TestHistoryEndpoints ─────────────────────────────────────────────────────

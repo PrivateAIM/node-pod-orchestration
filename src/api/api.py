@@ -15,7 +15,11 @@ from fastapi import APIRouter, FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.utils.hub_client import init_hub_client, get_node_id_by_client
+from src.utils.hub_client import (
+    RegistryCredentialsError,
+    init_hub_client,
+    get_node_id_by_client,
+)
 from src.utils.other import extract_hub_envs
 from src.api.oauth import valid_access_token
 from src.resources.database.entity import Database
@@ -206,18 +210,32 @@ class PodOrchestrationAPI:
     def create_analysis_call(self, body: CreateAnalysis):
         """``POST /po/`` — create and start a new analysis deployment.
 
+        The image and its registry credentials are not part of the payload:
+        they are resolved from the Hub for this node.
+
         Args:
-            body: Payload describing the analysis to create (image, registry
-                credentials, Kong token, etc.).
+            body: Payload describing the analysis to create (ids, Kong token,
+                etc.).
 
         Returns:
             A mapping of ``{analysis_id: status}`` for the newly started run.
 
         Raises:
-            HTTPException: 500 on any downstream failure (details in logs).
+            HTTPException: 502 if the registry credentials cannot be resolved
+                from the Hub, 500 on any other downstream failure (details in
+                logs).
         """
         try:
-            return create_analysis(body, self.database, self.namespace)
+            self._set_node_id_and_hub_client(max_attempts=5)
+            return create_analysis(
+                body, self.database, self.hub_client, self.node_id, self.namespace
+            )
+        except RegistryCredentialsError as e:
+            logger.error(f"Error creating analysis: {repr(e)}")
+            raise HTTPException(
+                status_code=502,
+                detail="Unable to resolve the registry credentials of this node from the Hub (see po logs).",
+            )
         except Exception as e:
             logger.error(f"Error creating analysis: {repr(e)}")
             raise HTTPException(

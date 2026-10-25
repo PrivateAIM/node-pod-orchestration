@@ -11,15 +11,20 @@ import json
 import os
 import time
 from typing import Optional
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from src.status.constants import AnalysisStatus
-from src.resources.database.db_models import Base, AnalysisDB
+from src.resources.database.db_models import Base, AnalysisDB, ArchiveDB
 from src.utils.po_logging import get_logger
 
 
 logger = get_logger()
+
+
+# Registry credentials used to be persisted per deployment; they are now
+# resolved from the Hub on every start and must not linger in old rows.
+_LEGACY_REGISTRY_COLUMNS = ("registry_url", "registry_user", "registry_password")
 
 
 class Database:
@@ -48,6 +53,24 @@ class Database:
             autocommit=False, autoflush=False, bind=self.engine
         )
         Base.metadata.create_all(bind=self.engine)
+        self._drop_legacy_registry_columns()
+
+    def _drop_legacy_registry_columns(self) -> None:
+        """Drop the registry credential columns from tables created by older versions.
+
+        ``create_all`` never alters existing tables, so without this the robot
+        account secrets of past deployments would stay in the database.
+        """
+        inspector = inspect(self.engine)
+        with self.engine.begin() as connection:
+            for table in (AnalysisDB.__tablename__, ArchiveDB.__tablename__):
+                existing = {column["name"] for column in inspector.get_columns(table)}
+                for column in _LEGACY_REGISTRY_COLUMNS:
+                    if column in existing:
+                        logger.info(f"Dropping legacy column {table}.{column}")
+                        connection.execute(
+                            text(f"ALTER TABLE {table} DROP COLUMN {column}")
+                        )
 
     def reset_db(self) -> None:
         """Drop and recreate all tables. Destructive — wipes all analyses."""
@@ -105,10 +128,7 @@ class Database:
         pod_ids: Optional[list[str]],
         status: str,
         log: Optional[str],
-        registry_url: str,
         image_url: str,
-        registry_user: str,
-        registry_password: str,
         kong_token: str,
         restart_counter: int,
         progress: int,
@@ -126,10 +146,7 @@ class Database:
             pod_ids=json.dumps(pod_ids),
             status=status,
             log=log,
-            registry_url=registry_url,
             image_url=image_url,
-            registry_user=registry_user,
-            registry_password=registry_password,
             namespace=namespace,
             kong_token=kong_token,
             restart_counter=restart_counter,
@@ -302,7 +319,7 @@ class Database:
         Used when unstucking an analysis to rebuild a ``CreateAnalysis`` body.
 
         Returns:
-            Dict with registry/namespace/token fields and ``progress=0``, or
+            Dict with image/namespace/token fields and ``progress=0``, or
             ``None`` when the analysis is unknown.
         """
         analysis = self.get_deployments(analysis_id)
@@ -311,10 +328,7 @@ class Database:
             return {
                 "analysis_id": analysis.analysis_id,
                 "project_id": analysis.project_id,
-                "registry_url": analysis.registry_url,
                 "image_url": analysis.image_url,
-                "registry_user": analysis.registry_user,
-                "registry_password": analysis.registry_password,
                 "namespace": analysis.namespace,
                 "kong_token": analysis.kong_token,
                 "restart_counter": analysis.restart_counter,
