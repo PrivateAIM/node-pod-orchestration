@@ -120,6 +120,60 @@ def get_node_id_by_client(
     return str(node_id_object.id) if node_id_object is not None else None
 
 
+class RegistryCredentialsError(RuntimeError):
+    """Raised when the node's registry credentials cannot be resolved from the Hub."""
+
+
+def get_registry_credentials(
+        hub_client: Optional[flame_hub.CoreClient], node_id: Optional[str]
+) -> flame_hub.models.NodeRegistryCredentials:
+    """Resolve the Harbor credentials of this node's registry project from the Hub.
+
+    Reads ``GET /nodes/{node_id}/registry/credentials``, which the Hub only
+    answers for the node's own client. The robot account belongs to the node's
+    registry project, so the same credentials pull every analysis image of
+    this node.
+
+    Args:
+        hub_client: Initialized Hub core client.
+        node_id: This node's id in the FLAME Hub.
+
+    Returns:
+        The registry host, project namespace (``external_name``) and robot
+        account credentials.
+
+    Raises:
+        RegistryCredentialsError: If the Hub is unreachable, refuses the
+            request, or the node has no registry project provisioned yet.
+    """
+    if hub_client is None or node_id is None:
+        raise RegistryCredentialsError(
+            "No Hub client or node id available to resolve registry credentials."
+        )
+    try:
+        credentials = hub_client.get_node_registry_credentials(node_id)
+    except (
+        HTTPError,
+        JSONDecodeError,
+        flame_hub._exceptions.HubAPIError,
+    ) as e:
+        raise RegistryCredentialsError(
+            f"Failed to retrieve registry credentials of node {node_id} from the Hub: {repr(e)}"
+        ) from e
+
+    if credentials is None:
+        raise RegistryCredentialsError(f"Node {node_id} not found in the Hub.")
+    if not credentials.host or not credentials.external_name:
+        raise RegistryCredentialsError(
+            f"The Hub returned no registry host or project for node {node_id}."
+        )
+    if not credentials.account_name or not credentials.account_secret:
+        raise RegistryCredentialsError(
+            f"The registry project of node {node_id} has no robot account yet."
+        )
+    return credentials
+
+
 def get_node_analysis_id(
         hub_client: flame_hub.CoreClient,
         analysis_id: str,

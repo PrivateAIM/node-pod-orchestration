@@ -118,9 +118,12 @@ lags behind them.
 | `RESULT_CLIENT_ID`, `RESULT_CLIENT_SECRET` | Result-service OAuth client |
 | `HUB_CLIENT_ID`, `HUB_CLIENT_SECRET`, `HUB_URL_CORE`, `HUB_URL_AUTH` | FLAME Hub access |
 
-> Registry credentials for analysis images are **not** configured here. They are supplied
-> per analysis in the `POST /po/` request body (`registry_url`, `registry_user`,
-> `registry_password`) and turned into a `dockerconfigjson` pull secret for that analysis.
+> Registry credentials for analysis images are **not** configured here. On every analysis
+> start (restarts included) the service reads its node's registry project credentials from
+> the Hub (`GET /nodes/{node_id}/registry/credentials`, using the `HUB_CLIENT_*` node client),
+> turns them into a `dockerconfigjson` pull secret and pulls `<host>/<project>/<analysis_id>`.
+> They are not persisted. If the Hub is unreachable during a restart, the existing pull secret
+> and the previously used image are reused.
 
 ### Optional
 

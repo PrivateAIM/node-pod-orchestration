@@ -9,7 +9,7 @@ longer knows about.
 
 import ast
 import time
-from typing import Union
+from typing import Optional, Union
 
 from fastapi import HTTPException
 from flame_hub import CoreClient
@@ -18,11 +18,17 @@ from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
 from src.resources.log.entity import CreateLogEntity
 from src.status.constants import AnalysisStatus
-from src.k8s.kubernetes import create_harbor_secret, get_analysis_logs
+from src.k8s.kubernetes import (
+    create_harbor_secret,
+    get_analysis_logs,
+    get_harbor_secret_auth,
+)
 from src.k8s.utils import find_k8s_resources, delete_k8s_resource
 from src.utils.token import _get_all_keycloak_clients
 from src.utils.token import delete_keycloak_client
 from src.utils.hub_client import (
+    RegistryCredentialsError,
+    get_registry_credentials,
     init_hub_client_and_update_hub_status,
     update_hub_status,
     get_node_analysis_id,
@@ -39,18 +45,29 @@ _MAX_UNSTUCK_REATTEMPTS = 10
 
 
 def create_analysis(
-    body: Union[CreateAnalysis, str], database: Database, namespace: str = "default"
+    body: Union[CreateAnalysis, str],
+    database: Database,
+    hub_client: Optional[CoreClient],
+    node_id: Optional[str],
+    namespace: str = "default",
 ) -> dict[str, str]:
     """Create and start a new analysis deployment.
 
-    Validates the UUIDs, provisions the Harbor pull secret, constructs the
-    :class:`Analysis` model, deploys it, and pushes the ``STARTED`` status to
-    the FLAME Hub.
+    Validates the UUIDs, resolves this node's registry credentials from the
+    Hub, provisions the Harbor pull secret, constructs the :class:`Analysis`
+    model, deploys it, and pushes the ``STARTED`` status to the FLAME Hub.
+
+    Credentials are resolved on every start, restarts included, so a robot
+    account the Hub rotated (e.g. after a node reconnects to its registry) is
+    picked up. Only a restart may proceed without the Hub: it then keeps the
+    existing pull secret and the stored image.
 
     Args:
         body: Either a :class:`CreateAnalysis` payload or an analysis id used
             to rebuild the payload from the database (restart case).
         database: Database wrapper used for persistence.
+        hub_client: Initialized Hub core client.
+        node_id: This node's id in the FLAME Hub.
         namespace: k8s namespace name
 
     Returns:
@@ -60,14 +77,16 @@ def create_analysis(
 
     Raises:
         HTTPException: 400 if ``analysis_id`` or ``project_id`` is not a UUID.
+        RegistryCredentialsError: If a new analysis is started and the
+            registry credentials cannot be resolved from the Hub.
     """
-
+    stored_image_url = None
     if isinstance(body, str):
-        body = database.extract_analysis_body(body)
-        if body is None:
+        stored_body = database.extract_analysis_body(body)
+        if stored_body is None:
             return {"status": "Analysis ID not found in database."}
-        else:
-            body = CreateAnalysis(**body)
+        stored_image_url = stored_body.pop("image_url", None)
+        body = CreateAnalysis(**stored_body)
 
     if not (is_uuid(body.analysis_id) or is_uuid(body.project_id)):
         logger.error(
@@ -77,20 +96,28 @@ def create_analysis(
             status_code=400, detail="Analysis ID and Project ID must be valid UUIDs."
         )
 
-    create_harbor_secret(
-        body.registry_url,
-        body.registry_user,
-        body.registry_password,
-        namespace=namespace,
-    )
+    try:
+        credentials = get_registry_credentials(hub_client, node_id)
+    except RegistryCredentialsError as e:
+        if stored_image_url is None:
+            raise
+        logger.warning(
+            f"{e} -> Restarting analysis {body.analysis_id} with the existing pull secret and image."
+        )
+        image_url = stored_image_url
+    else:
+        create_harbor_secret(
+            credentials.host,
+            credentials.account_name,
+            credentials.account_secret,
+            namespace=namespace,
+        )
+        image_url = f"{credentials.host}/{credentials.external_name}/{body.analysis_id}"
 
     analysis = Analysis(
         analysis_id=body.analysis_id,
         project_id=body.project_id,
-        registry_url=body.registry_url,
-        image_url=body.image_url,
-        registry_user=body.registry_user,
-        registry_password=body.registry_password,
+        image_url=image_url,
         namespace=namespace,
         kong_token=body.kong_token,
         restart_counter=body.restart_counter + 1,
@@ -104,6 +131,45 @@ def create_analysis(
     )
 
     return {body.analysis_id: analysis.status}
+
+
+def refresh_registry_credentials(
+    hub_client: Optional[CoreClient],
+    node_id: Optional[str],
+    namespace: str = "default",
+) -> bool:
+    """Update the pull secret if the Hub rotated the node's robot account.
+
+    The Hub issues a new robot secret when the node reconnects to its
+    registry, which invalidates the secret running analyses were started
+    with. Kubernetes pulls again whenever a pod is rescheduled, so the
+    shared pull secret is kept current instead of waiting for the pull to
+    fail. Never raises: a failure is logged and retried on the next call.
+
+    Args:
+        hub_client: Initialized Hub core client.
+        node_id: This node's id in the FLAME Hub.
+        namespace: Namespace of the pull secret.
+
+    Returns:
+        ``True`` if the pull secret was rewritten, else ``False``.
+    """
+    try:
+        credentials = get_registry_credentials(hub_client, node_id)
+        current = (
+            credentials.host,
+            credentials.account_name,
+            credentials.account_secret,
+        )
+        if get_harbor_secret_auth(namespace=namespace) == current:
+            return False
+        create_harbor_secret(*current, namespace=namespace)
+    except Exception as e:
+        logger.warning(f"Failed to refresh the registry credentials: {repr(e)}")
+        return False
+
+    logger.info("Registry credentials changed in the Hub, updated the pull secret.")
+    return True
 
 
 def retrieve_history(
@@ -318,11 +384,18 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]
     return {analysis_id: None for analysis_id, deployment in deployments.items()}
 
 
-def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
+def unstuck_analysis_deployments(
+    analysis_id: str,
+    database: Database,
+    hub_client: Optional[CoreClient],
+    node_id: Optional[str],
+) -> None:
     """Stop and restart an analysis to recover from a stuck/slow state.
 
     Waits 10 seconds between stop and recreate to let Kubernetes settle, then
     prunes historical deployment rows so only the latest one remains.
+    ``hub_client`` and ``node_id`` are used to refresh the registry
+    credentials (see :func:`create_analysis`).
     """
     deployment = database.get_latest_deployment(analysis_id)
     if deployment is not None:
@@ -331,7 +404,9 @@ def unstuck_analysis_deployments(analysis_id: str, database: Database) -> None:
         for i in range(_MAX_UNSTUCK_REATTEMPTS):
             try:
                 time.sleep(10)  # wait for k8s to update status
-                create_analysis(analysis_id, database, deployment.namespace)
+                create_analysis(
+                    analysis_id, database, hub_client, node_id, deployment.namespace
+                )
                 database.delete_old_deployments_from_db(analysis_id)
                 success = True
                 break
