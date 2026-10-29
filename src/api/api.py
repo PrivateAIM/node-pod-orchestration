@@ -21,7 +21,7 @@ from src.utils.hub_client import (
     get_node_id_by_client,
 )
 from src.utils.other import extract_hub_envs
-from src.api.oauth import valid_access_token
+from src.api.oauth import valid_access_token, valid_analysis_token
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import CreateAnalysis
 from src.resources.log.entity import CreateLogEntity, AnalysisStoppedLog
@@ -192,7 +192,7 @@ class PodOrchestrationAPI:
         router.add_api_route(
             "/stream_logs",
             self.stream_logs_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_analysis_token)],
             methods=["POST"],
             response_class=JSONResponse,
         )
