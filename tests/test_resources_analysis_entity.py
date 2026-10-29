@@ -15,28 +15,19 @@ class TestAnalysisModel:
         a = Analysis(
             analysis_id="a1",
             project_id="p1",
-            registry_url="harbor.test",
             image_url="harbor.test/img",
-            registry_user="user",
-            registry_password="pw",
             kong_token="tok",
         )
         assert a.analysis_id == "a1"
         assert a.project_id == "p1"
-        assert a.registry_url == "harbor.test"
         assert a.image_url == "harbor.test/img"
-        assert a.registry_user == "user"
-        assert a.registry_password == "pw"
         assert a.kong_token == "tok"
 
     def test_default_values(self):
         a = Analysis(
             analysis_id="a1",
             project_id="p1",
-            registry_url="harbor.test",
             image_url="harbor.test/img",
-            registry_user="user",
-            registry_password="pw",
             kong_token="tok",
         )
         assert a.namespace == "default"
@@ -53,10 +44,7 @@ class TestAnalysisModel:
         a = Analysis(
             analysis_id="a1",
             project_id="p1",
-            registry_url="harbor.test",
             image_url="harbor.test/img",
-            registry_user="user",
-            registry_password="pw",
             kong_token="tok",
         )
         assert a.status == "starting"
@@ -70,10 +58,7 @@ class TestAnalysisStart:
         return Analysis(
             analysis_id="test-analysis",
             project_id="test-project",
-            registry_url="harbor.test",
             image_url="harbor.test/test-project/test-analysis",
-            registry_user="robot_user",
-            registry_password="secret",
             kong_token="kong-tok",
         )
 
@@ -99,10 +84,7 @@ class TestAnalysisStart:
         analysis = Analysis(
             analysis_id="test-analysis",
             project_id="test-project",
-            registry_url="harbor.test",
             image_url="harbor.test/img",
-            registry_user="user",
-            registry_password="pw",
             kong_token="tok",
             restart_counter=3,
         )
@@ -182,10 +164,7 @@ class TestAnalysisStop:
         return Analysis(
             analysis_id="test-analysis",
             project_id="test-project",
-            registry_url="harbor.test",
             image_url="harbor.test/img",
-            registry_user="user",
-            registry_password="pw",
             kong_token="tok",
             deployment_name="analysis-test-analysis-0",
             status=AnalysisStatus.STARTED.value,
@@ -292,10 +271,7 @@ class TestReadDbAnalysis:
         db_row = sample_analysis_db(
             analysis_id="a99",
             project_id="p99",
-            registry_url="harbor.custom",
             image_url="harbor.custom/img",
-            registry_user="ruser",
-            registry_password="rpw",
             status="executing",
             pod_ids=json.dumps(["pod-a", "pod-b"]),
             log="some log",
@@ -308,10 +284,7 @@ class TestReadDbAnalysis:
         result = read_db_analysis(db_row)
         assert result.analysis_id == "a99"
         assert result.project_id == "p99"
-        assert result.registry_url == "harbor.custom"
         assert result.image_url == "harbor.custom/img"
-        assert result.registry_user == "ruser"
-        assert result.registry_password == "rpw"
         assert result.status == "executing"
         assert result.pod_ids == ["pod-a", "pod-b"]
         assert result.log == "some log"
@@ -339,18 +312,10 @@ class TestCreateAnalysis:
         ca = CreateAnalysis(
             analysis_id="analysis_id",
             project_id="project_id",
-            registry_url="harbor.privateaim",
-            image_url="harbor.privateaim/node_id/analysis_id",
-            registry_user="robot_user",
-            registry_password="default_pw",
             kong_token="default_kong_token",
         )
         assert ca.analysis_id == "analysis_id"
         assert ca.project_id == "project_id"
-        assert ca.registry_url == "harbor.privateaim"
-        assert ca.image_url == "harbor.privateaim/node_id/analysis_id"
-        assert ca.registry_user == "robot_user"
-        assert ca.registry_password == "default_pw"
         assert ca.kong_token == "default_kong_token"
         assert ca.restart_counter == 0
         assert ca.progress == 0
@@ -359,10 +324,6 @@ class TestCreateAnalysis:
         ca = CreateAnalysis(
             analysis_id="custom-id",
             project_id="custom-proj",
-            registry_url="harbor.custom",
-            image_url="harbor.custom/img",
-            registry_user="cuser",
-            registry_password="cpw",
             kong_token="ctok",
             restart_counter=5,
             progress=42,
@@ -371,6 +332,20 @@ class TestCreateAnalysis:
         assert ca.project_id == "custom-proj"
         assert ca.restart_counter == 5
         assert ca.progress == 42
+
+    def test_ignores_legacy_registry_fields(self):
+        # Older hub adapters still send the image and registry credentials.
+        ca = CreateAnalysis(
+            analysis_id="analysis_id",
+            project_id="project_id",
+            kong_token="tok",
+            image_url="harbor.privateaim/node/analysis_id",
+            registry_url="harbor.privateaim",
+            registry_user="robot_user",
+            registry_password="secret",
+        )
+        assert "registry_password" not in ca.model_dump()
+        assert "image_url" not in ca.model_dump()
 
     def test_is_pydantic_model(self):
         from pydantic import BaseModel

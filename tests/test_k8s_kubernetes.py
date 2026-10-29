@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch, call
 from kubernetes.client.exceptions import ApiException
 
 from src.k8s.kubernetes import (
+    get_harbor_secret_auth,
     create_harbor_secret,
     create_analysis_deployment,
     delete_deployment,
@@ -45,6 +46,43 @@ def _make_pod_list(*names: str, pod_ip: str = "10.0.0.1") -> MagicMock:
 
 def _not_found() -> ApiException:
     return ApiException(status=404, reason="Not Found")
+
+
+# ─── get_harbor_secret_auth ──────────────────────────────────────────────────
+
+class TestGetHarborSecretAuth:
+    def test_returns_credentials_written_by_create(self, mock_k8s_clients):
+        import base64
+
+        create_harbor_secret("harbor.test", "robot$proj", "secret")
+        written = mock_k8s_clients.core_v1.create_namespaced_secret.call_args.kwargs["body"]
+        stored = MagicMock()
+        stored.data = {
+            ".dockerconfigjson": base64.b64encode(
+                written.string_data[".dockerconfigjson"].encode()
+            ).decode()
+        }
+        mock_k8s_clients.core_v1.read_namespaced_secret.return_value = stored
+
+        assert get_harbor_secret_auth() == ("harbor.test", "robot$proj", "secret")
+
+    def test_missing_secret_returns_none(self, mock_k8s_clients):
+        mock_k8s_clients.core_v1.read_namespaced_secret.side_effect = ApiException(status=404)
+
+        assert get_harbor_secret_auth() is None
+
+    def test_unparseable_secret_returns_none(self, mock_k8s_clients):
+        stored = MagicMock()
+        stored.data = {".dockerconfigjson": "not base64 json"}
+        mock_k8s_clients.core_v1.read_namespaced_secret.return_value = stored
+
+        assert get_harbor_secret_auth() is None
+
+    def test_other_api_errors_raise(self, mock_k8s_clients):
+        mock_k8s_clients.core_v1.read_namespaced_secret.side_effect = ApiException(status=500)
+
+        with pytest.raises(ApiException):
+            get_harbor_secret_auth()
 
 
 # ─── create_harbor_secret ────────────────────────────────────────────────────

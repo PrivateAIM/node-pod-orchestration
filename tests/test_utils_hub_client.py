@@ -3,7 +3,7 @@ from json import JSONDecodeError
 from unittest.mock import MagicMock, patch, call
 
 import pytest
-from httpx2 import HTTPStatusError, ConnectError, ConnectTimeout
+from httpx2 import HTTPStatusError, ConnectError, ConnectTimeout, ReadTimeout
 
 
 # ─── TestInitHubClientWithClient ─────────────────────────────────────────────
@@ -235,6 +235,98 @@ class TestGetNodeIdByClient:
         result = get_node_id_by_client(mock_hub_client, "cid")
 
         assert result is None
+
+
+# ─── TestGetRegistryCredentials ──────────────────────────────────────────────
+
+class TestGetRegistryCredentials:
+    def test_success_returns_credentials(self, mock_hub_client):
+        from src.utils.hub_client import get_registry_credentials
+
+        result = get_registry_credentials(mock_hub_client, "node-uuid")
+
+        mock_hub_client.get_node_registry_credentials.assert_called_once_with("node-uuid")
+        assert result.host == "harbor.privateaim"
+        assert result.external_name == "node_project"
+        assert result.account_secret == "robot_secret"
+
+    @pytest.mark.parametrize("hub_client, node_id", [(None, "node-uuid"), (MagicMock(), None)])
+    def test_missing_client_or_node_raises(self, hub_client, node_id):
+        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+
+        with pytest.raises(RegistryCredentialsError):
+            get_registry_credentials(hub_client, node_id)
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ConnectError("down"),
+            ConnectTimeout("slow"),
+            ReadTimeout("slow read"),
+            HTTPStatusError("502", request=MagicMock(), response=MagicMock()),
+            JSONDecodeError("bad body", "", 0),
+        ],
+    )
+    def test_transport_errors_raise(self, mock_hub_client, error):
+        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+
+        mock_hub_client.get_node_registry_credentials.side_effect = error
+
+        with pytest.raises(RegistryCredentialsError):
+            get_registry_credentials(mock_hub_client, "node-uuid")
+
+    def test_hub_api_error_raises(self, mock_hub_client):
+        from flame_hub._exceptions import HubAPIError
+
+        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+
+        mock_hub_client.get_node_registry_credentials.side_effect = HubAPIError(
+            "The node has no registry project provisioned yet.", request=MagicMock()
+        )
+
+        with pytest.raises(RegistryCredentialsError):
+            get_registry_credentials(mock_hub_client, "node-uuid")
+
+    def test_unknown_node_raises(self, mock_hub_client):
+        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+
+        mock_hub_client.get_node_registry_credentials.return_value = None
+
+        with pytest.raises(RegistryCredentialsError):
+            get_registry_credentials(mock_hub_client, "node-uuid")
+
+    @pytest.mark.parametrize(
+        "host, external_name", [("", "node_project"), ("harbor.privateaim", "")]
+    )
+    def test_empty_host_or_project_raises(self, mock_hub_client, host, external_name):
+        from flame_hub.models import NodeRegistryCredentials
+
+        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+
+        mock_hub_client.get_node_registry_credentials.return_value = NodeRegistryCredentials(
+            host=host,
+            externalName=external_name,
+            accountName="robot$node_project",
+            accountSecret="robot_secret",
+        )
+
+        with pytest.raises(RegistryCredentialsError):
+            get_registry_credentials(mock_hub_client, "node-uuid")
+
+    def test_missing_robot_account_raises(self, mock_hub_client):
+        from flame_hub.models import NodeRegistryCredentials
+
+        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+
+        mock_hub_client.get_node_registry_credentials.return_value = NodeRegistryCredentials(
+            host="harbor.privateaim",
+            externalName="node_project",
+            accountName=None,
+            accountSecret=None,
+        )
+
+        with pytest.raises(RegistryCredentialsError):
+            get_registry_credentials(mock_hub_client, "node-uuid")
 
 
 # ─── TestGetNodeAnalysisId ────────────────────────────────────────────────────
