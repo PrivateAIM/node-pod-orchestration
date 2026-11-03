@@ -24,8 +24,6 @@ from src.k8s.kubernetes import (
     get_harbor_secret_auth,
 )
 from src.k8s.utils import find_k8s_resources, delete_k8s_resource
-from src.utils.token import _get_all_keycloak_clients
-from src.utils.token import delete_keycloak_client
 from src.utils.hub_client import (
     RegistryCredentialsError,
     get_registry_credentials,
@@ -378,7 +376,6 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]
 
     for analysis_id, deployment in deployments.items():
         deployment.stop(database, log="")
-        delete_keycloak_client(analysis_id)
         database.delete_analysis(analysis_id)
 
     return {analysis_id: None for analysis_id, deployment in deployments.items()}
@@ -435,11 +432,10 @@ def cleanup(
 
     Supported selectors (comma-separated allowed):
 
-    * ``all`` — resets the database and reinitializes message broker, storage
-      service, and Keycloak clients.
+    * ``all`` — resets the database and reinitializes message broker and
+      storage service.
     * ``analyzes`` — resets the analysis database.
     * ``services`` / ``mb`` / ``rs`` — restart FLAME helper pods.
-    * ``keycloak`` — delete Keycloak clients without a matching analysis.
 
     :func:`clean_up_the_rest` is always appended under the ``zombies`` key.
 
@@ -456,7 +452,7 @@ def cleanup(
 
     response_content = {}
     for cleanup_type in cleanup_types:
-        if cleanup_type in ["all", "analyzes", "services", "mb", "rs", "keycloak"]:
+        if cleanup_type in ["all", "analyzes", "services", "mb", "rs"]:
             # Analysis cleanup
             if cleanup_type in ["all", "analyzes"]:
                 # cleanup all analysis deployments, associated services, policies and configmaps
@@ -486,20 +482,11 @@ def cleanup(
                 )[0]
                 delete_k8s_resource(storage_service_name, "pod", namespace)
                 response_content[cleanup_type] = "Reset storage service"
-            if cleanup_type in ["all", "keycloak"]:
-                # cleanup keycloak clients without corresponding analysis
-                # if all is all flame clients are deleted because ther are no analyzes in the db
-                analysis_ids = database.get_analysis_ids()
-                for client in _get_all_keycloak_clients():
-                    if (client["clientId"] not in analysis_ids) and client[
-                        "name"
-                    ].startswith("flame-"):
-                        delete_keycloak_client(client["clientId"])
 
         else:
             response_content[cleanup_type] = (
                 f"Unknown cleanup type: {cleanup_type} (known types: 'zombies', 'all', "
-                + "'analyzes', 'keycloak', 'services', 'mb', and 'rs')"
+                + "'analyzes', 'services', 'mb', and 'rs')"
             )
     response_content["zombies"] = clean_up_the_rest(database, hub_client, namespace)
     return response_content

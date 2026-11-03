@@ -52,13 +52,8 @@ def init_hub_client(
         An initialized Hub core client, or ``None`` on authentication failure.
     """
     # Attempt to init hub client
-    proxies = None
     ssl_ctx = get_ssl_context()
-    if http_proxy and https_proxy:
-        proxies = {
-            "http://": HTTPTransport(proxy=http_proxy),
-            "https://": HTTPTransport(proxy=https_proxy, verify=ssl_ctx),
-        }
+    proxies = get_proxy_mounts(http_proxy, https_proxy, ssl_ctx)
     try:
         _client = Client(base_url=hub_auth, mounts=proxies, verify=ssl_ctx)
         hub_client = flame_hub.auth.ClientAuth(
@@ -75,6 +70,50 @@ def init_hub_client(
             f"Failed to authenticate with hub python client library: {repr(e)}"
         )
     return hub_client
+
+
+def get_proxy_mounts(
+    http_proxy: Optional[str], https_proxy: Optional[str], ssl_ctx: ssl.SSLContext
+) -> Optional[dict[str, HTTPTransport]]:
+    """Build httpx transport mounts routing traffic through the node's proxies.
+
+    Args:
+        http_proxy: HTTP proxy URL (may be empty/None).
+        https_proxy: HTTPS proxy URL (may be empty/None).
+        ssl_ctx: SSL context used to verify HTTPS connections via the proxy.
+
+    Returns:
+        The ``mounts`` mapping for :class:`httpx2.Client`, or ``None`` unless
+        both proxies are configured.
+    """
+    if http_proxy and https_proxy:
+        return {
+            "http://": HTTPTransport(proxy=http_proxy),
+            "https://": HTTPTransport(proxy=https_proxy, verify=ssl_ctx),
+        }
+    return None
+
+
+def init_proxied_http_client(timeout: float = 30.0) -> Client:
+    """Build a plain HTTP client that reaches external (Hub-side) hosts like the Hub client.
+
+    Uses the same ``PO_HTTP_PROXY`` / ``PO_HTTPS_PROXY`` mounts and
+    :func:`get_ssl_context` (system store plus ``EXTRA_CA_CERTS``) as
+    :func:`init_hub_client`, for direct calls to the global Authup instance.
+
+    Args:
+        timeout: Request timeout in seconds.
+
+    Returns:
+        A configured :class:`httpx2.Client`.
+    """
+    *_, http_proxy, https_proxy = extract_hub_envs()
+    ssl_ctx = get_ssl_context()
+    return Client(
+        mounts=get_proxy_mounts(http_proxy, https_proxy, ssl_ctx),
+        verify=ssl_ctx,
+        timeout=timeout,
+    )
 
 
 @lru_cache
