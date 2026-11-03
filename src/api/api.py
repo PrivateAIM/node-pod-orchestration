@@ -2,7 +2,8 @@
 
 Defines :class:`PodOrchestrationAPI`, which mounts every ``/po`` endpoint used
 to create, inspect, stop and delete analyses. All routes except
-``GET /po/healthz`` require a valid Keycloak bearer token. The class also owns
+``GET /po/healthz`` require a valid bearer token issued by the global Authup
+instance. The class also owns
 the FLAME Hub client and the resolved ``node_id``, re-initializing them on
 demand so Hub status updates keep working across Hub restarts.
 """
@@ -47,7 +48,7 @@ class PodOrchestrationAPI:
     Constructs a FastAPI app, wires up all routes under the ``/po`` prefix,
     enables CORS, initializes the FLAME Hub client used for status/log
     forwarding, and finally blocks on ``uvicorn.run``. All endpoints except
-    ``/po/healthz`` require a valid Keycloak access token.
+    ``/po/healthz`` require a valid Authup access token.
 
     Attributes:
         database: Database wrapper used for persistence.
@@ -460,7 +461,7 @@ class PodOrchestrationAPI:
     def delete_all_analysis_call(self):
         """``DELETE /po/delete`` — stop and permanently remove every analysis.
 
-        Removes each analysis from the database and deletes its Keycloak client.
+        Removes each analysis from the database.
 
         Returns:
             Mapping ``{analysis_id: None}`` acknowledging the deletions.

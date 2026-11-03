@@ -1,7 +1,7 @@
 """Tests for src/api/oauth.py.
 
 Drives async functions via anyio.run() (no pytest-asyncio required).
-Patches module-level env reads (oauth.py reads KEYCLOAK_URL at import time).
+Patches the module-level Authup JWKS client (oauth.py reads AUTHUP_JWKS_URL at import time).
 """
 
 import anyio
@@ -13,25 +13,38 @@ from fastapi import HTTPException
 # ─── TestValidAccessToken ─────────────────────────────────────────────────────
 
 class TestValidAccessToken:
-    def test_valid_token_returns_decoded_payload(self):
+    @staticmethod
+    def _credentials(token="valid.jwt.token"):
+        from fastapi.security import HTTPAuthorizationCredentials
+        return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+
+    def test_user_token_returns_decoded_payload(self):
         from src.api.oauth import valid_access_token
 
-        fake_token = "valid.jwt.token"
-        fake_payload = {"sub": "user-id", "preferred_username": "testuser"}
-
-        mock_signing_key = MagicMock()
-        mock_signing_key.key = "fake-key"
-
+        payload = {"sub": "user-id", "sub_kind": "user", "exp": 1}
         mock_jwks_client = MagicMock()
-        mock_jwks_client.get_signing_key_from_jwt.return_value = mock_signing_key
-
         with (
-            patch("src.api.oauth.PyJWKClient", return_value=mock_jwks_client),
-            patch("src.api.oauth.jwt.decode", return_value=fake_payload),
+            patch("src.api.oauth._authup_jwks_client", mock_jwks_client),
+            patch("src.api.oauth.jwt.decode", return_value=payload) as mock_decode,
         ):
-            result = valid_access_token(fake_token)
+            assert valid_access_token(self._credentials()) == payload
 
-        assert result == fake_payload
+        mock_jwks_client.get_signing_key_from_jwt.assert_called_once_with("valid.jwt.token")
+        options = mock_decode.call_args.kwargs["options"]
+        assert options["require"] == ["exp"]
+        assert options["verify_signature"] is True
+        assert options["verify_exp"] is True
+        assert options["verify_aud"] is False
+
+    def test_client_token_returns_decoded_payload(self):
+        from src.api.oauth import valid_access_token
+
+        payload = {"sub": "hub-client", "sub_kind": "client", "exp": 1}
+        with (
+            patch("src.api.oauth._authup_jwks_client", MagicMock()),
+            patch("src.api.oauth.jwt.decode", return_value=payload),
+        ):
+            assert valid_access_token(self._credentials()) == payload
 
     def test_invalid_token_raises_401(self):
         import jwt as jwt_lib
@@ -40,12 +53,38 @@ class TestValidAccessToken:
         mock_jwks_client = MagicMock()
         mock_jwks_client.get_signing_key_from_jwt.side_effect = jwt_lib.exceptions.InvalidTokenError("bad token")
 
-        with patch("src.api.oauth.PyJWKClient", return_value=mock_jwks_client):
+        with patch("src.api.oauth._authup_jwks_client", mock_jwks_client):
             with pytest.raises(HTTPException) as exc_info:
-                valid_access_token("bad.token.here")
+                valid_access_token(self._credentials("bad.token.here"))
 
         assert exc_info.value.status_code == 401
         assert "Not authenticated" in exc_info.value.detail
+
+    def test_jwks_connection_error_raises_503(self):
+        import jwt as jwt_lib
+        from src.api.oauth import valid_access_token
+
+        mock_jwks_client = MagicMock()
+        mock_jwks_client.get_signing_key_from_jwt.side_effect = (
+            jwt_lib.exceptions.PyJWKClientConnectionError("down")
+        )
+        with (
+            patch("src.api.oauth._authup_jwks_client", mock_jwks_client),
+            patch("src.api.oauth.logger"),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                valid_access_token(self._credentials())
+
+        assert exc_info.value.status_code == 503
+
+    def test_unconfigured_jwks_url_raises_500(self):
+        from src.api.oauth import valid_access_token
+
+        with patch("src.api.oauth._authup_jwks_client", None):
+            with pytest.raises(HTTPException) as exc_info:
+                valid_access_token(self._credentials())
+
+        assert exc_info.value.status_code == 500
 
 
 # ─── TestValidAnalysisToken ───────────────────────────────────────────────────

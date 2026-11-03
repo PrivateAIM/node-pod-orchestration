@@ -12,7 +12,7 @@ Each analysis runs in a dedicated Kubernetes deployment with an nginx reverse-pr
 - Background status loop that syncs pod state with the FLAME Hub and auto-restarts stuck pods (up to 3 restarts, then `FAILED`)
 - Archival of completed analyses to a separate database table
 - Structured JSON logging with custom log levels (`ACTION`, `STATUS_LOOP`)
-- Keycloak OAuth2 / JWT authentication on all endpoints except `/po/healthz`
+- JWT authentication against the global Authup instance on all endpoints except `/po/healthz`
 
 ## Tech Stack
 
@@ -22,7 +22,7 @@ Each analysis runs in a dedicated Kubernetes deployment with an nginx reverse-pr
 | Web framework    | FastAPI + Uvicorn (port 8000)             |
 | Orchestration    | Kubernetes Python client                  |
 | Database         | PostgreSQL + SQLAlchemy 2.0               |
-| Auth             | Keycloak (OAuth2 / JWT)                   |
+| Auth             | Authup (OAuth2 / JWT)                     |
 | Package manager  | Poetry                                    |
 | Lint / format    | Ruff (via pre-commit)                     |
 | Container base   | `python:3.11-alpine` (non-root UID 10000) |
@@ -31,7 +31,6 @@ Each analysis runs in a dedicated Kubernetes deployment with an nginx reverse-pr
 
 - Kubernetes cluster with RBAC to manage `Deployment`, `Service`, `NetworkPolicy`, `ConfigMap`, and `Secret` resources
 - PostgreSQL database
-- Keycloak realm with a configured client
 - Access to a [FLAME Hub](https://github.com/PrivateAIM/hub) instance
 - Harbor registry for analysis images
 - Docker (for local image builds)
@@ -114,10 +113,8 @@ lags behind them.
 | Variable | Description |
 |----------|-------------|
 | `POSTGRES_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | PostgreSQL connection |
-| `KEYCLOAK_URL`, `KEYCLOAK_REALM` | Keycloak instance |
-| `AUTHUP_JWKS_URL` | Global Authup JWKS endpoint, used to verify `AUTHUP_TOKEN`s presented by analysis containers on `/stream_logs` |
+| `AUTHUP_JWKS_URL` | Global Authup JWKS endpoint, used to verify the bearer token on every protected route (user and client tokens; `/stream_logs` accepts only the analysis containers' client tokens) |
 | `AUTHUP_TOKEN_URL` | Global Authup token endpoint, used to mint each analysis's access token |
-| `RESULT_CLIENT_ID`, `RESULT_CLIENT_SECRET` | Result-service OAuth client |
 | `HUB_CLIENT_ID`, `HUB_CLIENT_SECRET`, `HUB_URL_CORE`, `HUB_URL_AUTH` | FLAME Hub access |
 
 > Registry credentials for analysis images are **not** configured here. On every analysis
