@@ -609,10 +609,11 @@ def _create_nginx_config_map(
         "service", "label", "component=flame-storage-service", namespace=namespace
     )[0]
 
-    nextflow_launcher_locations = _build_nextflow_launcher_locations(analysis_name=analysis_name,
-                                                                     analysis_ip=analysis_ip,
-                                                                     analysis_env=analysis_env,
-                                                                     namespace=namespace)
+    nextflow_launcher_locations = ''
+    # nextflow_launcher_locations = _build_nextflow_launcher_locations(analysis_name=analysis_name,
+    #                                                                  analysis_ip=analysis_ip,
+    #                                                                  analysis_env=analysis_env,
+    #                                                                  namespace=namespace)
 
     proxy_timeout = 900
     proxy_connect_timeout = 10
