@@ -50,11 +50,16 @@ def create_analysis_tokens(kong_token: str, analysis_id: str) -> dict[str, str]:
 def get_analysis_token(analysis_id: str) -> Optional[str]:
     """Obtain a client-credentials access token for an analysis's Authup client.
 
-    Rotates and fetches the analysis's OAuth2 client credentials from the Hub
-    Core API (``update_analysis_client_credentials`` with ``secret=None``
-    always returns a fresh, plaintext secret), then exchanges them for an
-    access token against the global Authup instance's token endpoint, reached
-    through the node's Hub proxy and CA settings.
+    Reads the analysis's OAuth2 client credentials from the Hub Core API
+    (``get_analysis_client_credentials``), then exchanges them for an access
+    token against the global Authup instance's token endpoint, reached through
+    the node's Hub proxy and CA settings.
+
+    The node only reads the credentials: the Hub answers the read for the
+    client of a node with an approved assignment to the analysis, while
+    rotating the secret requires ``analysis_update``, which a node client does
+    not hold. Rotating would also invalidate the secret for every other node
+    running the same analysis.
 
     Args:
         analysis_id: Analysis id, used as the Hub Core API path parameter.
@@ -62,8 +67,8 @@ def get_analysis_token(analysis_id: str) -> Optional[str]:
     Returns:
         The access token, or ``None`` on failure.
     """
-    # Checked before contacting the Hub, which would otherwise rotate the
-    # analysis's client secret for a token that can never be minted.
+    # Checked before contacting the Hub, so no credentials are fetched for a
+    # token that can never be minted.
     if not _AUTHUP_TOKEN_URL:
         logger.error("AUTHUP_TOKEN_URL is not configured. Cannot retrieve analysis token.")
         return None
@@ -81,9 +86,7 @@ def get_analysis_token(analysis_id: str) -> Optional[str]:
         return None
 
     try:
-        credentials = hub_client.update_analysis_client_credentials(
-            analysis_id, secret=None
-        )
+        credentials = hub_client.get_analysis_client_credentials(analysis_id)
     except (
         HTTPStatusError,
         ConnectError,
@@ -92,7 +95,13 @@ def get_analysis_token(analysis_id: str) -> Optional[str]:
         AttributeError,
     ) as e:
         logger.error(
-            f"Failed to rotate/retrieve analysis client credentials from Hub for {analysis_id}: {repr(e)}"
+            f"Failed to retrieve analysis client credentials from Hub for {analysis_id}: {repr(e)}"
+        )
+        return None
+
+    if credentials is None or not credentials.secret:
+        logger.error(
+            f"The Hub returned no client credentials (or no secret) for analysis {analysis_id}."
         )
         return None
 

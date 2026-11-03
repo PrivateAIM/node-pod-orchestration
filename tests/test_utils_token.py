@@ -38,7 +38,7 @@ class TestGetAnalysisToken:
     def test_success_returns_access_token(self):
         mock_hub_client = MagicMock()
         mock_creds = MagicMock(id="client-uuid-1", secret="client-secret-1")
-        mock_hub_client.update_analysis_client_credentials.return_value = mock_creds
+        mock_hub_client.get_analysis_client_credentials.return_value = mock_creds
 
         mock_response = MagicMock()
         mock_response.json.return_value = {"access_token": "bearer-xyz"}
@@ -53,12 +53,12 @@ class TestGetAnalysisToken:
             result = get_analysis_token("analysis-1")
 
         assert result == "bearer-xyz"
-        mock_hub_client.update_analysis_client_credentials.assert_called_once_with("analysis-1", secret=None)
+        mock_hub_client.get_analysis_client_credentials.assert_called_once_with("analysis-1")
 
     def test_posts_correct_grant_to_authup(self):
         mock_hub_client = MagicMock()
         mock_creds = MagicMock(id="client-uuid-1", secret="client-secret-1")
-        mock_hub_client.update_analysis_client_credentials.return_value = mock_creds
+        mock_hub_client.get_analysis_client_credentials.return_value = mock_creds
 
         mock_response = MagicMock()
         mock_response.json.return_value = {"access_token": "tok"}
@@ -97,7 +97,7 @@ class TestGetAnalysisToken:
         import flame_hub
 
         mock_hub_client = MagicMock()
-        mock_hub_client.update_analysis_client_credentials.side_effect = flame_hub._exceptions.HubAPIError(
+        mock_hub_client.get_analysis_client_credentials.side_effect = flame_hub._exceptions.HubAPIError(
             "not found", request=MagicMock()
         )
 
@@ -110,10 +110,44 @@ class TestGetAnalysisToken:
 
         assert result is None
 
+    def test_missing_credentials_returns_none(self):
+        mock_hub_client = MagicMock()
+        mock_hub_client.get_analysis_client_credentials.return_value = None
+        ctor, _ = _http_client_ctor()
+
+        with (
+            patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
+            patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
+            patch("src.utils.token.init_proxied_http_client", ctor),
+            patch("src.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
+        ):
+            from src.utils.token import get_analysis_token
+            result = get_analysis_token("analysis-1")
+
+        assert result is None
+        ctor.assert_not_called()
+
+    def test_missing_secret_returns_none(self):
+        mock_hub_client = MagicMock()
+        mock_hub_client.get_analysis_client_credentials.return_value = MagicMock(id="c", secret=None)
+        ctor, _ = _http_client_ctor()
+
+        with (
+            patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
+            patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
+            patch("src.utils.token.init_proxied_http_client", ctor),
+            patch("src.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
+        ):
+            from src.utils.token import get_analysis_token
+            result = get_analysis_token("analysis-1")
+
+        assert result is None
+        ctor.assert_not_called()
+
     def test_token_request_exception_returns_none(self):
         mock_hub_client = MagicMock()
         mock_creds = MagicMock(id="client-uuid-1", secret="client-secret-1")
-        mock_hub_client.update_analysis_client_credentials.return_value = mock_creds
+        mock_hub_client.get_analysis_client_credentials.return_value = mock_creds
 
         with (
             patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
@@ -132,7 +166,7 @@ class TestGetAnalysisToken:
     def test_token_http_error_returns_none(self):
         mock_hub_client = MagicMock()
         mock_creds = MagicMock(id="client-uuid-1", secret="client-secret-1")
-        mock_hub_client.update_analysis_client_credentials.return_value = mock_creds
+        mock_hub_client.get_analysis_client_credentials.return_value = mock_creds
 
         mock_response = MagicMock()
         mock_response.raise_for_status.side_effect = httpx2.HTTPStatusError(
@@ -152,7 +186,7 @@ class TestGetAnalysisToken:
 
     def test_unconfigured_token_url_returns_none(self):
         mock_hub_client = MagicMock()
-        mock_hub_client.update_analysis_client_credentials.return_value = MagicMock(id="c", secret="s")
+        mock_hub_client.get_analysis_client_credentials.return_value = MagicMock(id="c", secret="s")
         ctor, _ = _http_client_ctor()
 
         with (
@@ -166,6 +200,6 @@ class TestGetAnalysisToken:
 
         assert result is None
         ctor.assert_not_called()
-        # The Hub must not rotate the client secret when the token can't be minted.
+        # The Hub must not be contacted when the token can't be minted.
         mock_init_hub.assert_not_called()
-        mock_hub_client.update_analysis_client_credentials.assert_not_called()
+        mock_hub_client.get_analysis_client_credentials.assert_not_called()
