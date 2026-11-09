@@ -35,9 +35,9 @@ from src.resources.utils import (
 )
 from src.status.constants import (
     AnalysisStatus,
-    _MAX_RESTARTS,
-    _INTERNAL_STATUS_TIMEOUT,
-    _REGISTRY_CREDENTIALS_REFRESH_INTERVAL,
+    MAX_RESTARTS,
+    INTERNAL_STATUS_TIMEOUT,
+    REGISTRY_CREDENTIALS_REFRESH_INTERVAL,
 )
 from src.utils.hub_client import (
     init_hub_client,
@@ -140,7 +140,7 @@ def status_loop(
                 # resolves the credentials itself.
                 if (registry_credentials_checked_at is None) or (
                     time.time() - registry_credentials_checked_at
-                    >= _REGISTRY_CREDENTIALS_REFRESH_INTERVAL
+                    >= REGISTRY_CREDENTIALS_REFRESH_INTERVAL
                 ):
                     refresh_registry_credentials(hub_client, node_id, namespace)
                     registry_credentials_checked_at = time.time()
@@ -366,7 +366,7 @@ def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
 def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> str:
     """Poll the analysis ``/healthz`` endpoint and derive the internal status.
 
-    Retries on connection errors until ``_INTERNAL_STATUS_TIMEOUT`` is hit, at
+    Retries on connection errors until ``INTERNAL_STATUS_TIMEOUT`` is hit, at
     which point ``FAILED`` is returned. Also refreshes the Keycloak token
     when the analysis reports it is close to expiry.
 
@@ -402,7 +402,7 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
                 f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} timed out: {repr(e)}"
             )
         elapsed_time = time.time() - start_time
-        if elapsed_time > _INTERNAL_STATUS_TIMEOUT:
+        if elapsed_time > INTERNAL_STATUS_TIMEOUT:
             logger.error(
                 f"Timeout getting internal deployment status after {elapsed_time:.1f} seconds"
             )
@@ -484,7 +484,7 @@ def _fix_stuck_status(
         enable_hub_logging: bool,
         hub_client: flame_hub.CoreClient,
 ) -> None:
-    """Restart a stuck/slow analysis or mark it failed once ``_MAX_RESTARTS`` is hit.
+    """Restart a stuck/slow analysis or mark it failed once ``MAX_RESTARTS`` is hit.
 
     Args:
         database: Database wrapper used for persistence.
@@ -500,7 +500,7 @@ def _fix_stuck_status(
         )
 
         # Tracking restarts
-        if analysis.restart_counter < _MAX_RESTARTS:
+        if analysis.restart_counter < MAX_RESTARTS:
             _stream_stuck_logs(
                 analysis, node_id, enable_hub_logging, database, hub_client, is_slow
             )
