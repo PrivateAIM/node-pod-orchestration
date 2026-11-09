@@ -12,7 +12,7 @@ Each analysis runs in a dedicated Kubernetes deployment with an nginx reverse-pr
 - Background status loop that syncs pod state with the FLAME Hub and auto-restarts stuck pods (up to 3 restarts, then `FAILED`)
 - Archival of completed analyses to a separate database table
 - Structured JSON logging with custom log levels (`ACTION`, `STATUS_LOOP`)
-- Keycloak OAuth2 / JWT authentication on all endpoints except `/po/healthz`
+- Keycloak OAuth2 or JWT authentication against the global Authup instance on all endpoints except `/po/healthz`
 
 ## Tech Stack
 
@@ -22,7 +22,7 @@ Each analysis runs in a dedicated Kubernetes deployment with an nginx reverse-pr
 | Web framework    | FastAPI + Uvicorn (port 8000)             |
 | Orchestration    | Kubernetes Python client                  |
 | Database         | PostgreSQL + SQLAlchemy 2.0               |
-| Auth             | Keycloak (OAuth2 / JWT)                   |
+| Auth             | Keycloak / Authup (OAuth2 / JWT)          |
 | Package manager  | Poetry                                    |
 | Lint / format    | Ruff (via pre-commit)                     |
 | Container base   | `python:3.11-alpine` (non-root UID 10000) |
@@ -31,7 +31,6 @@ Each analysis runs in a dedicated Kubernetes deployment with an nginx reverse-pr
 
 - Kubernetes cluster with RBAC to manage `Deployment`, `Service`, `NetworkPolicy`, `ConfigMap`, and `Secret` resources
 - PostgreSQL database
-- Keycloak realm with a configured client
 - Access to a [FLAME Hub](https://github.com/PrivateAIM/hub) instance
 - Harbor registry for analysis images
 - Docker (for local image builds)

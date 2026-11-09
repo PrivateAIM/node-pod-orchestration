@@ -8,12 +8,9 @@ internal status endpoint and how often a stuck analysis may be restarted.
 from enum import Enum
 
 
-_INTERNAL_STATUS_TIMEOUT = 60  # Time in seconds to wait for internal status response
-
-
-_MAX_RESTARTS = 3  # Maximum number of restarts for a stuck analysis
-# Seconds between checks for rotated registry credentials
-_REGISTRY_CREDENTIALS_REFRESH_INTERVAL = 300
+INTERNAL_STATUS_TIMEOUT = 60  # Time in seconds to wait for internal status response
+MAX_RESTARTS = 3  # Maximum number of restarts for a stuck analysis
+REGISTRY_CREDENTIALS_REFRESH_INTERVAL = 300  # Time in seconds between checks for rotated registry credentials
 
 
 class AnalysisStatus(Enum):
