@@ -1,15 +1,18 @@
 """Bearer token validation for the Pod Orchestration API.
 
-Provides the :func:`valid_access_token` FastAPI dependency, which verifies
-incoming JWTs against the Keycloak realm's JWKS endpoint and returns the
-decoded claims. Injected into every protected route except
-``POST /po/stream_logs``, which uses :func:`valid_analysis_token` to verify
-Authup-issued analysis tokens instead.
+Every protected route verifies its bearer token against the global Authup
+instance's JWKS (``AUTHUP_JWKS_URL``):
+
+* :func:`valid_access_token` guards every route except ``POST /po/stream_logs``.
+  It accepts any Authup-issued token, since the Hub Adapter forwards both user
+  tokens and tokens minted for the node's Hub client.
+* :func:`valid_analysis_token` guards ``POST /po/stream_logs``, which analysis
+  containers call directly. It additionally requires an Authup *client* token.
 """
 
 import os
 from fastapi import Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2AuthorizationCodeBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from jwt import PyJWKClient
 from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
@@ -22,45 +25,6 @@ from src.utils.po_logging import get_logger
 
 
 logger = get_logger()
-
-_KEYCLOAK_URL = os.getenv("KEYCLOAK_URL")
-_REALM = os.getenv("KEYCLOAK_REALM", "flame")
-_REALM_BASE = f"{_KEYCLOAK_URL}/realms/{_REALM}/protocol/openid-connect"
-
-
-_oauth2_scheme = OAuth2AuthorizationCodeBearer(
-    tokenUrl=f"{_REALM_BASE}/token",
-    authorizationUrl=f"{_REALM_BASE}/auth",
-    refreshUrl=f"{_REALM_BASE}/token",
-)
-
-
-def valid_access_token(token: Annotated[str, Depends(_oauth2_scheme)]) -> dict:
-    """FastAPI dependency that validates a Keycloak-issued OAuth2 bearer token.
-
-    Fetches the Keycloak realm's signing keys via JWKS and verifies the token's
-    signature and expiration. Audience validation is intentionally disabled.
-
-    Args:
-        token: The bearer token extracted from the ``Authorization`` header by
-            the OAuth2 scheme.
-
-    Returns:
-        The decoded JWT claims as a dictionary.
-
-    Raises:
-        HTTPException: 401 if the token is invalid, expired, or cannot be
-            verified against the realm's signing keys.
-    """
-    try:
-        sig_key = PyJWKClient(f"{_REALM_BASE}/certs").get_signing_key_from_jwt(token)
-        return jwt.decode(
-            token,
-            key=sig_key,
-            options={"verify_signature": True, "verify_aud": False, "verify_exp": True},
-        )
-    except jwt.exceptions.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Not authenticated")
 
 
 class _ProxiedPyJWKClient(PyJWKClient):
@@ -89,44 +53,29 @@ class _ProxiedPyJWKClient(PyJWKClient):
 
 _AUTHUP_JWKS_URL = os.getenv("AUTHUP_JWKS_URL")
 # Created once so PyJWKClient's JWK-set cache and kid LRU persist across
-# requests, instead of fetching Authup's JWKS on every /po/stream_logs call.
+# requests, instead of fetching Authup's JWKS on every call.
 _authup_jwks_client = _ProxiedPyJWKClient(_AUTHUP_JWKS_URL) if _AUTHUP_JWKS_URL else None
-_analysis_token_scheme = HTTPBearer()
+_bearer_scheme = HTTPBearer()
 
 
-def valid_analysis_token(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(_analysis_token_scheme)]
-) -> dict:
-    """FastAPI dependency that validates an Authup-issued analysis bearer token.
+def _verify_authup_token(token: str) -> dict:
+    """Verify an Authup-issued JWT and return its claims.
 
-    Analysis containers call ``POST /po/stream_logs`` directly (via their
-    nginx sidecar) using the ``AUTHUP_TOKEN`` minted for them against the
-    global Authup instance — a different issuer than the node-local Keycloak
-    ``valid_access_token`` verifies against.
-
-    Besides signature and expiration (``exp`` is required), the token must be
-    an Authup *client* token (``sub_kind == "client"``), as minted via the
-    client_credentials grant for an analysis; Authup user tokens are rejected.
-
-    Args:
-        credentials: The bearer token extracted from the ``Authorization``
-            header.
-
-    Returns:
-        The decoded JWT claims as a dictionary.
+    Checks the signature against Authup's signing keys and the expiration
+    (``exp`` is required). Audience validation is intentionally disabled.
 
     Raises:
-        HTTPException: 401 if the token is invalid, expired, lacks ``exp``,
-            is not a client token, or cannot be matched to/verified against
-            Authup's signing keys; 503 if Authup's JWKS cannot be fetched;
-            500 if ``AUTHUP_JWKS_URL`` is not configured.
+        HTTPException: 401 if the token is invalid, expired, lacks ``exp`` or
+            cannot be matched to/verified against Authup's signing keys; 503 if
+            Authup's JWKS cannot be fetched; 500 if ``AUTHUP_JWKS_URL`` is not
+            configured.
     """
     if _authup_jwks_client is None:
         raise HTTPException(status_code=500, detail="AUTHUP_JWKS_URL is not configured")
     try:
-        sig_key = _authup_jwks_client.get_signing_key_from_jwt(credentials.credentials)
-        claims = jwt.decode(
-            credentials.credentials,
+        sig_key = _authup_jwks_client.get_signing_key_from_jwt(token)
+        return jwt.decode(
+            token,
             key=sig_key,
             options={
                 "verify_signature": True,
@@ -143,6 +92,53 @@ def valid_analysis_token(
         raise HTTPException(status_code=401, detail="Not authenticated") from None
     except jwt.exceptions.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Not authenticated") from None
+
+
+def valid_access_token(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer_scheme)]
+) -> dict:
+    """FastAPI dependency that validates an Authup-issued bearer token.
+
+    Accepts user and client tokens alike: the Hub Adapter forwards the user's
+    own token, or one minted for the node's Hub client (e.g. for autostart).
+
+    Args:
+        credentials: The bearer token extracted from the ``Authorization``
+            header.
+
+    Returns:
+        The decoded JWT claims as a dictionary.
+
+    Raises:
+        HTTPException: see :func:`_verify_authup_token`.
+    """
+    return _verify_authup_token(credentials.credentials)
+
+
+def valid_analysis_token(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer_scheme)]
+) -> dict:
+    """FastAPI dependency that validates an Authup-issued analysis bearer token.
+
+    Analysis containers call ``POST /po/stream_logs`` directly (via their
+    nginx sidecar) using the ``AUTHUP_TOKEN`` minted for them against the
+    global Authup instance. On top of :func:`_verify_authup_token`, the token
+    must be an Authup *client* token (``sub_kind == "client"``), as minted via
+    the client_credentials grant for an analysis; Authup user tokens are
+    rejected.
+
+    Args:
+        credentials: The bearer token extracted from the ``Authorization``
+            header.
+
+    Returns:
+        The decoded JWT claims as a dictionary.
+
+    Raises:
+        HTTPException: 401 if the token is not a client token, otherwise see
+            :func:`_verify_authup_token`.
+    """
+    claims = _verify_authup_token(credentials.credentials)
     if claims.get("sub_kind") != "client":
         raise HTTPException(status_code=401, detail="Not authenticated")
     return claims
