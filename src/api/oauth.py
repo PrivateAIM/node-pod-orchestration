@@ -1,14 +1,17 @@
 """Bearer token validation for the Pod Orchestration API.
 
-Every protected route depends on :func:`valid_access_token`. Which identity
-provider it verifies against is decided at import time in
-:mod:`src.api.constants`:
+Two FastAPI dependencies verify bearer tokens; :mod:`src.api.api` wires them
+according to :data:`~src.api.constants.KEYCLOAK_URL_FOUND`:
 
-* Authup (``AUTHUP_JWKS_URL`` set): the token is verified against the global
-  Authup instance's JWKS and must be an Authup *client* token
-  (``sub_kind == "client"``).
-* Keycloak (fallback): the token is verified against the local Keycloak
-  realm's JWKS (``KEYCLOAK_URL`` / ``KEYCLOAK_REALM``).
+* :func:`valid_analysis_token` verifies against the global Authup instance's
+  JWKS and only accepts Authup *client* tokens (``sub_kind == "client"``).
+  It always guards ``POST /po/stream_logs``, and guards every other protected
+  route in Authup mode (``KEYCLOAK_URL`` unset or empty).
+* :func:`valid_access_token` verifies against the local Keycloak realm. It
+  guards every protected route except ``POST /po/stream_logs`` in Keycloak
+  mode (``KEYCLOAK_URL`` set). It must only be wired in Keycloak mode: it
+  depends on :data:`~src.api.constants.KEYCLOAK_SCHEME`, which is ``None``
+  otherwise, and FastAPI cannot register a route with ``Depends(None)``.
 """
 
 from fastapi import Depends, HTTPException
@@ -16,79 +19,109 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 from jwt import PyJWKClient, decode
 from jwt.exceptions import InvalidTokenError, PyJWKClientError, PyJWKClientConnectionError
-from typing import Annotated, Union
+from typing import Annotated
 
-from src.api.constants import AUTHUP_URL_FOUND, AUTHUP_JWKS_CLIENT, BEARER_SCHEME, KEYCLOAK_REALM_BASE, OAUTH2_SCHEME
+from src.api.constants import AUTHUP_CLIENT, AUTHUP_SCHEME, KEYCLOAK_URL_FOUND, KEYCLOAK_REALM_BASE, KEYCLOAK_SCHEME
 from src.utils.po_logging import get_logger
+
 
 logger = get_logger()
 
 
-def valid_access_token(
-        token: Union[Annotated[str, Depends(OAUTH2_SCHEME)], Annotated[HTTPAuthorizationCredentials, Depends(BEARER_SCHEME)]]
-) -> dict:
-    """FastAPI dependency that validates the request's bearer token.
+def valid_access_token(token: Annotated[str, Depends(KEYCLOAK_SCHEME)]) -> dict:
+    """FastAPI dependency that validates a Keycloak bearer token (deprecated).
 
-    With Authup configured (:data:`~src.api.constants.AUTHUP_URL_FOUND`), the
-    token is checked against Authup's signing keys via the cached
-    :data:`~src.api.constants.AUTHUP_JWKS_CLIENT`; the signature and
-    expiration are verified (``exp`` is required) and the token must be an
-    Authup client token (``sub_kind == "client"``), as minted via the
-    client_credentials grant. Without Authup, the token is checked against
-    the local Keycloak realm's ``/certs`` endpoint (signature and expiration).
-    Audience validation is intentionally disabled in both cases.
+    The token is checked against the local realm's ``/certs`` endpoint
+    (``{KEYCLOAK_REALM_BASE}/certs``); signature and expiration are verified,
+    audience validation is intentionally disabled. Every call logs a warning
+    that Keycloak authentication is scheduled for deprecation.
+
+    Only wire this dependency in Keycloak mode (see the module docstring).
 
     Args:
-        token: The bearer token. With Authup, the
-            :class:`~fastapi.security.HTTPAuthorizationCredentials` extracted
-            by :data:`~src.api.constants.BEARER_SCHEME`; with Keycloak, the
-            raw token string extracted by
-            :data:`~src.api.constants.OAUTH2_SCHEME`.
+        token: The raw bearer token extracted by
+            :data:`~src.api.constants.KEYCLOAK_SCHEME`.
 
     Returns:
         The decoded JWT claims as a dictionary.
 
     Raises:
-        HTTPException: 401 if the token is invalid, expired, cannot be
-            matched to/verified against the provider's signing keys or (Authup
-            only) lacks ``exp`` or is not a client token; 503 if Authup's JWKS
-            cannot be fetched; 500 if ``AUTHUP_JWKS_URL`` is set but empty.
+        HTTPException: 401 if the token is malformed, invalid, expired or cannot
+            be matched to/verified against the realm's signing keys; 503 if the
+            realm's JWKS cannot be fetched; 500 if ``KEYCLOAK_URL`` is not
+            configured (only reachable by calling the function directly).
     """
-    if AUTHUP_URL_FOUND:
-        credentials = token.credentials
-        if AUTHUP_JWKS_CLIENT is None:
-            raise HTTPException(status_code=500, detail="AUTHUP_JWKS_URL is not configured")
-        try:
-            sig_key = AUTHUP_JWKS_CLIENT.get_signing_key_from_jwt(credentials)
-            claims = decode(
-                credentials,
-                key=sig_key,
-                options={
-                    "verify_signature": True,
-                    "verify_aud": False,
-                    "verify_exp": True,
-                    "require": ["exp"],
-                },
-            )
-        except PyJWKClientConnectionError as e:
-            logger.error(f"Failed to fetch Authup JWKS: {repr(e)}")
-            raise HTTPException(status_code=503, detail="Authup JWKS unavailable") from e
-        except PyJWKClientError:
-            # e.g. no signing key matches the token's kid
-            raise HTTPException(status_code=401, detail="Not authenticated") from None
-        except InvalidTokenError:
-            raise HTTPException(status_code=401, detail="Not authenticated") from None
-
-        if claims.get("sub_kind") != "client":
-            raise HTTPException(status_code=401, detail="Not authenticated")
-        return claims
-    else:
-        try:
+    try:
+        if KEYCLOAK_URL_FOUND:
+            logger.warning(f"Use of keycloak authentication is scheduled to be deprecated in a later release")
             sig_key = PyJWKClient(f"{KEYCLOAK_REALM_BASE}/certs").get_signing_key_from_jwt(token)
             return decode(
                 token,
                 key=sig_key,
                 options={"verify_signature": True, "verify_aud": False, "verify_exp": True},
             )
-        except InvalidTokenError:
+        else:
+            logger.error(f"KEYCLOAK_URL is not configured")
+            raise HTTPException(status_code=500, detail="KEYCLOAK_URL is not configured")
+    except PyJWKClientConnectionError as e:
+        logger.error(f"Failed to fetch JWKS: {repr(e)}")
+        raise HTTPException(status_code=503, detail="JWKS unavailable") from e
+    except PyJWKClientError:
+        # e.g. no signing key matches the token's kid
+        raise HTTPException(status_code=401, detail="Not authenticated") from None
+    except InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Not authenticated") from None
+
+
+
+def valid_analysis_token(auth_creds: Annotated[HTTPAuthorizationCredentials, Depends(AUTHUP_SCHEME)]) -> dict:
+    """FastAPI dependency that validates an Authup client bearer token.
+
+    The token is checked against Authup's signing keys via the cached
+    :data:`~src.api.constants.AUTHUP_CLIENT`; signature and expiration are
+    verified (``exp`` is required), audience validation is intentionally
+    disabled. The token must be an Authup *client* token
+    (``sub_kind == "client"``), as minted via the client_credentials grant, e.g.
+    the ``AUTHUP_TOKEN`` of an analysis or a token of the node's Hub client;
+    Authup user tokens are rejected.
+
+    Args:
+        auth_creds: The bearer credentials extracted by
+            :data:`~src.api.constants.AUTHUP_SCHEME`.
+
+    Returns:
+        The decoded JWT claims as a dictionary.
+
+    Raises:
+        HTTPException: 401 if the token is malformed, invalid, expired, lacks
+            ``exp``, cannot be matched to/verified against Authup's signing keys
+            or is not a client token; 503 if Authup's JWKS cannot be fetched; 500
+            if ``AUTHUP_JWKS_URL`` is not configured.
+    """
+    if AUTHUP_CLIENT is None:
+        logger.error(f"AUTHUP_JWKS_URL is not configured")
+        raise HTTPException(status_code=500, detail="AUTHUP_JWKS_URL is not configured")
+    try:
+        credentials = auth_creds.credentials
+        sig_key = AUTHUP_CLIENT.get_signing_key_from_jwt(credentials)
+        claims = decode(
+            credentials,
+            key=sig_key,
+            options={
+                "verify_signature": True,
+                "verify_aud": False,
+                "verify_exp": True,
+                "require": ["exp"],
+            },
+        )
+        if claims.get("sub_kind") != "client":
             raise HTTPException(status_code=401, detail="Not authenticated")
+        return claims
+    except PyJWKClientConnectionError as e:
+        logger.error(f"Failed to fetch AUTHUP JWKS: {repr(e)}")
+        raise HTTPException(status_code=503, detail="AUTHUP JWKS unavailable") from e
+    except PyJWKClientError:
+        # e.g. no signing key matches the token's kid
+        raise HTTPException(status_code=401, detail="Not authenticated") from None
+    except InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Not authenticated") from None

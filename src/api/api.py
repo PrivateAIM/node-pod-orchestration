@@ -22,7 +22,7 @@ from src.utils.hub_client import (
     get_node_id_by_client,
 )
 from src.utils.other import extract_hub_envs
-from src.api.oauth import valid_access_token
+from src.api.oauth import valid_access_token, valid_analysis_token
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import CreateAnalysis
 from src.resources.log.entity import CreateLogEntity, AnalysisStoppedLog
@@ -38,6 +38,8 @@ from src.resources.utils import (
     stream_logs,
 )
 from src.utils.po_logging import get_logger
+from src.api.constants import KEYCLOAK_URL_FOUND
+
 
 logger = get_logger()
 
@@ -95,105 +97,105 @@ class PodOrchestrationAPI:
         router.add_api_route(
             "/",
             self.create_analysis_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["POST"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/history",
             self.retrieve_all_history_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["GET"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/history/{analysis_id}",
             self.retrieve_history_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["GET"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/logs",
             self.retrieve_all_logs_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["GET"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/logs/{analysis_id}",
             self.retrieve_logs_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["GET"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/status",
             self.get_all_status_and_progress_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["GET"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/status/{analysis_id}",
             self.get_status_and_progress_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["GET"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/pods",
             self.get_all_pods_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["GET"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/pods/{analysis_id}",
             self.get_pods_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["GET"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/stop",
             self.stop_all_analysis_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["PUT"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/stop/{analysis_id}",
             self.stop_analysis_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["PUT"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/delete",
             self.delete_all_analysis_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["DELETE"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/delete/{analysis_id}",
             self.delete_analysis_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["DELETE"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/cleanup/{cleanup_type}",
             self.cleanup_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_access_token if KEYCLOAK_URL_FOUND else valid_analysis_token)],
             methods=["DELETE"],
             response_class=JSONResponse,
         )
         router.add_api_route(
             "/stream_logs",
             self.stream_logs_call,
-            dependencies=[Depends(valid_access_token)],
+            dependencies=[Depends(valid_analysis_token)],
             methods=["POST"],
             response_class=JSONResponse,
         )

@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from src.status.constants import _MAX_RESTARTS, AnalysisStatus
+from src.status.constants import MAX_RESTARTS, AnalysisStatus
 
 
 class LogEntity(BaseModel):
@@ -80,28 +80,28 @@ class CreateStartUpErrorLog(CreateLogEntity):
             k8s_error_msg: Optional Kubernetes error reason appended for the
                 ``k8s`` error type.
         """
-        terminating = restart_num >= _MAX_RESTARTS
+        terminating = restart_num >= MAX_RESTARTS
         term_msg = " -> Terminating analysis as failed." if terminating else ""
         if error_type == "stuck":
             log = (
                 f"[flame -- POAPI: ANALYSISSTARTUP{'ERROR' if terminating else 'WARNING'} -- "
                 f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
                 f"The analysis failed to connect to other node components "
-                f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}"
+                f"[restart {restart_num} of {MAX_RESTARTS}].{term_msg}"
             )
         elif error_type == "slow":
             log = (
                 f"[flame -- POAPI: ANALYSISSTARTUP{'ERROR' if terminating else 'WARNING'} -- "
                 f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
                 f"The analysis took too long during startup and was restarted "
-                f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}"
+                f"[restart {restart_num} of {MAX_RESTARTS}].{term_msg}"
             )
         elif error_type == "k8s":
             log = (
                 f"[flame -- POAPI: ANALYSISSTARTUP{'ERROR' if terminating else 'WARNING'} -- "
                 f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}] "
                 f"The analysis failed to deploy in kubernetes "
-                f"[restart {restart_num} of {_MAX_RESTARTS}].{term_msg}"
+                f"[restart {restart_num} of {MAX_RESTARTS}].{term_msg}"
             )
             if k8s_error_msg:
                 log += f"\n\tKubernetesApiError: {k8s_error_msg}."
