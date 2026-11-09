@@ -2,7 +2,7 @@
 
 Uses the api_test_client fixture from conftest.py, which:
   - patches uvicorn.run to capture the FastAPI app
-  - overrides valid_access_token to skip JWT validation
+  - overrides valid_access_token / valid_analysis_token to skip JWT validation
   - patches hub client init to avoid real network calls
 """
 

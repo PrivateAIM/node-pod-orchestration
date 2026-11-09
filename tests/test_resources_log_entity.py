@@ -8,7 +8,7 @@ from src.resources.log.entity import (
     CreateStartUpErrorLog,
     AnalysisStoppedLog,
 )
-from src.status.constants import _MAX_RESTARTS
+from src.status.constants import MAX_RESTARTS
 
 
 # ─── LogEntity ────────────────────────────────────────────────────────────────
@@ -107,10 +107,10 @@ class TestCreateStartUpErrorLog:
             analysis_id="analysis-1",
             status="stuck",
         )
-        # restart_num < _MAX_RESTARTS -> non-terminating, logged as a warning
+        # restart_num < MAX_RESTARTS -> non-terminating, logged as a warning
         assert "ANALYSISSTARTUPWARNING" in log.log
         assert "failed to connect" in log.log
-        assert f"restart 1 of {_MAX_RESTARTS}" in log.log
+        assert f"restart 1 of {MAX_RESTARTS}" in log.log
         assert "Terminating analysis as failed." not in log.log
         assert log.log_type == "warn"
         assert log.analysis_id == "analysis-1"
@@ -124,10 +124,10 @@ class TestCreateStartUpErrorLog:
             analysis_id="analysis-2",
             status="stuck",
         )
-        # restart_num == _MAX_RESTARTS -> terminating, logged as an error
+        # restart_num == MAX_RESTARTS -> terminating, logged as an error
         assert "ANALYSISSTARTUPERROR" in log.log
         assert "took too long during startup" in log.log
-        assert f"restart 3 of {_MAX_RESTARTS}" in log.log
+        assert f"restart 3 of {MAX_RESTARTS}" in log.log
         assert "Terminating analysis as failed." in log.log
         assert log.log_type == "error"
 
@@ -139,7 +139,7 @@ class TestCreateStartUpErrorLog:
             status="stuck",
         )
         assert "failed to deploy in kubernetes" in log.log
-        assert f"restart 2 of {_MAX_RESTARTS}" in log.log
+        assert f"restart 2 of {MAX_RESTARTS}" in log.log
         assert "KubernetesApiError" not in log.log
 
     def test_k8s_type_log_content_with_k8s_msg(self):
@@ -154,7 +154,7 @@ class TestCreateStartUpErrorLog:
 
     def test_termination_message_at_max_restarts(self):
         log = CreateStartUpErrorLog(
-            restart_num=_MAX_RESTARTS,
+            restart_num=MAX_RESTARTS,
             error_type="stuck",
             analysis_id="analysis-4",
             status="stuck",
@@ -163,7 +163,7 @@ class TestCreateStartUpErrorLog:
 
     def test_no_termination_message_below_max_restarts(self):
         log = CreateStartUpErrorLog(
-            restart_num=_MAX_RESTARTS - 1,
+            restart_num=MAX_RESTARTS - 1,
             error_type="stuck",
             analysis_id="analysis-4",
             status="stuck",
@@ -180,14 +180,14 @@ class TestCreateStartUpErrorLog:
         assert log.log == ""
 
     def test_restart_num_reflected_in_log(self):
-        for num in [1, 5, _MAX_RESTARTS]:
+        for num in [1, 5, MAX_RESTARTS]:
             log = CreateStartUpErrorLog(
                 restart_num=num,
                 error_type="slow",
                 analysis_id="analysis-1",
                 status="stuck",
             )
-            assert f"restart {num} of {_MAX_RESTARTS}" in log.log
+            assert f"restart {num} of {MAX_RESTARTS}" in log.log
 
     def test_is_create_log_entity_subclass(self):
         log = CreateStartUpErrorLog(

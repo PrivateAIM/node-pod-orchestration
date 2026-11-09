@@ -1,6 +1,6 @@
 """Tests for src/status/constants.py"""
 
-from src.status.constants import AnalysisStatus, _MAX_RESTARTS, _INTERNAL_STATUS_TIMEOUT
+from src.status.constants import AnalysisStatus, MAX_RESTARTS, INTERNAL_STATUS_TIMEOUT
 
 
 class TestAnalysisStatusEnum:
@@ -55,13 +55,13 @@ class TestAnalysisStatusEnum:
 
 class TestConstants:
     def test_max_restarts_value(self):
-        assert _MAX_RESTARTS == 3
+        assert MAX_RESTARTS == 3
 
     def test_internal_status_timeout_value(self):
-        assert _INTERNAL_STATUS_TIMEOUT == 60
+        assert INTERNAL_STATUS_TIMEOUT == 60
 
     def test_max_restarts_is_int(self):
-        assert isinstance(_MAX_RESTARTS, int)
+        assert isinstance(MAX_RESTARTS, int)
 
     def test_internal_status_timeout_is_int(self):
-        assert isinstance(_INTERNAL_STATUS_TIMEOUT, int)
+        assert isinstance(INTERNAL_STATUS_TIMEOUT, int)
