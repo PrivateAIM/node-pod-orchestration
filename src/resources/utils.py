@@ -45,11 +45,11 @@ _MAX_FINAL_STATUS_UPDATE_REATTEMPTS = 5
 
 
 def create_analysis(
-    body: Union[CreateAnalysis, str],
-    database: Database,
-    hub_client: Optional[CoreClient],
-    node_id: Optional[str],
-    namespace: str = "default",
+        body: Union[CreateAnalysis, str],
+        database: Database,
+        hub_client: Optional[CoreClient],
+        node_id: Optional[str],
+        namespace: str = "default",
 ) -> dict[str, str]:
     """Create and start a new analysis deployment.
 
@@ -134,9 +134,9 @@ def create_analysis(
 
 
 def refresh_registry_credentials(
-    hub_client: Optional[CoreClient],
-    node_id: Optional[str],
-    namespace: str = "default",
+        hub_client: Optional[CoreClient],
+        node_id: Optional[str],
+        namespace: str = "default",
 ) -> bool:
     """Update the pull secret if the Hub rotated the node's robot account.
 
@@ -173,7 +173,7 @@ def refresh_registry_credentials(
 
 
 def retrieve_history(
-    analysis_id_str: str, database: Database
+        analysis_id_str: str, database: Database
 ) -> dict[str, dict[str, list[str]]]:
     """Return the persisted analysis and nginx logs for terminated analyses.
 
@@ -215,7 +215,7 @@ def retrieve_history(
 
 
 def retrieve_logs(
-    analysis_id_str: str, database: Database
+        analysis_id_str: str, database: Database
 ) -> dict[str, dict[str, list[str]]]:
     """Return live pod logs for analyses currently in ``EXECUTING``.
 
@@ -247,7 +247,7 @@ def retrieve_logs(
 
 
 def get_status_and_progress(
-    analysis_id_str: str, database: Database
+        analysis_id_str: str, database: Database
 ) -> dict[str, dict[str, str]]:
     """Return the latest status and progress for one or all analyses.
 
@@ -413,10 +413,10 @@ def delete_analysis(
 
 
 def unstuck_analysis_deployments(
-    analysis_id: str,
-    database: Database,
-    hub_client: Optional[CoreClient],
-    node_id: Optional[str],
+        analysis_id: str,
+        database: Database,
+        hub_client: Optional[CoreClient],
+        node_id: Optional[str],
 ) -> None:
     """Stop and restart an analysis to recover from a stuck/slow state.
 
@@ -454,10 +454,10 @@ def unstuck_analysis_deployments(
 
 
 def cleanup(
-    cleanup_type: str,
-    database: Database,
-    hub_client: CoreClient,
-    namespace: str = "default",
+        cleanup_type: str,
+        database: Database,
+        hub_client: CoreClient,
+        namespace: str = "default",
 ) -> dict[str, str]:
     """Run one or more targeted cleanup passes.
 
@@ -488,8 +488,8 @@ def cleanup(
             if cleanup_type in ["all", "analyzes"]:
                 # cleanup all analysis deployments, associated services, policies and configmaps
                 response_content[cleanup_type] = (
-                    f"Deleted {len(database.get_analysis_ids())} analysis deployments "
-                    + f"and associated resources from database ({database.get_analysis_ids()})"
+                        f"Deleted {len(database.get_analysis_ids())} analysis deployments "
+                        + f"and associated resources from database ({database.get_analysis_ids()})"
                 )
                 database.reset_db()
             # Service cleanup/reinit
@@ -516,15 +516,15 @@ def cleanup(
 
         else:
             response_content[cleanup_type] = (
-                f"Unknown cleanup type: {cleanup_type} (known types: 'zombies', 'all', "
-                + "'analyzes', 'services', 'mb', and 'rs')"
+                    f"Unknown cleanup type: {cleanup_type} (known types: 'zombies', 'all', "
+                    + "'analyzes', 'services', 'mb', and 'rs')"
             )
     response_content["zombies"] = clean_up_the_rest(database, hub_client, namespace)
     return response_content
 
 
 def clean_up_the_rest(
-    database: Database, hub_client: CoreClient, namespace: str = "default"
+        database: Database, hub_client: CoreClient, namespace: str = "default"
 ) -> str:
     """Delete orphaned Kubernetes resources whose analysis is no longer tracked.
 
@@ -572,23 +572,23 @@ def clean_up_the_rest(
                 r
                 for r in resources
                 if (r is not None)
-                and (resource_name_to_analysis(r) not in known_analysis_ids)
+                   and (resource_name_to_analysis(r) not in known_analysis_ids)
             ]
             for z in zombie_resources:
                 delete_k8s_resource(z, res, namespace=namespace)
             result_str += (
-                f"Deleted {len(zombie_resources)} zombie "
-                + f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
+                    f"Deleted {len(zombie_resources)} zombie "
+                    + f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
             )
     return result_str
 
 
 def stream_logs(
-    log_entity: CreateLogEntity,
-    node_id: str,
-    enable_hub_logging: bool,
-    database: Database,
-    hub_core_client: CoreClient,
+        log_entity: CreateLogEntity,
+        node_id: str,
+        enable_hub_logging: bool,
+        database: Database,
+        hub_core_client: CoreClient,
 ) -> None:
     """Persist a log line and mirror status/progress into the FLAME Hub.
 
@@ -678,4 +678,6 @@ def _validate_analysis_status_with_hub(
         if node_analysis_id is not None:
             hub_status = get_node_analysis_status(hub_client, analysis_id, node_analysis_id)
             validated_status[analysis_id] = db_status == hub_status
+        else:
+            validated_status[analysis_id] = False
     return validated_status
