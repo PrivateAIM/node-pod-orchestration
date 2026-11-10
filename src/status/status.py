@@ -209,7 +209,7 @@ def status_loop(
 
                         # Update running to finished status
                         if analysis_status["status_action"] == "finishing":
-                            _update_finished_status(database, hub_client, analysis_status)
+                            _update_finished_status(database, hub_client, node_id, analysis_status)
                             # Update analysis status (skip iteration if analysis is not deployed)
                             analysis_status = _get_analysis_status(
                                 analysis_id, database
@@ -588,6 +588,7 @@ def _update_running_status(database: Database, analysis_status: dict[str, str]) 
 def _update_finished_status(
         database: Database,
         hub_client: flame_hub.CoreClient,
+        node_id: str,
         analysis_status: dict[str, str]
 ) -> None:
     """Record the final internal status and either delete or stop the analysis.
@@ -610,6 +611,7 @@ def _update_finished_status(
                 analysis_status["analysis_id"],
                 hub_client,
                 database,
+                node_id,
                 finished_status
             )  # delete analysis from database
         else:
