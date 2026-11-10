@@ -323,6 +323,30 @@ def get_analysis_node_statuses(
     )
 
 
+def get_node_analysis_status(
+        hub_client: flame_hub.CoreClient,
+        analysis_id: str,
+        node_analysis_id: str
+) -> Optional[str]:
+    """Return :func:`get_analysis_node_statuses` only for the local node.
+
+    Args:
+        hub_client: Initialized Hub core client.
+        analysis_id: Analysis to query.
+        node_analysis_id: Local node's analysis-node id.
+
+    Returns:
+        Final execution_status for node_analysis_id, or ``None``
+        on lookup failure.
+    """
+    analysis_node_statuses = get_analysis_node_statuses(hub_client, analysis_id)
+    if analysis_node_statuses is not None:
+        for k, v in analysis_node_statuses.items():
+            if k == node_analysis_id:
+                return v
+    return None
+
+
 def get_partner_node_statuses(
         hub_client: flame_hub.CoreClient, analysis_id: str, node_analysis_id: str
 ) -> Optional[dict[str, str]]:

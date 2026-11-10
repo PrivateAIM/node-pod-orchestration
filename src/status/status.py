@@ -139,8 +139,8 @@ def status_loop(
                 # Only running analyses need a valid pull secret; a new start
                 # resolves the credentials itself.
                 if (registry_credentials_checked_at is None) or (
-                    time.time() - registry_credentials_checked_at
-                    >= REGISTRY_CREDENTIALS_REFRESH_INTERVAL
+                        time.time() - registry_credentials_checked_at
+                        >= REGISTRY_CREDENTIALS_REFRESH_INTERVAL
                 ):
                     refresh_registry_credentials(hub_client, node_id, namespace)
                     registry_credentials_checked_at = time.time()
@@ -209,7 +209,7 @@ def status_loop(
 
                         # Update running to finished status
                         if analysis_status["status_action"] == "finishing":
-                            _update_finished_status(database, analysis_status)
+                            _update_finished_status(database, hub_client, analysis_status)
                             # Update analysis status (skip iteration if analysis is not deployed)
                             analysis_status = _get_analysis_status(
                                 analysis_id, database
@@ -437,7 +437,7 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
 
 
 def _refresh_analysis_token(
-    deployment_name: str, analysis_id: str, token_remaining_time: int
+        deployment_name: str, analysis_id: str, token_remaining_time: int
 ) -> None:
     """Push a fresh Authup token to the analysis if the current one is near expiry.
 
@@ -586,7 +586,9 @@ def _update_running_status(database: Database, analysis_status: dict[str, str]) 
 
 
 def _update_finished_status(
-        database: Database, analysis_status: dict[str, str]
+        database: Database,
+        hub_client: flame_hub.CoreClient,
+        analysis_status: dict[str, str]
 ) -> None:
     """Record the final internal status and either delete or stop the analysis.
 
@@ -605,7 +607,10 @@ def _update_finished_status(
         if analysis_status["int_status"] == AnalysisStatus.EXECUTED.value:
             logger.info("Delete deployment")
             delete_analysis(
-                analysis_status["analysis_id"], database
+                analysis_status["analysis_id"],
+                hub_client,
+                database,
+                finished_status
             )  # delete analysis from database
         else:
             logger.info("Stop deployment")

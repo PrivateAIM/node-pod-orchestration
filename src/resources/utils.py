@@ -30,6 +30,7 @@ from src.utils.hub_client import (
     init_hub_client_and_update_hub_status,
     update_hub_status,
     get_node_analysis_id,
+    get_node_analysis_status
 )
 from src.utils.other import resource_name_to_analysis
 from src.utils.po_logging import get_logger
@@ -40,6 +41,7 @@ logger = get_logger()
 
 
 _MAX_UNSTUCK_REATTEMPTS = 10
+_MAX_FINAL_STATUS_UPDATE_REATTEMPTS = 5
 
 
 def create_analysis(
@@ -350,7 +352,13 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
     }
 
 
-def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]:
+def delete_analysis(
+        analysis_id_str: str,
+        hub_client: CoreClient,
+        database: Database,
+        node_id: Optional[str] = None,
+        final_status: str = AnalysisStatus.STOPPED.value
+) -> dict[str, None]:
     """Stop and permanently remove one or all analyses.
 
     In addition to :func:`stop_analysis`, this deletes the matching Keycloak
@@ -375,9 +383,32 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]
             deployments[analysis_id] = read_db_analysis(deployment)
 
     for analysis_id, deployment in deployments.items():
-        deployment.stop(database, log="")
-        database.delete_analysis(analysis_id)
-
+        deployment.stop(database, log="", status=final_status)
+        if node_id is not None:
+            hub_status = False
+            attempts = 0
+            while not hub_status:
+                hub_status = _validate_analysis_status_with_hub(
+                    {analysis_id: deployment.status},
+                    hub_client,
+                    node_id)[analysis_id]
+                if hub_status:
+                    database.delete_analysis(analysis_id)
+                else:
+                    if attempts < _MAX_FINAL_STATUS_UPDATE_REATTEMPTS:
+                        logger.info(f"Hub status failed to update final status for analysis (id={analysis_id}). "
+                                    f"Attempting to force update (attempts={attempts}).")
+                        node_analysis_id = get_node_analysis_id(
+                            hub_client, analysis_id, node_id
+                        )
+                        if node_analysis_id is not None:
+                            update_hub_status(hub_client, node_analysis_id, deployment.status)
+                        time.sleep(1.5 ** attempts)
+                    else:
+                        logger.warning(f"Failed to update status of analysis (id={analysis_id}). "
+                                       f"Database entry was not deleted.")
+                        break
+                    attempts += 1
     return {analysis_id: None for analysis_id, deployment in deployments.items()}
 
 
@@ -513,7 +544,8 @@ def clean_up_the_rest(
     known_analysis_ids = database.get_analysis_ids()
     if hub_client is not None:
         validated_analysis_ids = _validate_analyses_with_hub(
-            known_analysis_ids, hub_client
+            known_analysis_ids,
+            hub_client
         )
         for id in known_analysis_ids:
             if id not in validated_analysis_ids:
@@ -611,7 +643,8 @@ def stream_logs(
 
 
 def _validate_analyses_with_hub(
-    analysis_ids: list[str], hub_client: CoreClient
+        analysis_ids: list[str],
+        hub_client: CoreClient
 ) -> list[str]:
     """Keep only the analysis ids the Hub still knows about on this node.
 
@@ -630,3 +663,19 @@ def _validate_analyses_with_hub(
         if node_analysis_ids is None or node_analysis_ids:
             validated_ids.append(analysis_id)
     return validated_ids
+
+
+def _validate_analysis_status_with_hub(
+        analysis_db_status: dict[str, str],
+        hub_client: CoreClient,
+        node_id: str,
+) -> dict[str, bool]:
+    validated_ids = _validate_analyses_with_hub(list(analysis_db_status.keys()), hub_client)
+
+    validated_status = {}
+    for analysis_id, db_status in {k: v for k, v in analysis_db_status.items() if k in validated_ids}.items():
+        node_analysis_id = get_node_analysis_id(hub_client, analysis_id, node_id)
+        if node_analysis_id is not None:
+            hub_status = get_node_analysis_status(hub_client, analysis_id, node_analysis_id)
+            validated_status[analysis_id] = db_status == hub_status
+    return validated_status
