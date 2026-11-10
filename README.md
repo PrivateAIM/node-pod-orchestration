@@ -12,7 +12,7 @@ Each analysis runs in a dedicated Kubernetes deployment with an nginx reverse-pr
 - Background status loop that syncs pod state with the FLAME Hub and auto-restarts stuck pods (up to 3 restarts, then `FAILED`)
 - Archival of completed analyses to a separate database table
 - Structured JSON logging with custom log levels (`ACTION`, `STATUS_LOOP`)
-- JWT authentication against the global Authup instance on all endpoints except `/po/healthz`
+- JWT authentication against the global Authup instance (client tokens only) on all endpoints except `/po/healthz`, with a deprecated fallback to a local Keycloak realm
 
 ## Tech Stack
 
@@ -22,7 +22,7 @@ Each analysis runs in a dedicated Kubernetes deployment with an nginx reverse-pr
 | Web framework    | FastAPI + Uvicorn (port 8000)             |
 | Orchestration    | Kubernetes Python client                  |
 | Database         | PostgreSQL + SQLAlchemy 2.0               |
-| Auth             | Authup (OAuth2 / JWT)                     |
+| Auth             | Keycloak / Authup (OAuth2 / JWT)          |
 | Package manager  | Poetry                                    |
 | Lint / format    | Ruff (via pre-commit)                     |
 | Container base   | `python:3.11-alpine` (non-root UID 10000) |
@@ -85,7 +85,21 @@ Deployments are named `analysis-{analysis_id}-{restart_counter}`.
 
 ## API
 
-Base path: `/po` — all endpoints require a valid Keycloak bearer token except `GET /po/healthz`.
+Base path: `/po` — all endpoints require a valid bearer token except `GET /po/healthz`.
+
+The token issuer is selected at startup by `KEYCLOAK_URL`:
+
+- **Authup** (default, `KEYCLOAK_URL` unset or empty): every endpoint verifies tokens against the
+  global Authup JWKS (`AUTHUP_JWKS_URL`). Only Authup **client** tokens are accepted
+  (`sub_kind == "client"`, e.g. analysis tokens or the node's Hub client); Authup user tokens are
+  rejected.
+- **Keycloak** (deprecated, `KEYCLOAK_URL` set and non-empty): all endpoints except
+  `POST /po/stream_logs` verify tokens against the local Keycloak realm (`KEYCLOAK_URL` /
+  `KEYCLOAK_REALM`) and log a deprecation warning per request. `POST /po/stream_logs` is always
+  verified against Authup, since analysis tokens are minted by Authup (`AUTHUP_TOKEN_URL`), so
+  `AUTHUP_JWKS_URL` is required in this mode as well.
+
+If `AUTHUP_JWKS_URL` is missing, every Authup-verified endpoint answers with `500`.
 
 | Method | Path                           | Purpose                            |
 |--------|--------------------------------|------------------------------------|
@@ -113,8 +127,9 @@ lags behind them.
 | Variable | Description |
 |----------|-------------|
 | `POSTGRES_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | PostgreSQL connection |
-| `AUTHUP_JWKS_URL` | Global Authup JWKS endpoint, used to verify the bearer token on every protected route (user and client tokens; `/stream_logs` accepts only the analysis containers' client tokens) |
+| `AUTHUP_JWKS_URL` | Global Authup JWKS endpoint, used to verify API tokens (all endpoints in Authup mode, `/po/stream_logs` in Keycloak mode; see [API](#api)) |
 | `AUTHUP_TOKEN_URL` | Global Authup token endpoint, used to mint each analysis's access token |
+| `RESULT_CLIENT_ID`, `RESULT_CLIENT_SECRET` | Result-service OAuth client |
 | `HUB_CLIENT_ID`, `HUB_CLIENT_SECRET`, `HUB_URL_CORE`, `HUB_URL_AUTH` | FLAME Hub access |
 
 > Registry credentials for analysis images are **not** configured here. On every analysis
@@ -135,6 +150,7 @@ lags behind them.
 | `NGINX_IMAGE` | Image for the reverse-proxy sidecar | `nginxinc/nginx-unprivileged:1.31.4-alpine-perl` |
 | `NET_STATS_ENABLED` | Enable the network-statistics sidecar (`1` / `true`) | disabled |
 | `NET_STATS_IMAGE` | Image for that sidecar | `busybox:1.37` |
+| `KEYCLOAK_URL`, `KEYCLOAK_REALM` | Deprecated. A non-empty `KEYCLOAK_URL` switches the API to Keycloak mode (see [API](#api)) | unset, `flame` |
 
 ## Project Layout
 
@@ -143,7 +159,8 @@ src/
 ├── main.py               # Entry point: config load + API and status threads
 ├── api/
 │   ├── api.py            # FastAPI app + all REST endpoints
-│   └── oauth.py          # Keycloak JWT validation
+│   ├── constants.py      # Auth backend selection (Authup / Keycloak)
+│   └── oauth.py          # Bearer token validation
 ├── k8s/
 │   ├── kubernetes.py     # K8s resource creation
 │   └── utils.py          # K8s lookup and deletion

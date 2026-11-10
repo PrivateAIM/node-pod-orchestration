@@ -3,7 +3,7 @@ Shared test fixtures for node-pod-orchestration.
 
 IMPORTANT: mock_env_vars is session-scoped and autouse. It sets all required
 environment variables BEFORE any src modules are imported, which is critical
-because oauth.py and token.py read env vars at module level.
+because api/constants.py and token.py read env vars at module level.
 
 All src imports are deferred (inside fixture bodies) to ensure env vars are set first.
 """
@@ -22,6 +22,9 @@ _TEST_ENV_VARS = {
     "POSTGRES_USER": "test_user",
     "POSTGRES_PASSWORD": "test_password",
     "POSTGRES_DB": "test_db",
+    # Authup JWKS for token verification; KEYCLOAK_URL is deliberately unset so the
+    # session runs in Authup mode (src/api/constants.py decides at import time)
+    "AUTHUP_JWKS_URL": "http://authup.test/jwks",
     "HUB_CLIENT_ID": "test_hub_client",
     "HUB_CLIENT_SECRET": "test_hub_secret",
     "HUB_URL_CORE": "http://localhost:3000",
@@ -40,13 +43,15 @@ def mock_env_vars():
     """Set all required env vars for the entire test session.
 
     Uses os.environ directly because monkeypatch is function-scoped only.
-    Must run before any src module import triggers oauth.py / token.py
+    Must run before any src module import triggers api/constants.py / token.py
     module-level env var reads.
     """
     original = {}
     for key, value in _TEST_ENV_VARS.items():
         original[key] = os.environ.get(key)
         os.environ[key] = value
+    # Keep the session in Authup mode even if the developer's shell sets KEYCLOAK_URL.
+    original["KEYCLOAK_URL"] = os.environ.pop("KEYCLOAK_URL", None)
 
     yield
 
@@ -266,12 +271,15 @@ def api_test_client(mock_database, mock_hub_client, mock_k8s_clients):
 
     assert captured_app is not None, "Failed to capture FastAPI app from uvicorn.run"
 
+    # Authup mode wires valid_analysis_token on every route; valid_access_token
+    # (Keycloak mode) is overridden as well so the fixture works in both modes.
     captured_app.dependency_overrides[valid_access_token] = lambda: {
         "sub": "test-user",
         "preferred_username": "tester",
     }
     captured_app.dependency_overrides[valid_analysis_token] = lambda: {
-        "sub": "test-analysis-client",
+        "sub": "test-client",
+        "sub_kind": "client",
     }
 
     # starlette 0.36.x / httpx2 incompatibility: starlette passes `app=` to
