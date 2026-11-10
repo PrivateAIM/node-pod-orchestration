@@ -551,8 +551,8 @@ def _create_nginx_config_map(
     message_broker_pod_name = find_k8s_resources(
         "pod", "label", "component=flame-message-broker", namespace=namespace
     )[0]
-    message_broker_pod = None
-    while message_broker_pod is None:
+    message_broker_ip = None
+    while message_broker_ip is None:
         message_broker_pod = core_client.read_namespaced_pod(
             name=message_broker_pod_name, namespace=namespace
         )
@@ -569,8 +569,8 @@ def _create_nginx_config_map(
     pod_orchestration_name = find_k8s_resources(
         "pod", "label", "component=flame-po", namespace=namespace
     )[0]
-    pod_orchestration_pod = None
-    while pod_orchestration_pod is None:
+    pod_orchestration_ip = None
+    while pod_orchestration_ip is None:
         try:
             pod_orchestration_pod = core_client.read_namespaced_pod(
                 name=pod_orchestration_name, namespace=namespace
