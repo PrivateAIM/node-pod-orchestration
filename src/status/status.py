@@ -129,13 +129,12 @@ def status_loop(
                 continue
         else:
             # If running analyzes exist, enter status loop
-            running_analyzes = [
+            analysis_ids = [
                 analysis_id
                 for analysis_id in database.get_analysis_ids()
-                if database.analysis_is_running(analysis_id)
             ]
-            logger.action(f"Checking for running analyzes...{running_analyzes}")
-            if running_analyzes:
+            logger.action(f"Checking for running analyzes...{analysis_ids}")
+            if analysis_ids:
                 # Only running analyses need a valid pull secret; a new start
                 # resolves the credentials itself.
                 if (registry_credentials_checked_at is None) or (
@@ -144,7 +143,7 @@ def status_loop(
                 ):
                     refresh_registry_credentials(hub_client, node_id, namespace)
                     registry_credentials_checked_at = time.time()
-                for analysis_id in running_analyzes:
+                for analysis_id in analysis_ids:
                     logger.status_loop(f"Current analysis id: {analysis_id}")
                     # Get node analysis id
                     if analysis_id not in node_analysis_ids.keys():
@@ -353,11 +352,13 @@ def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
             int_status in [AnalysisStatus.STUCK.value]
     )
     was_stopped = int_status == AnalysisStatus.STOPPED.value
+    ended_though_not_deleted = ((db_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]) and
+                                (int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]))
     if is_stuck or is_slow:
         return "unstuck"
     elif newly_running:
         return "running"
-    elif speedy_finished or newly_ended or firmly_stuck or was_stopped:
+    elif speedy_finished or newly_ended or firmly_stuck or was_stopped or ended_though_not_deleted:
         return "finishing"
     else:
         return None
