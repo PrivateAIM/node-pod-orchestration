@@ -316,11 +316,7 @@ def get_analysis_node_statuses(
             f"Failed to retrieve node analyzes from hub python client: {repr(e)}"
         )
         return None
-    return (
-        {str(node.id): node.execution_status for node in node_analyzes}
-        if node_analyzes
-        else {}
-    )
+    return {str(node.id): node.execution_status for node in node_analyzes} if node_analyzes else {}
 
 
 def get_node_analysis_status(
@@ -344,6 +340,8 @@ def get_node_analysis_status(
         for k, v in analysis_node_statuses.items():
             if k == node_analysis_id:
                 return v
+    elif analysis_node_statuses == {}:
+        return ''
     return None
 
 
@@ -363,11 +361,11 @@ def get_partner_node_statuses(
         on lookup failure.
     """
     analysis_node_statuses = get_analysis_node_statuses(hub_client, analysis_id)
-    return (
-        {k: v for k, v in analysis_node_statuses.items() if k != node_analysis_id}
-        if analysis_node_statuses is not None
-        else None
-    )
+    if analysis_node_statuses is not None:
+        return {k: v for k, v in analysis_node_statuses.items() if k != node_analysis_id}
+    elif analysis_node_statuses == {}:
+        return {}
+    return None
 
 
 def init_hub_client_and_update_hub_status(analysis_id: str, status: str) -> None:

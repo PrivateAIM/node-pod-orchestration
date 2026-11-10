@@ -257,30 +257,31 @@ def inform_analysis_of_partner_statuses(
         API is not (yet) reachable.
     """
     node_statuses = get_partner_node_statuses(hub_client, analysis_id, node_analysis_id)
-    deployment_name = database.get_latest_deployment(analysis_id).deployment_name
-    client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['service'][0]}")
-    try:  # try except, in case analysis api is not yet ready
-        response = client.post(
-            url="/analysis/partner_status",
-            headers=[("Connection", "close")],
-            json={"partner_status": node_statuses},
-        )
-        response.raise_for_status()
+    if node_statuses:
+        deployment_name = database.get_latest_deployment(analysis_id).deployment_name
+        client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['service'][0]}")
+        try:  # try except, in case analysis api is not yet ready
+            response = client.post(
+                url="/analysis/partner_status",
+                headers=[("Connection", "close")],
+                json={"partner_status": node_statuses},
+            )
+            response.raise_for_status()
+            client.close()
+            return response.json()
+        except HTTPStatusError as e:
+            logger.warning(
+                f"Error whilst trying to access analysis partner_status endpoint: {repr(e)}"
+            )
+        except ConnectError as e:
+            logger.warning(
+                f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}"
+            )
+        except (TimeoutException, ConnectTimeout) as e:
+            logger.warning(
+                f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} timed out: {repr(e)}"
+            )
         client.close()
-        return response.json()
-    except HTTPStatusError as e:
-        logger.warning(
-            f"Error whilst trying to access analysis partner_status endpoint: {repr(e)}"
-        )
-    except ConnectError as e:
-        logger.warning(
-            f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}"
-        )
-    except (TimeoutException, ConnectTimeout) as e:
-        logger.warning(
-            f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} timed out: {repr(e)}"
-        )
-    client.close()
     return None
 
 

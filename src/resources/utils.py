@@ -677,7 +677,7 @@ def _validate_analysis_status_with_hub(
     for analysis_id, db_status in {k: v for k, v in analysis_db_status.items() if k in validated_ids}.items():
         if node_analysis_id is not None:
             hub_status = get_node_analysis_status(hub_client, analysis_id, node_analysis_id)
-            validated_status[analysis_id] = db_status == hub_status
+            validated_status[analysis_id] = db_status == hub_status if hub_status != '' else True
         else:
             validated_status[analysis_id] = False
     return validated_status
