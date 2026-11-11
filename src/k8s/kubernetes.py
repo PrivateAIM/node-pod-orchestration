@@ -462,7 +462,7 @@ def _create_analysis_nginx_deployment(
     container = client.V1Container(
         name=nginx_name,
         image=os.getenv(
-            "NGINX_IMAGE", "nginxinc/nginx-unprivileged:1.31.4-alpine-perl"
+            "NGINX_IMAGE", "nginxinc/nginx-unprivileged:1.31.7-alpine-slim"
         ),
         image_pull_policy="IfNotPresent",
         ports=[client.V1ContainerPort(PORTS["nginx"][0])],
