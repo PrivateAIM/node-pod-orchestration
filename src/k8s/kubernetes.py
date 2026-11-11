@@ -148,7 +148,9 @@ def create_analysis_deployment(
 
     Creates the analysis ``Deployment`` using the Harbor pull secret, exposes
     it via a ``Service``, and then provisions the companion nginx deployment
-    that reverse-proxies egress to node-local services.
+    that reverse-proxies egress to node-local services. Waits 3 seconds after
+    creating the nginx deployment so the analysis pods are registered before
+    they are listed.
 
     Args:
         name: Deployment name (typically ``analysis-{analysis_id}-{restart_counter}``).

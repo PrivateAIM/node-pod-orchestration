@@ -201,6 +201,43 @@ class TestCreateAnalysisDeployment:
         ]
         assert any("nginx" in name for name in deployment_names)
 
+    def test_nginx_default_image_is_slim(self, mock_k8s_clients, _setup_pod_reads, monkeypatch):
+        monkeypatch.delenv("NGINX_IMAGE", raising=False)
+        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+            create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
+
+        nginx_body = next(
+            c[1]["body"]
+            for c in mock_k8s_clients.apps_v1.create_namespaced_deployment.call_args_list
+            if "nginx" in c[1]["body"].metadata.name
+        )
+        assert (
+            nginx_body.spec.template.spec.containers[0].image
+            == "nginxinc/nginx-unprivileged:1.31.7-alpine-slim"
+        )
+
+    def test_nginx_image_overridable_via_env(self, mock_k8s_clients, _setup_pod_reads, monkeypatch):
+        monkeypatch.setenv("NGINX_IMAGE", "registry.local/nginx:custom")
+        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+            create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
+
+        images = [
+            c[1]["body"].spec.template.spec.containers[0].image
+            for c in mock_k8s_clients.apps_v1.create_namespaced_deployment.call_args_list
+        ]
+        assert "registry.local/nginx:custom" in images
+
+    def test_pod_ip_loops_do_not_sleep_when_ips_are_ready(self, mock_k8s_clients, _setup_pod_reads):
+        """Sleeps in the IP-wait loops only happen on a miss; the fixed waits remain."""
+        with (
+            patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()),
+            patch("src.k8s.kubernetes.time.sleep") as mock_sleep,
+        ):
+            create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
+
+        assert 1 not in [c.args[0] for c in mock_sleep.call_args_list]
+        mock_sleep.assert_any_call(3)
+
     def test_creates_services(self, mock_k8s_clients, _setup_pod_reads):
         with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)

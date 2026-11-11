@@ -355,8 +355,10 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
 def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]:
     """Stop and permanently remove one or all analyses.
 
-    In addition to :func:`stop_analysis`, this deletes the matching Keycloak
-    client and removes the analysis rows from the database.
+    Each analysis is stopped (Kubernetes resources torn down, message-broker
+    subscription removed) and its rows are deleted from the database right
+    away. Unlike the status loop's teardown of finished analyses, no Hub
+    status is pushed or verified first.
 
     Args:
         analysis_id_str: Specific analysis id or the literal string ``"all"``.

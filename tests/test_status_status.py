@@ -4,13 +4,14 @@ Does NOT test status_loop itself (infinite loop — untestable without mocking t
 Tests all helper functions: _decide_status_action, _get_analysis_status,
 _get_internal_deployment_status, _refresh_analysis_token,
 inform_analysis_of_partner_statuses, _fix_stuck_status,
-_update_running_status, _update_finished_status, _set_analysis_hub_status.
+_update_running_status, _update_finished_status, _set_analysis_hub_status,
+_remove_db_entry_after_hub_status_verification.
 """
 
 from unittest.mock import MagicMock, patch
 
 import pytest
-from httpx2 import ConnectError, ConnectTimeout
+from httpx2 import ConnectError, ConnectTimeout, HTTPStatusError, ReadTimeout
 
 from src.status.constants import AnalysisStatus, MAX_RESTARTS, INTERNAL_STATUS_TIMEOUT
 from src.status.status import (
@@ -19,6 +20,7 @@ from src.status.status import (
     _get_analysis_status,
     _get_internal_deployment_status,
     _refresh_analysis_token,
+    _remove_db_entry_after_hub_status_verification,
     _set_analysis_hub_status,
     _update_finished_status,
     _update_running_status,
@@ -137,6 +139,33 @@ class TestGetInternalDeploymentStatus:
 
         assert result == AnalysisStatus.FAILED.value
 
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ConnectError("refused"),
+            ReadTimeout("slow read"),
+            HTTPStatusError("503", request=MagicMock(), response=MagicMock()),
+        ],
+    )
+    @patch("src.status.status._refresh_analysis_token")
+    @patch("src.status.status.logger")
+    @patch("src.status.status.time")
+    @patch("src.status.status.Client")
+    def test_http_error_is_logged_and_retried(
+        self, mock_client_cls, mock_time, mock_logger, mock_refresh, error
+    ):
+        mock_time.time.return_value = 0
+        ok_response = MagicMock()
+        ok_response.json.return_value = {"status": "executing", "token_remaining_time": 9999}
+        mock_client_cls.return_value.get.side_effect = [error, ok_response]
+
+        result = _get_internal_deployment_status("dep-name", "analysis_id")
+
+        assert result == AnalysisStatus.EXECUTING.value
+        assert mock_client_cls.return_value.get.call_count == 2
+        mock_logger.warning.assert_called_once()
+        assert "nginx-dep-name" in mock_logger.warning.call_args[0][0]
+
 
 # ─── TestRefreshAnalysisToken ─────────────────────────────────────────────────
 
@@ -237,6 +266,25 @@ class TestInformAnalysisOfPartnerStatuses:
 
         assert result is None
 
+    @pytest.mark.parametrize(
+        "error",
+        [ReadTimeout("slow read"), HTTPStatusError("500", request=MagicMock(), response=MagicMock())],
+    )
+    @patch("src.status.status.get_partner_node_statuses")
+    @patch("src.status.status.Client")
+    def test_any_http_error_returns_none(
+        self, mock_client_cls, mock_get_partners, mock_database, mock_hub_client, sample_analysis_db, error
+    ):
+        mock_database.get_latest_deployment.return_value = sample_analysis_db(deployment_name="analysis-id-0")
+        mock_get_partners.return_value = {}
+        mock_client_cls.return_value.post.side_effect = error
+
+        result = inform_analysis_of_partner_statuses(
+            mock_database, mock_hub_client, "analysis_id", "node-analysis-id"
+        )
+
+        assert result is None
+
 
 # ─── TestFixStuckStatus ───────────────────────────────────────────────────────
 
@@ -306,31 +354,172 @@ class TestUpdateRunningStatus:
 # ─── TestUpdateFinishedStatus ─────────────────────────────────────────────────
 
 class TestUpdateFinishedStatus:
-    @patch("src.status.status.delete_analysis")
-    def test_executed_deletes_analysis(self, mock_delete, mock_database, sample_analysis_db):
-        analysis = sample_analysis_db(deployment_name="dep-name")
-        mock_database.get_latest_deployment.return_value = analysis
+    @staticmethod
+    def _status(int_status):
+        return {
+            "analysis_id": "analysis_id",
+            "db_status": AnalysisStatus.EXECUTING.value,
+            "int_status": int_status,
+        }
 
-        _update_finished_status(
-            mock_database,
-            {"analysis_id": "analysis_id", "db_status": AnalysisStatus.EXECUTING.value, "int_status": AnalysisStatus.EXECUTED.value},
-        )
-
-        mock_database.update_deployment_status.assert_called_once_with("dep-name", AnalysisStatus.EXECUTED.value)
-        mock_delete.assert_called_once_with("analysis_id", mock_database)
-
+    @pytest.mark.parametrize(
+        "int_status, expected_final",
+        [
+            (AnalysisStatus.EXECUTED.value, AnalysisStatus.EXECUTED.value),
+            (AnalysisStatus.FAILED.value, AnalysisStatus.FAILED.value),
+            (AnalysisStatus.STUCK.value, AnalysisStatus.FAILED.value),
+        ],
+    )
+    @patch("src.status.status._remove_db_entry_after_hub_status_verification")
     @patch("src.status.status.stop_analysis")
-    def test_failed_stops_analysis(self, mock_stop, mock_database, sample_analysis_db):
-        analysis = sample_analysis_db(deployment_name="dep-name")
-        mock_database.get_latest_deployment.return_value = analysis
+    def test_running_analysis_is_stopped_then_verified(
+        self, mock_stop, mock_remove, mock_database, mock_hub_client, sample_analysis_db,
+        int_status, expected_final,
+    ):
+        mock_database.get_latest_deployment.return_value = sample_analysis_db(deployment_name="dep-name")
+        mock_database.analysis_is_running.return_value = True
 
-        _update_finished_status(
-            mock_database,
-            {"analysis_id": "analysis_id", "db_status": AnalysisStatus.EXECUTING.value, "int_status": AnalysisStatus.FAILED.value},
+        _update_finished_status(mock_database, mock_hub_client, "node-id", self._status(int_status))
+
+        mock_database.update_deployment_status.assert_called_once_with("dep-name", expected_final)
+        mock_stop.assert_called_once_with("analysis_id", mock_database)
+        mock_remove.assert_called_once_with(
+            mock_database, mock_hub_client, "node-id", "analysis_id", expected_final
         )
 
-        mock_database.update_deployment_status.assert_called_once_with("dep-name", AnalysisStatus.FAILED.value)
-        mock_stop.assert_called_once_with("analysis_id", mock_database)
+    @patch("src.status.status._remove_db_entry_after_hub_status_verification")
+    @patch("src.status.status.stop_analysis")
+    def test_already_stopped_analysis_is_only_verified(
+        self, mock_stop, mock_remove, mock_database, mock_hub_client, sample_analysis_db
+    ):
+        """A finished analysis left in the DB by an earlier pass is not stopped again."""
+        mock_database.get_latest_deployment.return_value = sample_analysis_db(deployment_name="dep-name")
+        mock_database.analysis_is_running.return_value = False
+
+        _update_finished_status(
+            mock_database, mock_hub_client, "node-id", self._status(AnalysisStatus.EXECUTED.value)
+        )
+
+        mock_database.update_deployment_status.assert_not_called()
+        mock_stop.assert_not_called()
+        mock_remove.assert_called_once_with(
+            mock_database, mock_hub_client, "node-id", "analysis_id", AnalysisStatus.EXECUTED.value
+        )
+
+    @patch("src.status.status._remove_db_entry_after_hub_status_verification")
+    @patch("src.status.status.stop_analysis")
+    def test_missing_deployment_is_noop(
+        self, mock_stop, mock_remove, mock_database, mock_hub_client
+    ):
+        mock_database.get_latest_deployment.return_value = None
+
+        _update_finished_status(
+            mock_database, mock_hub_client, "node-id", self._status(AnalysisStatus.EXECUTED.value)
+        )
+
+        mock_stop.assert_not_called()
+        mock_remove.assert_not_called()
+
+
+# ─── TestRemoveDbEntryAfterHubStatusVerification ─────────────────────────────
+
+class TestRemoveDbEntryAfterHubStatusVerification:
+    @pytest.fixture(autouse=True)
+    def _no_sleep(self):
+        with patch("src.status.status.time.sleep") as mock_sleep:
+            self.mock_sleep = mock_sleep
+            yield
+
+    @patch("src.status.status.update_hub_status")
+    @patch("src.status.status.get_node_analysis_status")
+    @patch("src.status.status.get_node_analysis_id")
+    def test_no_node_id_is_noop(self, mock_get_id, mock_get_status, mock_update, mock_database, mock_hub_client):
+        _remove_db_entry_after_hub_status_verification(
+            mock_database, mock_hub_client, None, "analysis_id", AnalysisStatus.EXECUTED.value
+        )
+
+        mock_get_id.assert_not_called()
+        mock_database.delete_analysis.assert_not_called()
+
+    @patch("src.status.status.update_hub_status")
+    @patch("src.status.status.get_node_analysis_status", return_value=AnalysisStatus.EXECUTED.value)
+    @patch("src.status.status.get_node_analysis_id", return_value="na-id")
+    def test_matching_hub_status_deletes_entry(
+        self, mock_get_id, mock_get_status, mock_update, mock_database, mock_hub_client
+    ):
+        _remove_db_entry_after_hub_status_verification(
+            mock_database, mock_hub_client, "node-id", "analysis_id", AnalysisStatus.EXECUTED.value
+        )
+
+        mock_get_status.assert_called_once_with(mock_hub_client, "analysis_id", "na-id")
+        mock_database.delete_analysis.assert_called_once_with("analysis_id")
+        mock_update.assert_not_called()
+
+    @patch("src.status.status.update_hub_status")
+    @patch("src.status.status.get_node_analysis_status")
+    @patch("src.status.status.get_node_analysis_id", return_value=[])
+    def test_analysis_unknown_to_hub_deletes_entry(
+        self, mock_get_id, mock_get_status, mock_update, mock_database, mock_hub_client
+    ):
+        """An empty analysis-node list means the analysis was deleted in the Hub."""
+        _remove_db_entry_after_hub_status_verification(
+            mock_database, mock_hub_client, "node-id", "analysis_id", AnalysisStatus.EXECUTED.value
+        )
+
+        mock_database.delete_analysis.assert_called_once_with("analysis_id")
+        mock_get_status.assert_not_called()
+        mock_update.assert_not_called()
+
+    @patch("src.status.status.update_hub_status")
+    @patch(
+        "src.status.status.get_node_analysis_status",
+        side_effect=[AnalysisStatus.EXECUTING.value, AnalysisStatus.EXECUTED.value],
+    )
+    @patch("src.status.status.get_node_analysis_id", return_value="na-id")
+    def test_mismatch_forces_update_then_deletes(
+        self, mock_get_id, mock_get_status, mock_update, mock_database, mock_hub_client
+    ):
+        _remove_db_entry_after_hub_status_verification(
+            mock_database, mock_hub_client, "node-id", "analysis_id", AnalysisStatus.EXECUTED.value
+        )
+
+        mock_update.assert_called_once_with(mock_hub_client, "na-id", AnalysisStatus.EXECUTED.value)
+        self.mock_sleep.assert_called_once_with(1)  # 1.5 ** 0
+        mock_database.delete_analysis.assert_called_once_with("analysis_id")
+
+    @patch("src.status.status.update_hub_status")
+    @patch("src.status.status.get_node_analysis_status", return_value=AnalysisStatus.EXECUTING.value)
+    @patch("src.status.status.get_node_analysis_id", return_value="na-id")
+    def test_gives_up_after_max_attempts_and_keeps_entry(
+        self, mock_get_id, mock_get_status, mock_update, mock_database, mock_hub_client
+    ):
+        from src.status.status import _MAX_FINAL_STATUS_UPDATE_REATTEMPTS
+
+        _remove_db_entry_after_hub_status_verification(
+            mock_database, mock_hub_client, "node-id", "analysis_id", AnalysisStatus.EXECUTED.value
+        )
+
+        assert mock_update.call_count == _MAX_FINAL_STATUS_UPDATE_REATTEMPTS
+        assert [c.args[0] for c in self.mock_sleep.call_args_list] == [
+            1.5 ** i for i in range(_MAX_FINAL_STATUS_UPDATE_REATTEMPTS)
+        ]
+        mock_database.delete_analysis.assert_not_called()
+
+    @patch("src.status.status.update_hub_status")
+    @patch("src.status.status.get_node_analysis_status")
+    @patch("src.status.status.get_node_analysis_id", return_value=None)
+    def test_hub_lookup_failure_retries_without_update(
+        self, mock_get_id, mock_get_status, mock_update, mock_database, mock_hub_client
+    ):
+        from src.status.status import _MAX_FINAL_STATUS_UPDATE_REATTEMPTS
+
+        _remove_db_entry_after_hub_status_verification(
+            mock_database, mock_hub_client, "node-id", "analysis_id", AnalysisStatus.EXECUTED.value
+        )
+
+        assert mock_get_id.call_count == _MAX_FINAL_STATUS_UPDATE_REATTEMPTS + 1
+        mock_update.assert_not_called()
+        mock_database.delete_analysis.assert_not_called()
 
 
 # ─── TestSetAnalysisHubStatus ─────────────────────────────────────────────────

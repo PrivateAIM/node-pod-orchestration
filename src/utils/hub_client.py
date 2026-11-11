@@ -20,8 +20,7 @@ import truststore
 from flame_hub import CoreClient as HubClient
 from flame_hub._exceptions import HubAPIError
 from flame_hub.auth import ClientAuth
-from flame_hub.models import NodeRegistryCredentials
-
+from flame_hub.models import ClientCredentials, NodeRegistryCredentials
 
 from src.status.constants import AnalysisStatus
 from src.utils.po_logging import get_logger
@@ -328,7 +327,7 @@ def get_node_analysis_status(
         analysis_id: str,
         node_analysis_id: str
 ) -> Optional[str]:
-    """Return :func:`get_analysis_node_statuses` only for the local node.
+    """Return the Hub ``execution_status`` of the local node's analysis-node.
 
     Args:
         hub_client: Initialized Hub core client.
@@ -336,8 +335,9 @@ def get_node_analysis_status(
         node_analysis_id: Local node's analysis-node id.
 
     Returns:
-        Final execution_status for node_analysis_id, or ``None``
-        on lookup failure.
+        The ``execution_status`` of ``node_analysis_id``, or ``None`` if the
+        Hub lookup failed or the analysis-node is not (or no longer) part of
+        the analysis.
     """
     analysis_node_statuses = get_analysis_node_statuses(hub_client, analysis_id)
     if analysis_node_statuses is not None:
@@ -365,8 +365,6 @@ def get_partner_node_statuses(
     analysis_node_statuses = get_analysis_node_statuses(hub_client, analysis_id)
     if analysis_node_statuses is not None:
         return {k: v for k, v in analysis_node_statuses.items() if k != node_analysis_id}
-    elif analysis_node_statuses == {}:
-        return {}
     return None
 
 
@@ -413,6 +411,19 @@ def create_analysis_node_log(
         log_type: str,
         log: str,
 ) -> None:
+    """Forward a single analysis log line to the Hub.
+
+    Hub/transport errors are logged and swallowed so that Hub downtime never
+    interrupts local log persistence.
+
+    Args:
+        hub_client: Initialized Hub core client.
+        analysis_id: Analysis the log belongs to.
+        node_id: Hub node id of this node.
+        status: Analysis status at the time of the log.
+        log_type: Log level (e.g. ``info``, ``error``).
+        log: Log message.
+    """
     try:
         hub_client.create_analysis_node_log(
             analysis_id=analysis_id,
@@ -425,7 +436,19 @@ def create_analysis_node_log(
         logger.error(f"Failed to create analysis node log: {repr(e)}")
 
 
-def get_analysis_client_credentials(hub_client: HubClient, analysis_id: str) -> Optional[str]:
+def get_analysis_client_credentials(
+        hub_client: HubClient, analysis_id: str
+) -> Optional[ClientCredentials]:
+    """Fetch the Authup client credentials of an analysis from the Hub.
+
+    Args:
+        hub_client: Initialized Hub core client.
+        analysis_id: Analysis whose client credentials are requested.
+
+    Returns:
+        The analysis' client credentials (``id`` and ``secret``), or ``None``
+        if the Hub request failed.
+    """
     try:
         return hub_client.get_analysis_client_credentials(analysis_id)
     except (HTTPError, JSONDecodeError, HubAPIError) as e:

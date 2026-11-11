@@ -381,7 +381,9 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
             client.close()
             break
         except HTTPError as e:
-            f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}"
+            logger.warning(
+                f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}"
+            )
         elapsed_time = time.time() - start_time
         if elapsed_time > INTERNAL_STATUS_TIMEOUT:
             logger.error(
@@ -572,11 +574,24 @@ def _update_finished_status(
         node_id: str,
         analysis_status: dict[str, str]
 ) -> None:
-    """Record the final internal status and either delete or stop the analysis.
+    """Stop a finished analysis and drop its DB entry once the Hub agrees.
 
-    ``EXECUTED`` triggers a full delete (removing the analysis row and
-    Keycloak client); anything else triggers a stop that retains the row for
-    history.
+    ``STUCK`` is recorded as ``FAILED``; every other internal status is
+    recorded as-is. If the deployment is still running, the final status is
+    written to the DB and the analysis is stopped (Kubernetes resources torn
+    down). Its DB entry is then removed only after
+    :func:`_remove_db_entry_after_hub_status_verification` confirms the Hub
+    reflects the same final status, so the status loop keeps retrying the
+    Hub update on later passes until it sticks.
+
+    Args:
+        database: Database wrapper used for persistence.
+        hub_client: Initialized Hub core client.
+        node_id: Hub node id of this node; ``None`` skips the Hub check and
+            keeps the DB entry.
+        analysis_status: Status snapshot as produced by
+            :func:`_get_analysis_status` (needs ``analysis_id`` and
+            ``int_status``).
     """
     analysis = database.get_latest_deployment(analysis_status["analysis_id"])
     if analysis is not None:
@@ -640,6 +655,25 @@ def _remove_db_entry_after_hub_status_verification(
         analysis_id: str,
         analysis_status: str,
 ) -> None:
+    """Delete an analysis' DB entry once the Hub reports its final status.
+
+    Polls the Hub for this node's analysis-node and compares its
+    ``execution_status`` with ``analysis_status``. The entry is deleted when
+    they match, or when the Hub returns no analysis-node at all (the
+    analysis was deleted in the Hub, so there is nothing left to sync).
+    Otherwise the status is re-pushed via :func:`update_hub_status` and the
+    check is retried with exponential backoff (``1.5 ** attempt`` seconds)
+    up to ``_MAX_FINAL_STATUS_UPDATE_REATTEMPTS`` times; if it still does not
+    match, the entry is kept and a warning is logged.
+
+    Args:
+        database: Database wrapper used for persistence.
+        hub_client: Initialized Hub core client.
+        node_id: Hub node id of this node. ``None`` (Hub unavailable) is a
+            no-op, so the DB entry is kept.
+        analysis_id: Analysis to verify and delete.
+        analysis_status: Final status expected in the Hub.
+    """
     if node_id is not None:
         status_validated = False
         attempts = 0

@@ -83,6 +83,8 @@ STARTING → STARTED → EXECUTING → EXECUTED | STOPPED | FAILED
 
 Deployments are named `analysis-{analysis_id}-{restart_counter}`.
 
+When an analysis finishes (`EXECUTED`, `FAILED`, or `STUCK` after the restart limit), the status loop stops its deployment and keeps the database entry until the FLAME Hub reports the same final status. It re-pushes the status with exponential backoff (up to 5 retries per pass) and deletes the entry once the Hub agrees, or once the Hub no longer knows the analysis. `DELETE /po/delete/{id}` removes the entry straight away, without a Hub check.
+
 ## API
 
 Base path: `/po` — all endpoints require a valid bearer token except `GET /po/healthz`.
@@ -147,7 +149,7 @@ lags behind them.
 | `HUB_LOGGING` | Forward analysis logs to the FLAME Hub | unset |
 | `EXTRA_CA_CERTS` | Additional CA bundle path | unset |
 | `STATUS_LOOP_INTERVAL` | Status-loop interval in seconds | `10` |
-| `NGINX_IMAGE` | Image for the reverse-proxy sidecar | `nginxinc/nginx-unprivileged:1.31.4-alpine-perl` |
+| `NGINX_IMAGE` | Image for the reverse-proxy sidecar | `nginxinc/nginx-unprivileged:1.31.7-alpine-slim` |
 | `NET_STATS_ENABLED` | Enable the network-statistics sidecar (`1` / `true`) | disabled |
 | `NET_STATS_IMAGE` | Image for that sidecar | `busybox:1.37` |
 | `KEYCLOAK_URL`, `KEYCLOAK_REALM` | Deprecated. A non-empty `KEYCLOAK_URL` switches the API to Keycloak mode (see [API](#api)) | unset, `flame` |
