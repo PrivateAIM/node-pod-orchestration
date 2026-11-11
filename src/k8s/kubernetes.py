@@ -224,6 +224,7 @@ def create_analysis_deployment(
         namespace=namespace,
     )
     _create_analysis_nginx_deployment(name, env, namespace)
+    time.sleep(3)
 
     return _get_pods(name, namespace)
 
@@ -558,7 +559,8 @@ def _create_nginx_config_map(
         )
         if message_broker_pod is not None:
             message_broker_ip = message_broker_pod.status.pod_ip
-        time.sleep(1)
+        else:
+            time.sleep(1)
 
     # get the service name of the pod orchestrator
     po_service_name = find_k8s_resources(
@@ -581,7 +583,8 @@ def _create_nginx_config_map(
             ) from e
         if pod_orchestration_pod is not None:
             pod_orchestration_ip = pod_orchestration_pod.status.pod_ip
-        time.sleep(1)
+        else:
+            time.sleep(1)
 
     # await and get analysis pod ip
     analysis_ip = None
@@ -592,7 +595,8 @@ def _create_nginx_config_map(
 
         if len(pod_list_object.items) > 0:
             analysis_ip = pod_list_object.items[0].status.pod_ip
-        time.sleep(1)
+        else:
+            time.sleep(1)
 
     # get the name of the hub adapter, kong proxy, and storage service
     hub_adapter_service_name = find_k8s_resources(
