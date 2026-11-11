@@ -12,7 +12,8 @@ import time
 from typing import Optional, Union
 
 from fastapi import HTTPException
-from flame_hub import CoreClient
+
+from flame_hub import CoreClient as HubClient
 
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
@@ -30,6 +31,7 @@ from src.utils.hub_client import (
     init_hub_client_and_update_hub_status,
     update_hub_status,
     get_node_analysis_id,
+    create_analysis_node_log
 )
 from src.utils.other import resource_name_to_analysis
 from src.utils.po_logging import get_logger
@@ -43,11 +45,11 @@ _MAX_UNSTUCK_REATTEMPTS = 10
 
 
 def create_analysis(
-    body: Union[CreateAnalysis, str],
-    database: Database,
-    hub_client: Optional[CoreClient],
-    node_id: Optional[str],
-    namespace: str = "default",
+        body: Union[CreateAnalysis, str],
+        database: Database,
+        hub_client: Optional[HubClient],
+        node_id: Optional[str],
+        namespace: str = "default",
 ) -> dict[str, str]:
     """Create and start a new analysis deployment.
 
@@ -132,9 +134,9 @@ def create_analysis(
 
 
 def refresh_registry_credentials(
-    hub_client: Optional[CoreClient],
-    node_id: Optional[str],
-    namespace: str = "default",
+        hub_client: Optional[HubClient],
+        node_id: Optional[str],
+        namespace: str = "default",
 ) -> bool:
     """Update the pull secret if the Hub rotated the node's robot account.
 
@@ -171,7 +173,7 @@ def refresh_registry_credentials(
 
 
 def retrieve_history(
-    analysis_id_str: str, database: Database
+        analysis_id_str: str, database: Database
 ) -> dict[str, dict[str, list[str]]]:
     """Return the persisted analysis and nginx logs for terminated analyses.
 
@@ -213,7 +215,7 @@ def retrieve_history(
 
 
 def retrieve_logs(
-    analysis_id_str: str, database: Database
+        analysis_id_str: str, database: Database
 ) -> dict[str, dict[str, list[str]]]:
     """Return live pod logs for analyses currently in ``EXECUTING``.
 
@@ -245,7 +247,7 @@ def retrieve_logs(
 
 
 def get_status_and_progress(
-    analysis_id_str: str, database: Database
+        analysis_id_str: str, database: Database
 ) -> dict[str, dict[str, str]]:
     """Return the latest status and progress for one or all analyses.
 
@@ -353,8 +355,10 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
 def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]:
     """Stop and permanently remove one or all analyses.
 
-    In addition to :func:`stop_analysis`, this deletes the matching Keycloak
-    client and removes the analysis rows from the database.
+    Each analysis is stopped (Kubernetes resources torn down, message-broker
+    subscription removed) and its rows are deleted from the database right
+    away. Unlike the status loop's teardown of finished analyses, no Hub
+    status is pushed or verified first.
 
     Args:
         analysis_id_str: Specific analysis id or the literal string ``"all"``.
@@ -382,10 +386,10 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]
 
 
 def unstuck_analysis_deployments(
-    analysis_id: str,
-    database: Database,
-    hub_client: Optional[CoreClient],
-    node_id: Optional[str],
+        analysis_id: str,
+        database: Database,
+        hub_client: Optional[HubClient],
+        node_id: Optional[str],
 ) -> None:
     """Stop and restart an analysis to recover from a stuck/slow state.
 
@@ -423,10 +427,10 @@ def unstuck_analysis_deployments(
 
 
 def cleanup(
-    cleanup_type: str,
-    database: Database,
-    hub_client: CoreClient,
-    namespace: str = "default",
+        cleanup_type: str,
+        database: Database,
+        hub_client: HubClient,
+        namespace: str = "default",
 ) -> dict[str, str]:
     """Run one or more targeted cleanup passes.
 
@@ -457,8 +461,8 @@ def cleanup(
             if cleanup_type in ["all", "analyzes"]:
                 # cleanup all analysis deployments, associated services, policies and configmaps
                 response_content[cleanup_type] = (
-                    f"Deleted {len(database.get_analysis_ids())} analysis deployments "
-                    + f"and associated resources from database ({database.get_analysis_ids()})"
+                        f"Deleted {len(database.get_analysis_ids())} analysis deployments "
+                        + f"and associated resources from database ({database.get_analysis_ids()})"
                 )
                 database.reset_db()
             # Service cleanup/reinit
@@ -485,15 +489,15 @@ def cleanup(
 
         else:
             response_content[cleanup_type] = (
-                f"Unknown cleanup type: {cleanup_type} (known types: 'zombies', 'all', "
-                + "'analyzes', 'services', 'mb', and 'rs')"
+                    f"Unknown cleanup type: {cleanup_type} (known types: 'zombies', 'all', "
+                    + "'analyzes', 'services', 'mb', and 'rs')"
             )
     response_content["zombies"] = clean_up_the_rest(database, hub_client, namespace)
     return response_content
 
 
 def clean_up_the_rest(
-    database: Database, hub_client: CoreClient, namespace: str = "default"
+        database: Database, hub_client: HubClient, namespace: str = "default"
 ) -> str:
     """Delete orphaned Kubernetes resources whose analysis is no longer tracked.
 
@@ -513,7 +517,8 @@ def clean_up_the_rest(
     known_analysis_ids = database.get_analysis_ids()
     if hub_client is not None:
         validated_analysis_ids = _validate_analyses_with_hub(
-            known_analysis_ids, hub_client
+            known_analysis_ids,
+            hub_client
         )
         for id in known_analysis_ids:
             if id not in validated_analysis_ids:
@@ -536,27 +541,29 @@ def clean_up_the_rest(
             resources = find_k8s_resources(
                 res, "label", selector_arg, namespace=namespace
             )
+            logger.debug(f"Found {len(resources)} resources for {selector_arg} during cleanup")
             zombie_resources = [
                 r
                 for r in resources
                 if (r is not None)
-                and (resource_name_to_analysis(r) not in known_analysis_ids)
+                   and (resource_name_to_analysis(r) not in known_analysis_ids)
             ]
             for z in zombie_resources:
+                logger.debug(f"Deleting {z} resource")
                 delete_k8s_resource(z, res, namespace=namespace)
             result_str += (
-                f"Deleted {len(zombie_resources)} zombie "
-                + f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
+                    f"Deleted {len(zombie_resources)} zombie "
+                    + f"{'' if '-nginx' not in selector_arg else 'nginx-'}{res}s\n"
             )
     return result_str
 
 
 def stream_logs(
-    log_entity: CreateLogEntity,
-    node_id: str,
-    enable_hub_logging: bool,
-    database: Database,
-    hub_core_client: CoreClient,
+        log_entity: CreateLogEntity,
+        node_id: str,
+        enable_hub_logging: bool,
+        database: Database,
+        hub_core_client: HubClient,
 ) -> None:
     """Persist a log line and mirror status/progress into the FLAME Hub.
 
@@ -582,12 +589,13 @@ def stream_logs(
 
     # log to hub
     if enable_hub_logging:
-        hub_core_client.create_analysis_node_log(
-            analysis_id=log_entity.analysis_id,
-            node_id=node_id,
-            status=log_entity.status,
-            level=log_entity.log_type,
-            message=log_entity.log,
+        create_analysis_node_log(
+            hub_core_client,
+            log_entity.analysis_id,
+            node_id,
+            log_entity.status,
+            log_entity.log_type,
+            log_entity.log
         )
 
     node_analysis_id = get_node_analysis_id(
@@ -611,7 +619,8 @@ def stream_logs(
 
 
 def _validate_analyses_with_hub(
-    analysis_ids: list[str], hub_client: CoreClient
+        analysis_ids: list[str],
+        hub_client: HubClient
 ) -> list[str]:
     """Keep only the analysis ids the Hub still knows about on this node.
 

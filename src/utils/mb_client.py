@@ -4,13 +4,7 @@ Used during analysis teardown to remove the analysis' subscription from the
 message broker running alongside the Pod Orchestration service.
 """
 
-from httpx2 import (
-    Client,
-    ConnectError,
-    HTTPStatusError,
-    TimeoutException,
-    ConnectTimeout,
-)
+from httpx2 import Client, HTTPError
 from src.k8s.utils import find_k8s_resources
 from src.utils.po_logging import get_logger
 
@@ -46,13 +40,7 @@ def delete_subscription(
         )
         response = mb_client.delete(f"/analyses/{analysis_id}/messages/subscriptions")
         response.raise_for_status()
-    except (
-        HTTPStatusError,
-        ConnectError,
-        TimeoutException,
-        ConnectTimeout,
-        IndexError,
-    ) as e:
+    except (HTTPError, IndexError) as e:
         logger.warning(
             f"Could not reach Message-Broker service to delete analysis subscription "
             f"(analysis_id={analysis_id}): {repr(e)}"

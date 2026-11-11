@@ -148,7 +148,9 @@ def create_analysis_deployment(
 
     Creates the analysis ``Deployment`` using the Harbor pull secret, exposes
     it via a ``Service``, and then provisions the companion nginx deployment
-    that reverse-proxies egress to node-local services.
+    that reverse-proxies egress to node-local services. Waits 3 seconds after
+    creating the nginx deployment so the analysis pods are registered before
+    they are listed.
 
     Args:
         name: Deployment name (typically ``analysis-{analysis_id}-{restart_counter}``).
@@ -224,6 +226,7 @@ def create_analysis_deployment(
         namespace=namespace,
     )
     _create_analysis_nginx_deployment(name, env, namespace)
+    time.sleep(3)
 
     return _get_pods(name, namespace)
 
@@ -462,7 +465,7 @@ def _create_analysis_nginx_deployment(
     container = client.V1Container(
         name=nginx_name,
         image=os.getenv(
-            "NGINX_IMAGE", "nginxinc/nginx-unprivileged:1.31.4-alpine-perl"
+            "NGINX_IMAGE", "nginxinc/nginx-unprivileged:1.31.7-alpine-slim"
         ),
         image_pull_policy="IfNotPresent",
         ports=[client.V1ContainerPort(PORTS["nginx"][0])],
@@ -551,14 +554,15 @@ def _create_nginx_config_map(
     message_broker_pod_name = find_k8s_resources(
         "pod", "label", "component=flame-message-broker", namespace=namespace
     )[0]
-    message_broker_pod = None
-    while message_broker_pod is None:
+    message_broker_ip = None
+    while message_broker_ip is None:
         message_broker_pod = core_client.read_namespaced_pod(
             name=message_broker_pod_name, namespace=namespace
         )
         if message_broker_pod is not None:
             message_broker_ip = message_broker_pod.status.pod_ip
-        time.sleep(1)
+        else:
+            time.sleep(1)
 
     # get the service name of the pod orchestrator
     po_service_name = find_k8s_resources(
@@ -569,8 +573,8 @@ def _create_nginx_config_map(
     pod_orchestration_name = find_k8s_resources(
         "pod", "label", "component=flame-po", namespace=namespace
     )[0]
-    pod_orchestration_pod = None
-    while pod_orchestration_pod is None:
+    pod_orchestration_ip = None
+    while pod_orchestration_ip is None:
         try:
             pod_orchestration_pod = core_client.read_namespaced_pod(
                 name=pod_orchestration_name, namespace=namespace
@@ -581,7 +585,8 @@ def _create_nginx_config_map(
             ) from e
         if pod_orchestration_pod is not None:
             pod_orchestration_ip = pod_orchestration_pod.status.pod_ip
-        time.sleep(1)
+        else:
+            time.sleep(1)
 
     # await and get analysis pod ip
     analysis_ip = None
@@ -592,7 +597,8 @@ def _create_nginx_config_map(
 
         if len(pod_list_object.items) > 0:
             analysis_ip = pod_list_object.items[0].status.pod_ip
-        time.sleep(1)
+        else:
+            time.sleep(1)
 
     # get the name of the hub adapter, kong proxy, and storage service
     hub_adapter_service_name = find_k8s_resources(

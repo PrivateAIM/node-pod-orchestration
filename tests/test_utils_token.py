@@ -1,5 +1,6 @@
 from unittest.mock import patch, MagicMock
 import httpx2
+from flame_hub._exceptions import HubAPIError
 
 
 class TestCreateAnalysisTokens:
@@ -94,10 +95,9 @@ class TestGetAnalysisToken:
         assert result is None
 
     def test_credential_fetch_failure_returns_none(self):
-        import flame_hub
 
         mock_hub_client = MagicMock()
-        mock_hub_client.get_analysis_client_credentials.side_effect = flame_hub._exceptions.HubAPIError(
+        mock_hub_client.get_analysis_client_credentials.side_effect = HubAPIError(
             "not found", request=MagicMock()
         )
 

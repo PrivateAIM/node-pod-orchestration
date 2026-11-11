@@ -3,6 +3,7 @@ from json import JSONDecodeError
 from unittest.mock import MagicMock, patch, call
 
 import pytest
+from flame_hub._exceptions import HubAPIError
 from httpx2 import HTTPStatusError, ConnectError, ConnectTimeout, ReadTimeout
 
 
@@ -16,8 +17,8 @@ class TestInitHubClientWithClient:
         with (
             patch("src.utils.hub_client.get_ssl_context", return_value=mock_ssl_ctx),
             patch("src.utils.hub_client.Client") as mock_httpx_client,
-            patch("src.utils.hub_client.flame_hub.auth.ClientAuth") as mock_auth,
-            patch("src.utils.hub_client.flame_hub.CoreClient", return_value=mock_core_client),
+            patch("src.utils.hub_client.ClientAuth") as mock_auth,
+            patch("src.utils.hub_client.HubClient", return_value=mock_core_client),
         ):
             from src.utils.hub_client import init_hub_client
             result = init_hub_client(
@@ -56,8 +57,8 @@ class TestInitHubClientWithClient:
             patch("src.utils.hub_client.get_ssl_context", return_value=mock_ssl_ctx),
             patch("src.utils.hub_client.HTTPTransport", return_value=mock_transport) as mock_transport_cls,
             patch("src.utils.hub_client.Client") as mock_httpx_client,
-            patch("src.utils.hub_client.flame_hub.auth.ClientAuth"),
-            patch("src.utils.hub_client.flame_hub.CoreClient"),
+            patch("src.utils.hub_client.ClientAuth"),
+            patch("src.utils.hub_client.HubClient"),
         ):
             from src.utils.hub_client import init_hub_client
             init_hub_client(
@@ -82,8 +83,8 @@ class TestInitHubClientWithClient:
         with (
             patch("src.utils.hub_client.get_ssl_context", return_value=mock_ssl_ctx),
             patch("src.utils.hub_client.Client") as mock_httpx_client,
-            patch("src.utils.hub_client.flame_hub.auth.ClientAuth"),
-            patch("src.utils.hub_client.flame_hub.CoreClient"),
+            patch("src.utils.hub_client.ClientAuth"),
+            patch("src.utils.hub_client.HubClient"),
         ):
             from src.utils.hub_client import init_hub_client
             init_hub_client(
@@ -226,8 +227,7 @@ class TestGetNodeIdByClient:
         assert result is None
 
     def test_hub_api_error_returns_none(self, mock_hub_client):
-        import flame_hub
-        mock_hub_client.find_nodes.side_effect = flame_hub._exceptions.HubAPIError(
+        mock_hub_client.find_nodes.side_effect = HubAPIError(
             "hub error", request=MagicMock()
         )
 
@@ -353,7 +353,7 @@ class TestGetNodeAnalysisId:
 
         assert result == []
 
-    def test_http_status_error_returns_empty_list(self, mock_hub_client):
+    def test_http_status_error_returns_none(self, mock_hub_client):
         mock_hub_client.find_analysis_nodes.side_effect = HTTPStatusError(
             "500", request=MagicMock(), response=MagicMock()
         )
@@ -363,9 +363,8 @@ class TestGetNodeAnalysisId:
 
         assert result is None
 
-    def test_hub_api_error_returns_empty_list(self, mock_hub_client):
-        import flame_hub
-        mock_hub_client.find_analysis_nodes.side_effect = flame_hub._exceptions.HubAPIError(
+    def test_hub_api_error_returns_none(self, mock_hub_client):
+        mock_hub_client.find_analysis_nodes.side_effect = HubAPIError(
             "err", request=MagicMock()
         )
 
@@ -374,7 +373,7 @@ class TestGetNodeAnalysisId:
 
         assert result is None
 
-    def test_attribute_error_returns_empty_list(self, mock_hub_client):
+    def test_attribute_error_returns_none(self, mock_hub_client):
         mock_hub_client.find_analysis_nodes.side_effect = AttributeError("no attr")
 
         from src.utils.hub_client import get_node_analysis_id
@@ -433,8 +432,7 @@ class TestUpdateHubStatus:
         update_hub_status(mock_hub_client, "na-id", "started")
 
     def test_hub_api_error_does_not_raise(self, mock_hub_client):
-        import flame_hub
-        mock_hub_client.update_analysis_node.side_effect = flame_hub._exceptions.HubAPIError(
+        mock_hub_client.update_analysis_node.side_effect = HubAPIError(
             "err", request=MagicMock()
         )
 
@@ -491,3 +489,142 @@ class TestGetPartnerNodeStatuses:
         result = get_partner_node_statuses(mock_hub_client, "analysis-1", "self-id")
 
         assert result == {}
+
+# ─── Broadened httpx2 error handling ─────────────────────────────────────────
+# All Hub wrappers catch the HTTPError base class (plus JSONDecodeError and
+# HubAPIError), so any transport failure is handled, not only the subclasses
+# that used to be listed explicitly.
+
+_TRANSPORT_ERRORS = [
+    ConnectError("down"),
+    ConnectTimeout("slow"),
+    ReadTimeout("slow read"),
+    HTTPStatusError("502", request=MagicMock(), response=MagicMock()),
+    JSONDecodeError("bad body", "", 0),
+]
+
+
+class TestHubWrappersCatchAllTransportErrors:
+    @pytest.mark.parametrize("error", _TRANSPORT_ERRORS)
+    def test_get_node_id_by_client_returns_none(self, mock_hub_client, error):
+        from src.utils.hub_client import get_node_id_by_client
+        mock_hub_client.find_nodes.side_effect = error
+
+        assert get_node_id_by_client(mock_hub_client, "cid") is None
+
+    @pytest.mark.parametrize("error", _TRANSPORT_ERRORS)
+    def test_get_node_analysis_id_returns_none(self, mock_hub_client, error):
+        from src.utils.hub_client import get_node_analysis_id
+        mock_hub_client.find_analysis_nodes.side_effect = error
+
+        assert get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id") is None
+
+    @pytest.mark.parametrize("error", _TRANSPORT_ERRORS)
+    def test_update_hub_status_does_not_raise(self, mock_hub_client, error):
+        from src.utils.hub_client import update_hub_status
+        mock_hub_client.update_analysis_node.side_effect = error
+
+        update_hub_status(mock_hub_client, "na-id", "started")
+
+    @pytest.mark.parametrize("error", _TRANSPORT_ERRORS)
+    def test_get_analysis_node_statuses_returns_none(self, mock_hub_client, error):
+        from src.utils.hub_client import get_analysis_node_statuses
+        mock_hub_client.find_analysis_nodes.side_effect = error
+
+        assert get_analysis_node_statuses(mock_hub_client, "analysis-1") is None
+
+
+# ─── TestGetNodeAnalysisIdWithoutNode ─────────────────────────────────────────
+
+class TestGetNodeAnalysisIdWithoutNode:
+    def test_returns_all_analysis_node_ids(self, mock_hub_client):
+        node_a, node_b = MagicMock(), MagicMock()
+        node_a.id, node_b.id = "na-1", "na-2"
+        mock_hub_client.find_analysis_nodes.return_value = [node_a, node_b]
+
+        from src.utils.hub_client import get_node_analysis_id
+        result = get_node_analysis_id(mock_hub_client, "analysis-1")
+
+        assert result == ["na-1", "na-2"]
+        mock_hub_client.find_analysis_nodes.assert_called_once_with(
+            filter={"analysis_id": "analysis-1"}
+        )
+
+
+# ─── TestGetNodeAnalysisStatus ────────────────────────────────────────────────
+
+class TestGetNodeAnalysisStatus:
+    def test_returns_status_of_own_node(self, mock_hub_client):
+        own, partner = MagicMock(), MagicMock()
+        own.id, own.execution_status = "self-id", "executed"
+        partner.id, partner.execution_status = "partner-id", "executing"
+        mock_hub_client.find_analysis_nodes.return_value = [partner, own]
+
+        from src.utils.hub_client import get_node_analysis_status
+        assert get_node_analysis_status(mock_hub_client, "analysis-1", "self-id") == "executed"
+
+    def test_unknown_node_returns_none(self, mock_hub_client):
+        from src.utils.hub_client import get_node_analysis_status
+        assert get_node_analysis_status(mock_hub_client, "analysis-1", "other-id") is None
+
+    def test_no_analysis_nodes_returns_none(self, mock_hub_client):
+        """The Hub returning no analysis-nodes (e.g. deleted analysis) yields None, not ''."""
+        mock_hub_client.find_analysis_nodes.return_value = []
+
+        from src.utils.hub_client import get_node_analysis_status
+        assert get_node_analysis_status(mock_hub_client, "analysis-1", "self-id") is None
+
+    def test_hub_failure_returns_none(self, mock_hub_client):
+        mock_hub_client.find_analysis_nodes.side_effect = ConnectError("down")
+
+        from src.utils.hub_client import get_node_analysis_status
+        assert get_node_analysis_status(mock_hub_client, "analysis-1", "self-id") is None
+
+
+# ─── TestCreateAnalysisNodeLog ────────────────────────────────────────────────
+
+class TestCreateAnalysisNodeLog:
+    def test_forwards_log_to_hub(self, mock_hub_client):
+        from src.utils.hub_client import create_analysis_node_log
+        create_analysis_node_log(mock_hub_client, "analysis-1", "node-1", "executing", "info", "msg")
+
+        mock_hub_client.create_analysis_node_log.assert_called_once_with(
+            analysis_id="analysis-1",
+            node_id="node-1",
+            status="executing",
+            level="info",
+            message="msg",
+        )
+
+    @pytest.mark.parametrize(
+        "error", _TRANSPORT_ERRORS + [HubAPIError("err", request=MagicMock())]
+    )
+    def test_errors_are_logged_not_raised(self, mock_hub_client, error):
+        mock_hub_client.create_analysis_node_log.side_effect = error
+
+        from src.utils.hub_client import create_analysis_node_log
+        with patch("src.utils.hub_client.logger") as mock_logger:
+            create_analysis_node_log(mock_hub_client, "analysis-1", "node-1", "executing", "info", "msg")
+
+        mock_logger.error.assert_called_once()
+
+
+# ─── TestGetAnalysisClientCredentials ─────────────────────────────────────────
+
+class TestGetAnalysisClientCredentials:
+    def test_returns_credentials(self, mock_hub_client):
+        creds = MagicMock(id="client-id", secret="secret")
+        mock_hub_client.get_analysis_client_credentials.return_value = creds
+
+        from src.utils.hub_client import get_analysis_client_credentials
+        assert get_analysis_client_credentials(mock_hub_client, "analysis-1") is creds
+        mock_hub_client.get_analysis_client_credentials.assert_called_once_with("analysis-1")
+
+    @pytest.mark.parametrize(
+        "error", _TRANSPORT_ERRORS + [HubAPIError("err", request=MagicMock())]
+    )
+    def test_errors_return_none(self, mock_hub_client, error):
+        mock_hub_client.get_analysis_client_credentials.side_effect = error
+
+        from src.utils.hub_client import get_analysis_client_credentials
+        assert get_analysis_client_credentials(mock_hub_client, "analysis-1") is None

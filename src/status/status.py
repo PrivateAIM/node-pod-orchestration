@@ -11,16 +11,9 @@ up analyses that have finished.
 import time
 import os
 from typing import Optional
-from httpx2 import (
-    Client,
-    HTTPError,
-    HTTPStatusError,
-    ConnectError,
-    ConnectTimeout,
-    TimeoutException,
-)
+from httpx2 import Client, HTTPError
 
-import flame_hub
+from flame_hub import CoreClient as HubClient
 
 from src.resources.log.entity import CreateStartUpErrorLog
 from src.k8s.kubernetes import PORTS, get_pod_status
@@ -28,7 +21,6 @@ from src.resources.database.entity import Database, AnalysisDB
 from src.resources.utils import (
     unstuck_analysis_deployments,
     stop_analysis,
-    delete_analysis,
     stream_logs,
     clean_up_the_rest,
     refresh_registry_credentials,
@@ -45,6 +37,7 @@ from src.utils.hub_client import (
     get_node_analysis_id,
     get_partner_node_statuses,
     update_hub_status,
+    get_node_analysis_status,
 )
 from src.utils.other import extract_hub_envs
 from src.utils.token import get_analysis_token
@@ -52,6 +45,9 @@ from src.utils.po_logging import get_logger
 
 
 logger = get_logger()
+
+
+_MAX_FINAL_STATUS_UPDATE_REATTEMPTS = 5
 
 
 def status_loop(
@@ -129,22 +125,21 @@ def status_loop(
                 continue
         else:
             # If running analyzes exist, enter status loop
-            running_analyzes = [
+            analysis_ids = [
                 analysis_id
                 for analysis_id in database.get_analysis_ids()
-                if database.analysis_is_running(analysis_id)
             ]
-            logger.action(f"Checking for running analyzes...{running_analyzes}")
-            if running_analyzes:
+            logger.action(f"Checking for running analyzes...{analysis_ids}")
+            if analysis_ids:
                 # Only running analyses need a valid pull secret; a new start
                 # resolves the credentials itself.
                 if (registry_credentials_checked_at is None) or (
-                    time.time() - registry_credentials_checked_at
-                    >= REGISTRY_CREDENTIALS_REFRESH_INTERVAL
+                        time.time() - registry_credentials_checked_at
+                        >= REGISTRY_CREDENTIALS_REFRESH_INTERVAL
                 ):
                     refresh_registry_credentials(hub_client, node_id, namespace)
                     registry_credentials_checked_at = time.time()
-                for analysis_id in running_analyzes:
+                for analysis_id in analysis_ids:
                     logger.status_loop(f"Current analysis id: {analysis_id}")
                     # Get node analysis id
                     if analysis_id not in node_analysis_ids.keys():
@@ -209,7 +204,7 @@ def status_loop(
 
                         # Update running to finished status
                         if analysis_status["status_action"] == "finishing":
-                            _update_finished_status(database, analysis_status)
+                            _update_finished_status(database, hub_client, node_id, analysis_status)
                             # Update analysis status (skip iteration if analysis is not deployed)
                             analysis_status = _get_analysis_status(
                                 analysis_id, database
@@ -241,7 +236,7 @@ def status_loop(
 
 def inform_analysis_of_partner_statuses(
         database: Database,
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
         analysis_id: str,
         node_analysis_id: str,
 ) -> Optional[dict[str, str]]:
@@ -258,30 +253,23 @@ def inform_analysis_of_partner_statuses(
         API is not (yet) reachable.
     """
     node_statuses = get_partner_node_statuses(hub_client, analysis_id, node_analysis_id)
-    deployment_name = database.get_latest_deployment(analysis_id).deployment_name
-    client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['service'][0]}")
-    try:  # try except, in case analysis api is not yet ready
-        response = client.post(
-            url="/analysis/partner_status",
-            headers=[("Connection", "close")],
-            json={"partner_status": node_statuses},
-        )
-        response.raise_for_status()
+    if node_statuses:
+        deployment_name = database.get_latest_deployment(analysis_id).deployment_name
+        client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['service'][0]}")
+        try:  # try except, in case analysis api is not yet ready
+            response = client.post(
+                url="/analysis/partner_status",
+                headers=[("Connection", "close")],
+                json={"partner_status": node_statuses},
+            )
+            response.raise_for_status()
+            client.close()
+            return response.json()
+        except HTTPError as e:
+            logger.warning(
+                f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}"
+            )
         client.close()
-        return response.json()
-    except HTTPStatusError as e:
-        logger.warning(
-            f"Error whilst trying to access analysis partner_status endpoint: {repr(e)}"
-        )
-    except ConnectError as e:
-        logger.warning(
-            f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}"
-        )
-    except (TimeoutException, ConnectTimeout) as e:
-        logger.warning(
-            f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} timed out: {repr(e)}"
-        )
-    client.close()
     return None
 
 
@@ -346,18 +334,21 @@ def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
     speedy_finished = (db_status in [AnalysisStatus.STARTED.value]) and (
             int_status in [AnalysisStatus.EXECUTED.value]
     )
-    newly_ended = (
-                          db_status in [AnalysisStatus.EXECUTING.value, AnalysisStatus.FAILED.value]
-                  ) and (int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value])
+    newly_ended = (db_status in [AnalysisStatus.EXECUTING.value, AnalysisStatus.FAILED.value]) and (
+            int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]
+    )
     firmly_stuck = (db_status in [AnalysisStatus.FAILED.value]) and (
             int_status in [AnalysisStatus.STUCK.value]
     )
     was_stopped = int_status == AnalysisStatus.STOPPED.value
+    ended_though_not_deleted = (db_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]) and (
+            int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]
+    )
     if is_stuck or is_slow:
         return "unstuck"
     elif newly_running:
         return "running"
-    elif speedy_finished or newly_ended or firmly_stuck or was_stopped:
+    elif speedy_finished or newly_ended or firmly_stuck or was_stopped or ended_though_not_deleted:
         return "finishing"
     else:
         return None
@@ -389,17 +380,9 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
             response.raise_for_status()
             client.close()
             break
-        except HTTPStatusError as e:
-            logger.warning(
-                f"Error whilst retrieving internal deployment status: {repr(e)}"
-            )
-        except ConnectError as e:
+        except HTTPError as e:
             logger.warning(
                 f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}"
-            )
-        except (TimeoutException, ConnectTimeout) as e:
-            logger.warning(
-                f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} timed out: {repr(e)}"
             )
         elapsed_time = time.time() - start_time
         if elapsed_time > INTERNAL_STATUS_TIMEOUT:
@@ -437,7 +420,7 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
 
 
 def _refresh_analysis_token(
-    deployment_name: str, analysis_id: str, token_remaining_time: int
+        deployment_name: str, analysis_id: str, token_remaining_time: int
 ) -> None:
     """Push a fresh Authup token to the analysis if the current one is near expiry.
 
@@ -482,7 +465,7 @@ def _fix_stuck_status(
         analysis_status: dict[str, str],
         node_id: str,
         enable_hub_logging: bool,
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
 ) -> None:
     """Restart a stuck/slow analysis or mark it failed once ``MAX_RESTARTS`` is hit.
 
@@ -521,7 +504,7 @@ def _stream_stuck_logs(
         node_id: str,
         enable_hub_logging: bool,
         database: Database,
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
         is_slow: bool,
 ) -> None:
     """Emit a startup-error log matching the observed failure mode.
@@ -586,13 +569,29 @@ def _update_running_status(database: Database, analysis_status: dict[str, str]) 
 
 
 def _update_finished_status(
-        database: Database, analysis_status: dict[str, str]
+        database: Database,
+        hub_client: HubClient,
+        node_id: str,
+        analysis_status: dict[str, str]
 ) -> None:
-    """Record the final internal status and either delete or stop the analysis.
+    """Stop a finished analysis and drop its DB entry once the Hub agrees.
 
-    ``EXECUTED`` triggers a full delete (removing the analysis row and
-    Keycloak client); anything else triggers a stop that retains the row for
-    history.
+    ``STUCK`` is recorded as ``FAILED``; every other internal status is
+    recorded as-is. If the deployment is still running, the final status is
+    written to the DB and the analysis is stopped (Kubernetes resources torn
+    down). Its DB entry is then removed only after
+    :func:`_remove_db_entry_after_hub_status_verification` confirms the Hub
+    reflects the same final status, so the status loop keeps retrying the
+    Hub update on later passes until it sticks.
+
+    Args:
+        database: Database wrapper used for persistence.
+        hub_client: Initialized Hub core client.
+        node_id: Hub node id of this node; ``None`` skips the Hub check and
+            keeps the DB entry.
+        analysis_status: Status snapshot as produced by
+            :func:`_get_analysis_status` (needs ``analysis_id`` and
+            ``int_status``).
     """
     analysis = database.get_latest_deployment(analysis_status["analysis_id"])
     if analysis is not None:
@@ -601,19 +600,22 @@ def _update_finished_status(
         else:
             finished_status = analysis_status["int_status"]
 
-        database.update_deployment_status(analysis.deployment_name, finished_status)
-        if analysis_status["int_status"] == AnalysisStatus.EXECUTED.value:
-            logger.info("Delete deployment")
-            delete_analysis(
-                analysis_status["analysis_id"], database
-            )  # delete analysis from database
-        else:
-            logger.info("Stop deployment")
-            stop_analysis(analysis_status["analysis_id"], database)  # stop analysis
+        logger.action("Stopping deployment")
+        if database.analysis_is_running(analysis.analysis_id):
+            database.update_deployment_status(analysis.deployment_name, finished_status)
+            stop_analysis(analysis.analysis_id, database)  # stop analysis
+
+        _remove_db_entry_after_hub_status_verification(
+            database,
+            hub_client,
+            node_id,
+            analysis_status["analysis_id"],
+            finished_status
+        )
 
 
 def _set_analysis_hub_status(
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
         node_analysis_id: str,
         analysis_status: dict[str, str],
 ) -> str:
@@ -644,3 +646,65 @@ def _set_analysis_hub_status(
 
     update_hub_status(hub_client, node_analysis_id, analysis_hub_status)
     return analysis_hub_status
+
+
+def _remove_db_entry_after_hub_status_verification(
+        database: Database,
+        hub_client: HubClient,
+        node_id: str,
+        analysis_id: str,
+        analysis_status: str,
+) -> None:
+    """Delete an analysis' DB entry once the Hub reports its final status.
+
+    Polls the Hub for this node's analysis-node and compares its
+    ``execution_status`` with ``analysis_status``. The entry is deleted when
+    they match, or when the Hub returns no analysis-node at all (the
+    analysis was deleted in the Hub, so there is nothing left to sync).
+    Otherwise the status is re-pushed via :func:`update_hub_status` and the
+    check is retried with exponential backoff (``1.5 ** attempt`` seconds)
+    up to ``_MAX_FINAL_STATUS_UPDATE_REATTEMPTS`` times; if it still does not
+    match, the entry is kept and a warning is logged.
+
+    Args:
+        database: Database wrapper used for persistence.
+        hub_client: Initialized Hub core client.
+        node_id: Hub node id of this node. ``None`` (Hub unavailable) is a
+            no-op, so the DB entry is kept.
+        analysis_id: Analysis to verify and delete.
+        analysis_status: Final status expected in the Hub.
+    """
+    if node_id is not None:
+        status_validated = False
+        attempts = 0
+        while not status_validated:
+            node_analysis_id = get_node_analysis_id(
+                hub_client, analysis_id, node_id
+            )
+            if node_analysis_id is not None:
+                if node_analysis_id == []:
+                    logger.action(f"Final Hub status check successful. "
+                                  f"Deleting analysis (id={analysis_id}) from database.")
+                    database.delete_analysis(analysis_id)
+                    break
+                else:
+                    hub_status = get_node_analysis_status(hub_client, analysis_id, node_analysis_id)
+                    status_validated = analysis_status == hub_status
+                    logger.debug(f"Analysis_status={analysis_status} == retrieved hub_status={hub_status}: "
+                                 f"{status_validated}, for node_analysis_id={node_analysis_id}.")
+                    if status_validated:
+                        logger.action(f"Final Hub status check successful. "
+                                      f"Deleting analysis (id={analysis_id}) from database.")
+                        database.delete_analysis(analysis_id)
+                        break
+            if attempts < _MAX_FINAL_STATUS_UPDATE_REATTEMPTS:
+                logger.info(f"Hub status failed to update final status for analysis (id={analysis_id}). "
+                            f"Attempting to force update (attempts={attempts}).")
+                if node_analysis_id is not None:
+                    update_hub_status(hub_client, node_analysis_id, analysis_status)
+                time.sleep(1.5 ** attempts)
+            else:
+                logger.warning(f"Failed to update status of analysis (id={analysis_id}). "
+                               f"Database entry was not deleted.")
+                break
+            attempts += 1

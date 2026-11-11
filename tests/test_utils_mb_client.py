@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from httpx2 import ConnectError, HTTPStatusError, ConnectTimeout
+from httpx2 import ConnectError, HTTPStatusError, ConnectTimeout, ReadTimeout
 
 
 # ─── TestDeleteSubscription ───────────────────────────────────────────────────
@@ -72,6 +72,22 @@ class TestDeleteSubscription:
 
             from src.utils.mb_client import delete_subscription
             delete_subscription("analysis-1", "token-123")
+
+    def test_read_timeout_does_not_raise(self):
+        """Any httpx2 HTTPError is handled, not only the formerly listed subclasses."""
+        with (
+            patch("src.utils.mb_client.find_k8s_resources", return_value=["mb-service"]),
+            patch("src.utils.mb_client.Client") as mock_client_cls,
+            patch("src.utils.mb_client.logger") as mock_logger,
+        ):
+            mock_client_instance = MagicMock()
+            mock_client_instance.delete.side_effect = ReadTimeout("slow read")
+            mock_client_cls.return_value = mock_client_instance
+
+            from src.utils.mb_client import delete_subscription
+            delete_subscription("analysis-1", "token-123")
+
+        mock_logger.warning.assert_called_once()
 
     def test_raise_for_status_on_error_response_logs_warning(self):
         mock_response = self._make_mock_response(500)

@@ -756,6 +756,22 @@ class TestStreamLogs:
             message="test log message",
         )
 
+    def test_hub_log_failure_does_not_break_stream_logs(self, mock_database, mock_hub_client):
+        """Hub log errors are swallowed by create_analysis_node_log; local logging and status updates go on."""
+        from httpx2 import ReadTimeout
+        from src.resources.utils import stream_logs
+
+        log_entity = self._make_log_entity()
+        mock_database.progress_valid.return_value = False
+        mock_hub_client.create_analysis_node_log.side_effect = ReadTimeout("slow")
+
+        with patch("src.resources.utils.get_node_analysis_id", return_value="na"):
+            with patch("src.resources.utils.update_hub_status") as mock_update:
+                stream_logs(log_entity, "node-id", True, mock_database, mock_hub_client)
+
+        mock_database.update_analysis_log.assert_called_once()
+        mock_update.assert_called_once()
+
     def test_valid_progress_updates_progress_and_hub(self, mock_database, mock_hub_client):
         from src.resources.utils import stream_logs
 
