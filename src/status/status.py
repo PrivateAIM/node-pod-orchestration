@@ -128,10 +128,13 @@ def status_loop(
                 time.sleep(status_loop_interval)
                 continue
         else:
-            # If running analyzes exist, enter status loop
+            # Running analyses, plus executed ones whose deletion has not been
+            # confirmed by the Hub yet. Stopped and failed analyses are kept in
+            # the database for history and must not be finished again.
             analysis_ids = [
                 analysis_id
-                for analysis_id in database.get_analysis_ids()
+                for analysis_id in dict.fromkeys(database.get_analysis_ids())
+                if _needs_reconciliation(analysis_id, database)
             ]
             logger.action(f"Checking for running analyzes...{analysis_ids}")
             if analysis_ids:
@@ -328,6 +331,21 @@ def _get_analysis_status(
         return None
 
 
+def _needs_reconciliation(analysis_id: str, database: Database) -> bool:
+    """Return True if the status loop still has to act on an analysis.
+
+    That is the case while it is running, and once it has executed but its
+    database entry is still present (the final Hub status update failed).
+    """
+    analysis = database.get_latest_deployment(analysis_id)
+    if analysis is None:
+        return False
+    return analysis.status not in [
+        AnalysisStatus.STOPPED.value,
+        AnalysisStatus.FAILED.value,
+    ]
+
+
 def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
     """Map the (db_status, int_status) pair to a reconciliation action.
 
@@ -353,8 +371,8 @@ def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
             int_status in [AnalysisStatus.STUCK.value]
     )
     was_stopped = int_status == AnalysisStatus.STOPPED.value
-    ended_though_not_deleted = (db_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]) and (
-            int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]
+    ended_though_not_deleted = (db_status in [AnalysisStatus.EXECUTED.value]) and (
+            int_status in [AnalysisStatus.EXECUTED.value]
     )
     if is_stuck or is_slow:
         return "unstuck"
@@ -564,19 +582,26 @@ def _stream_stuck_logs(
                 )
 
     # Create and stream POAPIError logs or either slow, stuck, or kubernetes_error state to Hub
-    stream_logs(
-        CreateStartUpErrorLog(
-            analysis.restart_counter,
-            ("k8s" if is_k8s_related else "slow") if is_slow else "stuck",
-            analysis.analysis_id,
-            analysis.status,
-            k8s_error_msg=reason if is_k8s_related else "",
-        ),
-        node_id,
-        enable_hub_logging,
-        database,
-        hub_client,
-    )
+    try:
+        stream_logs(
+            CreateStartUpErrorLog(
+                analysis.restart_counter,
+                ("k8s" if is_k8s_related else "slow") if is_slow else "stuck",
+                analysis.analysis_id,
+                analysis.status,
+                k8s_error_msg=reason if is_k8s_related else "",
+            ),
+            node_id,
+            enable_hub_logging,
+            database,
+            hub_client,
+        )
+    except (HTTPError, flame_hub._exceptions.HubAPIError) as e:
+        # A rejected log (e.g. the analysis was deleted in the Hub) must not
+        # take down the status loop.
+        logger.error(
+            f"Failed to stream startup error log for analysis={analysis.analysis_id}: {repr(e)}"
+        )
 
 
 def _update_running_status(database: Database, analysis_status: dict[str, str]) -> None:

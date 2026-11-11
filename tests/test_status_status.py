@@ -18,6 +18,8 @@ from src.status.status import (
     _fix_stuck_status,
     _get_analysis_status,
     _get_internal_deployment_status,
+    _needs_reconciliation,
+    _stream_stuck_logs,
     _refresh_analysis_token,
     _set_analysis_hub_status,
     _update_finished_status,
@@ -64,9 +66,35 @@ class TestDecideStatusAction:
         # int_status=STOPPED
         assert _decide_status_action(AnalysisStatus.EXECUTING.value, AnalysisStatus.STOPPED.value) == "finishing"
 
+    def test_executed_not_deleted_returns_finishing(self):
+        # db=EXECUTED + int=EXECUTED: deletion has to be retried
+        assert _decide_status_action(AnalysisStatus.EXECUTED.value, AnalysisStatus.EXECUTED.value) == "finishing"
+
     def test_no_matching_condition_returns_none(self):
         # db=EXECUTING + int=EXECUTING: no condition matches
         assert _decide_status_action(AnalysisStatus.EXECUTING.value, AnalysisStatus.EXECUTING.value) is None
+
+
+# ─── TestNeedsReconciliation ──────────────────────────────────────────────────
+
+class TestNeedsReconciliation:
+    @pytest.mark.parametrize(
+        "status, expected",
+        [
+            (AnalysisStatus.STARTED.value, True),
+            (AnalysisStatus.EXECUTING.value, True),
+            (AnalysisStatus.EXECUTED.value, True),
+            (AnalysisStatus.STOPPED.value, False),
+            (AnalysisStatus.FAILED.value, False),
+        ],
+    )
+    def test_by_latest_status(self, status, expected, mock_database, sample_analysis_db):
+        mock_database.get_latest_deployment.return_value = sample_analysis_db(status=status)
+        assert _needs_reconciliation("analysis_id", mock_database) is expected
+
+    def test_no_deployment_returns_false(self, mock_database):
+        mock_database.get_latest_deployment.return_value = None
+        assert _needs_reconciliation("analysis_id", mock_database) is False
 
 
 # ─── TestGetAnalysisStatus ────────────────────────────────────────────────────
@@ -280,6 +308,23 @@ class TestFixStuckStatus:
         _fix_stuck_status(mock_database, analysis_status, "node-id", False, mock_hub_client)
 
         mock_unstuck.assert_not_called()
+        mock_stream.assert_called_once()
+
+
+# ─── TestStreamStuckLogs ──────────────────────────────────────────────────────
+
+class TestStreamStuckLogs:
+    @patch("src.status.status.stream_logs")
+    def test_hub_api_error_is_swallowed(
+        self, mock_stream, mock_database, mock_hub_client, sample_analysis_db
+    ):
+        from flame_hub._exceptions import HubAPIError
+
+        mock_stream.side_effect = HubAPIError("Property analysisId is invalid", request=MagicMock())
+        analysis = sample_analysis_db(status=AnalysisStatus.EXECUTING.value)
+
+        _stream_stuck_logs(analysis, "node-id", True, mock_database, mock_hub_client, is_slow=False)
+
         mock_stream.assert_called_once()
 
 
