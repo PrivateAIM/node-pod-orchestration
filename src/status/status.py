@@ -346,15 +346,16 @@ def _decide_status_action(db_status: str, int_status: str) -> Optional[str]:
     speedy_finished = (db_status in [AnalysisStatus.STARTED.value]) and (
             int_status in [AnalysisStatus.EXECUTED.value]
     )
-    newly_ended = (
-                          db_status in [AnalysisStatus.EXECUTING.value, AnalysisStatus.FAILED.value]
-                  ) and (int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value])
+    newly_ended = (db_status in [AnalysisStatus.EXECUTING.value, AnalysisStatus.FAILED.value]) and (
+            int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]
+    )
     firmly_stuck = (db_status in [AnalysisStatus.FAILED.value]) and (
             int_status in [AnalysisStatus.STUCK.value]
     )
     was_stopped = int_status == AnalysisStatus.STOPPED.value
-    ended_though_not_deleted = ((db_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]) and
-                                (int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]))
+    ended_though_not_deleted = (db_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]) and (
+            int_status in [AnalysisStatus.EXECUTED.value, AnalysisStatus.FAILED.value]
+    )
     if is_stuck or is_slow:
         return "unstuck"
     elif newly_running:
@@ -608,7 +609,7 @@ def _update_finished_status(
 
         database.update_deployment_status(analysis.deployment_name, finished_status)
         if analysis_status["int_status"] == AnalysisStatus.EXECUTED.value:
-            logger.info("Delete deployment")
+            logger.action("Deleting deployment")
             delete_analysis(
                 analysis_status["analysis_id"],
                 hub_client,
@@ -617,7 +618,7 @@ def _update_finished_status(
                 finished_status
             )  # delete analysis from database
         else:
-            logger.info("Stop deployment")
+            logger.action("Stopping deployment")
             stop_analysis(analysis_status["analysis_id"], database)  # stop analysis
 
 

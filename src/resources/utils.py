@@ -396,7 +396,10 @@ def delete_analysis(
                         {analysis_id: final_status},
                         hub_client,
                         node_analysis_id)[analysis_id]
+                    logger.debug(f"Retrieved hub_status={hub_status} for node_analysis_id={node_analysis_id}.")
                     if hub_status:
+                        logger.action(f"Final Hub status check successful. "
+                                    f"Deleting analysis (id={analysis_id}) from database.")
                         database.delete_analysis(analysis_id)
                         break
                 if attempts < _MAX_FINAL_STATUS_UPDATE_REATTEMPTS:
@@ -569,6 +572,7 @@ def clean_up_the_rest(
             resources = find_k8s_resources(
                 res, "label", selector_arg, namespace=namespace
             )
+            logger.debug(f"Found {len(resources)} resources for {selector_arg} during cleanup")
             zombie_resources = [
                 r
                 for r in resources
@@ -576,6 +580,7 @@ def clean_up_the_rest(
                    and (resource_name_to_analysis(r) not in known_analysis_ids)
             ]
             for z in zombie_resources:
+                logger.debug(f"Deleting {z} resource")
                 delete_k8s_resource(z, res, namespace=namespace)
             result_str += (
                     f"Deleted {len(zombie_resources)} zombie "

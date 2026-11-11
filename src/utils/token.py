@@ -88,9 +88,7 @@ def get_analysis_token(analysis_id: str) -> Optional[str]:
     try:
         credentials = hub_client.get_analysis_client_credentials(analysis_id)
     except (
-        HTTPStatusError,
-        ConnectError,
-        ConnectTimeout,
+        HTTPError,
         flame_hub._exceptions.HubAPIError,
         AttributeError,
     ) as e:
