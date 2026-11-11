@@ -12,7 +12,8 @@ import time
 from typing import Optional, Union
 
 from fastapi import HTTPException
-from flame_hub import CoreClient
+
+from flame_hub import CoreClient as HubClient
 
 from src.resources.database.entity import Database
 from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
@@ -30,7 +31,7 @@ from src.utils.hub_client import (
     init_hub_client_and_update_hub_status,
     update_hub_status,
     get_node_analysis_id,
-    get_node_analysis_status
+    create_analysis_node_log
 )
 from src.utils.other import resource_name_to_analysis
 from src.utils.po_logging import get_logger
@@ -46,7 +47,7 @@ _MAX_UNSTUCK_REATTEMPTS = 10
 def create_analysis(
         body: Union[CreateAnalysis, str],
         database: Database,
-        hub_client: Optional[CoreClient],
+        hub_client: Optional[HubClient],
         node_id: Optional[str],
         namespace: str = "default",
 ) -> dict[str, str]:
@@ -133,7 +134,7 @@ def create_analysis(
 
 
 def refresh_registry_credentials(
-        hub_client: Optional[CoreClient],
+        hub_client: Optional[HubClient],
         node_id: Optional[str],
         namespace: str = "default",
 ) -> bool:
@@ -385,7 +386,7 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]
 def unstuck_analysis_deployments(
         analysis_id: str,
         database: Database,
-        hub_client: Optional[CoreClient],
+        hub_client: Optional[HubClient],
         node_id: Optional[str],
 ) -> None:
     """Stop and restart an analysis to recover from a stuck/slow state.
@@ -426,7 +427,7 @@ def unstuck_analysis_deployments(
 def cleanup(
         cleanup_type: str,
         database: Database,
-        hub_client: CoreClient,
+        hub_client: HubClient,
         namespace: str = "default",
 ) -> dict[str, str]:
     """Run one or more targeted cleanup passes.
@@ -494,7 +495,7 @@ def cleanup(
 
 
 def clean_up_the_rest(
-        database: Database, hub_client: CoreClient, namespace: str = "default"
+        database: Database, hub_client: HubClient, namespace: str = "default"
 ) -> str:
     """Delete orphaned Kubernetes resources whose analysis is no longer tracked.
 
@@ -560,7 +561,7 @@ def stream_logs(
         node_id: str,
         enable_hub_logging: bool,
         database: Database,
-        hub_core_client: CoreClient,
+        hub_core_client: HubClient,
 ) -> None:
     """Persist a log line and mirror status/progress into the FLAME Hub.
 
@@ -586,12 +587,13 @@ def stream_logs(
 
     # log to hub
     if enable_hub_logging:
-        hub_core_client.create_analysis_node_log(
-            analysis_id=log_entity.analysis_id,
-            node_id=node_id,
-            status=log_entity.status,
-            level=log_entity.log_type,
-            message=log_entity.log,
+        create_analysis_node_log(
+            hub_core_client,
+            log_entity.analysis_id,
+            node_id,
+            log_entity.status,
+            log_entity.log_type,
+            log_entity.log
         )
 
     node_analysis_id = get_node_analysis_id(
@@ -616,7 +618,7 @@ def stream_logs(
 
 def _validate_analyses_with_hub(
         analysis_ids: list[str],
-        hub_client: CoreClient
+        hub_client: HubClient
 ) -> list[str]:
     """Keep only the analysis ids the Hub still knows about on this node.
 

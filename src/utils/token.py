@@ -9,16 +9,15 @@ an analysis container.
 import os
 from typing import Optional
 
-from httpx2 import ConnectError, ConnectTimeout, HTTPError, HTTPStatusError
+from httpx2 import HTTPError
 
-import flame_hub
-
-from src.utils.hub_client import init_hub_client, init_proxied_http_client
+from src.utils.hub_client import init_hub_client, init_proxied_http_client, get_analysis_client_credentials
 from src.utils.other import extract_hub_envs
 from src.utils.po_logging import get_logger
 
 
 logger = get_logger()
+
 
 _AUTHUP_TOKEN_URL = os.getenv("AUTHUP_TOKEN_URL")
 
@@ -85,17 +84,7 @@ def get_analysis_token(analysis_id: str) -> Optional[str]:
         )
         return None
 
-    try:
-        credentials = hub_client.get_analysis_client_credentials(analysis_id)
-    except (
-        HTTPError,
-        flame_hub._exceptions.HubAPIError,
-        AttributeError,
-    ) as e:
-        logger.error(
-            f"Failed to retrieve analysis client credentials from Hub for {analysis_id}: {repr(e)}"
-        )
-        return None
+    credentials = get_analysis_client_credentials(hub_client, analysis_id)
 
     if credentials is None or not credentials.secret:
         logger.error(

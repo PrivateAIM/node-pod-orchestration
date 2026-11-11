@@ -14,10 +14,14 @@ from pathlib import Path
 from functools import lru_cache
 from json import JSONDecodeError
 from typing import Optional, Union
-from httpx2 import Client, HTTPError, HTTPTransport, HTTPStatusError, ConnectError, ConnectTimeout
+from httpx2 import Client, HTTPError, HTTPTransport
 import truststore
 
-import flame_hub
+from flame_hub import CoreClient as HubClient
+from flame_hub._exceptions import HubAPIError
+from flame_hub.auth import ClientAuth
+from flame_hub.models import NodeRegistryCredentials
+
 
 from src.status.constants import AnalysisStatus
 from src.utils.po_logging import get_logger
@@ -34,7 +38,7 @@ def init_hub_client(
         hub_auth: str,
         http_proxy: str,
         https_proxy: str,
-) -> Optional[flame_hub.CoreClient]:
+) -> Optional[HubClient]:
     """Authenticate and build a :class:`flame_hub.CoreClient` talking to the FLAME Hub.
 
     Honors the ``PO_HTTP_PROXY`` / ``PO_HTTPS_PROXY`` and ``EXTRA_CA_CERTS``
@@ -56,14 +60,14 @@ def init_hub_client(
     proxies = get_proxy_mounts(http_proxy, https_proxy, ssl_ctx)
     try:
         _client = Client(base_url=hub_auth, mounts=proxies, verify=ssl_ctx)
-        hub_client = flame_hub.auth.ClientAuth(
+        hub_client = ClientAuth(
             client_id=client_id, client_secret=client_secret, client=_client
         )
 
         client = Client(
             base_url=hub_url_core, mounts=proxies, auth=hub_client, verify=ssl_ctx
         )
-        hub_client = flame_hub.CoreClient(client=client)
+        hub_client = HubClient(client=client)
     except Exception as e:
         hub_client = None
         logger.error(
@@ -132,7 +136,7 @@ def get_ssl_context() -> ssl.SSLContext:
 
 
 def get_node_id_by_client(
-        hub_client: flame_hub.CoreClient, client_id: str
+        hub_client: HubClient, client_id: str
 ) -> Optional[str]:
     """Look up the Hub node id associated with an OAuth2 client id.
 
@@ -146,10 +150,9 @@ def get_node_id_by_client(
     try:
         node_id_object = hub_client.find_nodes(filter={"client_id": client_id})[0]
     except (
-            HTTPStatusError,
+            HTTPError,
             JSONDecodeError,
-            ConnectTimeout,
-            flame_hub._exceptions.HubAPIError,
+            HubAPIError,
             AttributeError,
     ) as e:
         logger.error(
@@ -164,8 +167,8 @@ class RegistryCredentialsError(RuntimeError):
 
 
 def get_registry_credentials(
-        hub_client: Optional[flame_hub.CoreClient], node_id: Optional[str]
-) -> flame_hub.models.NodeRegistryCredentials:
+        hub_client: Optional[HubClient], node_id: Optional[str]
+) -> NodeRegistryCredentials:
     """Resolve the Harbor credentials of this node's registry project from the Hub.
 
     Reads ``GET /nodes/{node_id}/registry/credentials``, which the Hub only
@@ -194,7 +197,7 @@ def get_registry_credentials(
     except (
         HTTPError,
         JSONDecodeError,
-        flame_hub._exceptions.HubAPIError,
+        HubAPIError,
     ) as e:
         raise RegistryCredentialsError(
             f"Failed to retrieve registry credentials of node {node_id} from the Hub: {repr(e)}"
@@ -214,7 +217,7 @@ def get_registry_credentials(
 
 
 def get_node_analysis_id(
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
         analysis_id: str,
         node_id_object_id: Optional[str] = None,
 ) -> Optional[Union[str, list[str]]]:
@@ -238,7 +241,7 @@ def get_node_analysis_id(
             node_analyzes = hub_client.find_analysis_nodes(
                 filter={"analysis_id": analysis_id}
             )
-    except (HTTPError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
+    except (HTTPError, JSONDecodeError, HubAPIError, AttributeError) as e:
         logger.error(
             f"Failed to retrieve node analyzes from hub python client: {repr(e)}"
         )
@@ -254,7 +257,7 @@ def get_node_analysis_id(
 
 
 def update_hub_status(
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
         node_analysis_id: str,
         run_status: str,
         run_progress: Optional[int] = None,
@@ -284,9 +287,9 @@ def update_hub_status(
                 execution_progress=run_progress,
             )
     except (
-            HTTPStatusError,
-            ConnectError,
-            flame_hub._exceptions.HubAPIError,
+            HTTPError,
+            JSONDecodeError,
+            HubAPIError,
             AttributeError,
     ) as e:
         logger.error(
@@ -295,7 +298,8 @@ def update_hub_status(
 
 
 def get_analysis_node_statuses(
-        hub_client: flame_hub.CoreClient, analysis_id: str
+        hub_client: HubClient,
+        analysis_id: str
 ) -> Optional[dict[str, str]]:
     """Return the execution status of every node participating in an analysis.
 
@@ -311,7 +315,7 @@ def get_analysis_node_statuses(
         node_analyzes = hub_client.find_analysis_nodes(
             filter={"analysis_id": analysis_id}
         )
-    except (HTTPStatusError, flame_hub._exceptions.HubAPIError, AttributeError) as e:
+    except (HTTPError, JSONDecodeError, HubAPIError, AttributeError) as e:
         logger.error(
             f"Failed to retrieve node analyzes from hub python client: {repr(e)}"
         )
@@ -320,7 +324,7 @@ def get_analysis_node_statuses(
 
 
 def get_node_analysis_status(
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
         analysis_id: str,
         node_analysis_id: str
 ) -> Optional[str]:
@@ -344,7 +348,7 @@ def get_node_analysis_status(
 
 
 def get_partner_node_statuses(
-        hub_client: flame_hub.CoreClient, analysis_id: str, node_analysis_id: str
+        hub_client: HubClient, analysis_id: str, node_analysis_id: str
 ) -> Optional[dict[str, str]]:
     """Return :func:`get_analysis_node_statuses` with the local node filtered out.
 
@@ -399,3 +403,31 @@ def init_hub_client_and_update_hub_status(analysis_id: str, status: str) -> None
             )
     else:
         logger.error("Failed to initialize hub client. Cannot update status.")
+
+
+def create_analysis_node_log(
+        hub_client: HubClient,
+        analysis_id: str,
+        node_id: str,
+        status: str,
+        log_type: str,
+        log: str,
+) -> None:
+    try:
+        hub_client.create_analysis_node_log(
+            analysis_id=analysis_id,
+            node_id=node_id,
+            status=status,
+            level=log_type,
+            message=log,
+        )
+    except (HTTPError, JSONDecodeError, HubAPIError) as e:
+        logger.error(f"Failed to create analysis node log: {repr(e)}")
+
+
+def get_analysis_client_credentials(hub_client: HubClient, analysis_id: str) -> Optional[str]:
+    try:
+        return hub_client.get_analysis_client_credentials(analysis_id)
+    except (HTTPError, JSONDecodeError, HubAPIError) as e:
+        logger.error(f"Failed to get analysis client credentials: {repr(e)}")
+        return None

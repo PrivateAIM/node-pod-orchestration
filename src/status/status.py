@@ -11,16 +11,9 @@ up analyses that have finished.
 import time
 import os
 from typing import Optional
-from httpx2 import (
-    Client,
-    HTTPError,
-    HTTPStatusError,
-    ConnectError,
-    ConnectTimeout,
-    TimeoutException,
-)
+from httpx2 import Client, HTTPError
 
-import flame_hub
+from flame_hub import CoreClient as HubClient
 
 from src.resources.log.entity import CreateStartUpErrorLog
 from src.k8s.kubernetes import PORTS, get_pod_status
@@ -243,7 +236,7 @@ def status_loop(
 
 def inform_analysis_of_partner_statuses(
         database: Database,
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
         analysis_id: str,
         node_analysis_id: str,
 ) -> Optional[dict[str, str]]:
@@ -272,17 +265,9 @@ def inform_analysis_of_partner_statuses(
             response.raise_for_status()
             client.close()
             return response.json()
-        except HTTPStatusError as e:
-            logger.warning(
-                f"Error whilst trying to access analysis partner_status endpoint: {repr(e)}"
-            )
-        except ConnectError as e:
+        except HTTPError as e:
             logger.warning(
                 f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}"
-            )
-        except (TimeoutException, ConnectTimeout) as e:
-            logger.warning(
-                f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} timed out: {repr(e)}"
             )
         client.close()
     return None
@@ -395,18 +380,8 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
             response.raise_for_status()
             client.close()
             break
-        except HTTPStatusError as e:
-            logger.warning(
-                f"Error whilst retrieving internal deployment status: {repr(e)}"
-            )
-        except ConnectError as e:
-            logger.warning(
-                f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}"
-            )
-        except (TimeoutException, ConnectTimeout) as e:
-            logger.warning(
-                f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} timed out: {repr(e)}"
-            )
+        except HTTPError as e:
+            f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}"
         elapsed_time = time.time() - start_time
         if elapsed_time > INTERNAL_STATUS_TIMEOUT:
             logger.error(
@@ -488,7 +463,7 @@ def _fix_stuck_status(
         analysis_status: dict[str, str],
         node_id: str,
         enable_hub_logging: bool,
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
 ) -> None:
     """Restart a stuck/slow analysis or mark it failed once ``MAX_RESTARTS`` is hit.
 
@@ -527,7 +502,7 @@ def _stream_stuck_logs(
         node_id: str,
         enable_hub_logging: bool,
         database: Database,
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
         is_slow: bool,
 ) -> None:
     """Emit a startup-error log matching the observed failure mode.
@@ -593,7 +568,7 @@ def _update_running_status(database: Database, analysis_status: dict[str, str]) 
 
 def _update_finished_status(
         database: Database,
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
         node_id: str,
         analysis_status: dict[str, str]
 ) -> None:
@@ -625,7 +600,7 @@ def _update_finished_status(
 
 
 def _set_analysis_hub_status(
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
         node_analysis_id: str,
         analysis_status: dict[str, str],
 ) -> str:
@@ -660,7 +635,7 @@ def _set_analysis_hub_status(
 
 def _remove_db_entry_after_hub_status_verification(
         database: Database,
-        hub_client: flame_hub.CoreClient,
+        hub_client: HubClient,
         node_id: str,
         analysis_id: str,
         analysis_status: str,
