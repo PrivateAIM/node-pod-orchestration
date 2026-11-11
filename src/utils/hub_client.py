@@ -340,8 +340,6 @@ def get_node_analysis_status(
         for k, v in analysis_node_statuses.items():
             if k == node_analysis_id:
                 return v
-    elif analysis_node_statuses == {}:
-        return ''
     return None
 
 

@@ -472,7 +472,7 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            return delete_analysis("all", self.hub_client, self.database, self.node_id)
+            return delete_analysis("all", self.database)
         except Exception as e:
             logger.error(f"Error deleting ALL analyzes: {repr(e)}")
             raise HTTPException(
@@ -492,7 +492,7 @@ class PodOrchestrationAPI:
             HTTPException: 500 on any downstream failure (details in logs).
         """
         try:
-            return delete_analysis(analysis_id, self.hub_client, self.database, self.node_id)
+            return delete_analysis(analysis_id, self.database)
         except Exception as e:
             logger.error(f"Error deleting analysis: {repr(e)}")
             raise HTTPException(

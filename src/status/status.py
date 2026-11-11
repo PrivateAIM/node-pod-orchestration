@@ -28,7 +28,6 @@ from src.resources.database.entity import Database, AnalysisDB
 from src.resources.utils import (
     unstuck_analysis_deployments,
     stop_analysis,
-    delete_analysis,
     stream_logs,
     clean_up_the_rest,
     refresh_registry_credentials,
@@ -45,6 +44,7 @@ from src.utils.hub_client import (
     get_node_analysis_id,
     get_partner_node_statuses,
     update_hub_status,
+    get_node_analysis_status,
 )
 from src.utils.other import extract_hub_envs
 from src.utils.token import get_analysis_token
@@ -52,6 +52,9 @@ from src.utils.po_logging import get_logger
 
 
 logger = get_logger()
+
+
+_MAX_FINAL_STATUS_UPDATE_REATTEMPTS = 5
 
 
 def status_loop(
@@ -607,19 +610,18 @@ def _update_finished_status(
         else:
             finished_status = analysis_status["int_status"]
 
-        database.update_deployment_status(analysis.deployment_name, finished_status)
-        if analysis_status["int_status"] == AnalysisStatus.EXECUTED.value:
-            logger.action("Deleting deployment")
-            delete_analysis(
-                analysis_status["analysis_id"],
-                hub_client,
-                database,
-                node_id,
-                finished_status
-            )  # delete analysis from database
-        else:
-            logger.action("Stopping deployment")
-            stop_analysis(analysis_status["analysis_id"], database)  # stop analysis
+        logger.action("Stopping deployment")
+        if database.analysis_is_running(analysis.analysis_id):
+            database.update_deployment_status(analysis.deployment_name, finished_status)
+            stop_analysis(analysis.analysis_id, database)  # stop analysis
+
+        _remove_db_entry_after_hub_status_verification(
+            database,
+            hub_client,
+            node_id,
+            analysis_status["analysis_id"],
+            finished_status
+        )
 
 
 def _set_analysis_hub_status(
@@ -654,3 +656,46 @@ def _set_analysis_hub_status(
 
     update_hub_status(hub_client, node_analysis_id, analysis_hub_status)
     return analysis_hub_status
+
+
+def _remove_db_entry_after_hub_status_verification(
+        database: Database,
+        hub_client: flame_hub.CoreClient,
+        node_id: str,
+        analysis_id: str,
+        analysis_status: str,
+) -> None:
+    if node_id is not None:
+        status_validated = False
+        attempts = 0
+        while not status_validated:
+            node_analysis_id = get_node_analysis_id(
+                hub_client, analysis_id, node_id
+            )
+            if node_analysis_id is not None:
+                if node_analysis_id == []:
+                    logger.action(f"Final Hub status check successful. "
+                                  f"Deleting analysis (id={analysis_id}) from database.")
+                    database.delete_analysis(analysis_id)
+                    break
+                else:
+                    hub_status = get_node_analysis_status(hub_client, analysis_id, node_analysis_id)
+                    status_validated = analysis_status == hub_status
+                    logger.debug(f"Analysis_status={analysis_status} == retrieved hub_status={hub_status}: "
+                                 f"{status_validated}, for node_analysis_id={node_analysis_id}.")
+                    if status_validated:
+                        logger.action(f"Final Hub status check successful. "
+                                      f"Deleting analysis (id={analysis_id}) from database.")
+                        database.delete_analysis(analysis_id)
+                        break
+            if attempts < _MAX_FINAL_STATUS_UPDATE_REATTEMPTS:
+                logger.info(f"Hub status failed to update final status for analysis (id={analysis_id}). "
+                            f"Attempting to force update (attempts={attempts}).")
+                if node_analysis_id is not None:
+                    update_hub_status(hub_client, node_analysis_id, analysis_status)
+                time.sleep(1.5 ** attempts)
+            else:
+                logger.warning(f"Failed to update status of analysis (id={analysis_id}). "
+                               f"Database entry was not deleted.")
+                break
+            attempts += 1
