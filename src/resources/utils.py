@@ -534,7 +534,7 @@ def clean_up_the_rest(
         "deployment": ["component=flame-analysis", "component=flame-analysis-nginx"],
         "pod": ["component=flame-analysis", "component=flame-analysis-nginx"],
         "service": ["component=flame-analysis", "component=flame-analysis-nginx"],
-        "networkpolicy": ["component=flame-nginx-to-analysis-policy"],
+        "networkpolicy": ["component=flame-nginx-to-analysis-policy", "component=flame-analysis-to-nginx-policy"],
         "configmap": ["component=flame-nginx-analysis-config-map"],
     }.items():
         for selector_arg in selector_args:

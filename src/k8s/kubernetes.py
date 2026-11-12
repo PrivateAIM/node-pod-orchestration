@@ -148,10 +148,12 @@ def create_analysis_deployment(
     env: Optional[dict[str, str]] = None,
     namespace: str = "default",
 ) -> list[str]:
-    """Deploy an analysis pod along with its nginx sidecar, service, and network policy.
+    """Deploy an analysis pod along with its nginx sidecar, services, and network policies.
 
-    Creates the analysis ``Deployment`` using the Harbor pull secret, exposes
-    it via a ``Service``, and then provisions the companion nginx deployment
+    First installs the network policies isolating the analysis and its nginx,
+    then creates the nginx service whose cluster IP is pinned into the analysis
+    pod's hosts file. Creates the analysis ``Deployment`` using the Harbor pull
+    secret, exposes it via a ``Service``, and then provisions the companion nginx deployment
     that reverse-proxies egress to node-local services. Waits 3 seconds after
     creating the nginx deployment so the analysis pods are registered before
     they are listed.
@@ -169,8 +171,18 @@ def create_analysis_deployment(
     app_client = client.AppsV1Api()
     containers = []
 
-    # the nginx service is created up front so that its cluster IP can be pinned into the analysis pod
     nginx_name = f"nginx-{name}"
+    # the analysis-to-nginx network policy is created up front in order to instantly isolate the analysis
+    _create_analysis_egress_network_policy(name, nginx_name, namespace)
+    # the nginx-to-analysis network policy is created up front in order to instantly isolate access to the nginx
+    service_names = [
+        ("component", "flame-po"),
+        ("component", "flame-message-broker"),
+        ("app", name),
+        # TODO: ("component", "flame-nextflow-launcher"),
+    ]
+    _create_nginx_ingress_network_policy(name, nginx_name, service_names, namespace)
+    # the nginx service is created up front so that its cluster IP can be pinned into the analysis pod
     nginx_service = _create_service(
         nginx_name,
         ports=PORTS["service"],
@@ -178,7 +190,7 @@ def create_analysis_deployment(
         meta_data_labels={"app": nginx_name, "component": "flame-analysis-nginx"},
         namespace=namespace,
     )
-    host_aliases = _build_nginx_host_aliases(nginx_name, nginx_service, namespace)
+    nginx_host_aliases = _build_host_aliases(nginx_name, nginx_service, namespace)
 
     container = client.V1Container(
         name=name,
@@ -201,7 +213,7 @@ def create_analysis_deployment(
     depl_selector = client.V1LabelSelector(match_labels=labels)
     depl_pod_spec = client.V1PodSpec(
         containers=containers,
-        host_aliases=host_aliases,
+        host_aliases=nginx_host_aliases,
         image_pull_secrets=[
             client.V1LocalObjectReference(name="flame-harbor-credentials"),
         ],
@@ -239,7 +251,7 @@ def delete_deployment(deployment_name: str, namespace: str = "default") -> None:
     """Tear down an analysis and its companion nginx resources.
 
     Deletes both the analysis and ``nginx-{name}`` deployments with their
-    services, as well as the associated network policy and nginx ConfigMap.
+    services, as well as the associated network policies and nginx ConfigMap.
     Missing resources are logged and ignored.
 
     Args:
@@ -253,7 +265,8 @@ def delete_deployment(deployment_name: str, namespace: str = "default") -> None:
     for name in [deployment_name, f"nginx-{deployment_name}"]:
         _delete_k8s_deployment(app_client, name, namespace)
         _delete_service(name, namespace)
-    _delete_network_policy(f"nginx-to-{deployment_name}-policy", namespace)
+    _delete_network_policy(f"egress-{deployment_name}-to-nginx-policy", namespace)
+    _delete_network_policy(f"ingress-nginx-to-{deployment_name}-policy", namespace)
     _delete_config_map(f"nginx-{deployment_name}-config", namespace)
 
 
@@ -351,30 +364,40 @@ def get_pod_status(
         return None
 
 
-def _build_nginx_host_aliases(
-    nginx_name: str, nginx_service: client.V1Service, namespace: str = "default"
+def _build_host_aliases(
+    service_name: str, service: client.V1Service, namespace: str = "default"
 ) -> list[client.V1HostAlias]:
-    """Map the nginx service name onto its cluster IP for the analysis pod's hosts file."""
-    cluster_ip = (
-        nginx_service.spec.cluster_ip if nginx_service.spec is not None else None
-    )
+    """Map a service's (namespaced) hostnames onto its cluster IP for a pod's hosts file.
+
+    Args:
+        service_name: Name of the service to alias.
+        service: Created service object providing the cluster IP.
+        namespace: Namespace of the service.
+
+    Returns:
+        A single-element list containing the host alias.
+
+    Raises:
+        ValueError: If the service has no cluster IP.
+    """
+    cluster_ip = service.spec.cluster_ip if service.spec is not None else None
     if (not cluster_ip) or (cluster_ip == "None"):
         logger.error(
-            f"Service {nginx_name} in namespace {namespace} was created without a cluster IP, so it cannot "
-            f"be pinned into the analysis pod (cluster_ip={cluster_ip})."
+            f"Service {service_name} in namespace {namespace} was created without a cluster IP, so it cannot "
+            f"be pinned as an alias (cluster_ip={cluster_ip})."
         )
         raise ValueError(
-            f"Service {nginx_name} was created without a cluster IP (see logs)"
+            f"Service {service_name} was created without a cluster IP (see logs)"
         )
 
     return [
         client.V1HostAlias(
             ip=cluster_ip,
             hostnames=[
-                nginx_name,
-                f"{nginx_name}.{namespace}",
-                f"{nginx_name}.{namespace}.svc",
-                f"{nginx_name}.{namespace}.svc.cluster.local",
+                service_name,
+                f"{service_name}.{namespace}",
+                f"{service_name}.{namespace}.svc",
+                f"{service_name}.{namespace}.svc.cluster.local",
             ],
         )
     ]
@@ -424,8 +447,7 @@ def _create_analysis_nginx_deployment(
     """Deploy the nginx reverse-proxy sidecar for an analysis.
 
     Builds the nginx ConfigMap, starts the ``nginx-{analysis_name}`` deployment
-    with a liveness probe on ``/healthz``, creates its service, and installs
-    the network policy locking egress/ingress to the analysis pod.
+    with a liveness probe on ``/healthz``, and creates its service.
 
     Args:
         analysis_name: Name of the analysis deployment this nginx sidecar fronts.
@@ -444,7 +466,7 @@ def _create_analysis_nginx_deployment(
         analysis_name=analysis_name,
         nginx_name=nginx_name,
         analysis_env=analysis_env,
-        namespace=namespace,
+        namespace=namespace
     )
 
     liveness_probe = client.V1Probe(
@@ -506,9 +528,6 @@ def _create_analysis_nginx_deployment(
         async_req=False, namespace=namespace, body=depl_body
     )
 
-    time.sleep(0.1)
-    _create_analysis_network_policy(analysis_name, nginx_name, namespace)
-
     return nginx_name
 
 
@@ -521,12 +540,12 @@ def _create_nginx_config_map(
     """Build and create the nginx ConfigMap scoped to a single analysis.
 
     Discovers the message broker, pod orchestration, hub adapter, kong, and
-    storage services at runtime, waits until each of their pods has an IP, and
-    renders an ``nginx.conf`` that whitelists the analysis pod for egress and
-    the message broker / pod orchestrator for ingress.
+    storage services at runtime and renders an ``nginx.conf`` proxying the
+    analysis' egress to them and ingress via ``/analysis`` to the analysis.
+    Access control is enforced by network policies.
 
     Args:
-        analysis_name: Name of the analysis deployment.
+        analysis_name: Name of the analysis deployment (ingress target).
         nginx_name: Name of the nginx deployment (used to prefix the config
             map name).
         analysis_env: Analysis config containing ``ANALYSIS_ID`` and
@@ -537,8 +556,7 @@ def _create_nginx_config_map(
         Name of the created ConfigMap (``{nginx_name}-config``).
 
     Raises:
-        ValueError: If ``analysis_env`` is ``None`` or the pod orchestration
-            pod cannot be found.
+        ValueError: If ``analysis_env`` is ``None``.
     """
     if analysis_env is None:
         logger.error(
@@ -549,65 +567,16 @@ def _create_nginx_config_map(
         )
     core_client = client.CoreV1Api()
 
-    # get the service name of the message broker
-    message_broker_service_name = find_k8s_resources(
-        "service", "label", "component=flame-message-broker", namespace=namespace
-    )[0]
+    # get the service names
+    message_broker_service_name, po_service_name, hub_adapter_service_name, storage_service_name = [
+        find_k8s_resources(
+            "service",
+            "label",
+            f"component={label}",
+            namespace=namespace
+        )[0] for label in ["flame-message-broker", "flame-po", "flame-hub-adapter", "flame-storage-service"]
+    ]
 
-    # await and get the pod id and name of the message broker
-    message_broker_pod_name = find_k8s_resources(
-        "pod", "label", "component=flame-message-broker", namespace=namespace
-    )[0]
-    message_broker_ip = None
-    while message_broker_ip is None:
-        message_broker_pod = core_client.read_namespaced_pod(
-            name=message_broker_pod_name, namespace=namespace
-        )
-        if message_broker_pod is not None:
-            message_broker_ip = message_broker_pod.status.pod_ip
-        else:
-            time.sleep(1)
-
-    # get the service name of the pod orchestrator
-    po_service_name = find_k8s_resources(
-        "service", "label", "component=flame-po", namespace=namespace
-    )[0]
-
-    # await and get the pod ip and name of the pod orchestrator
-    pod_orchestration_name = find_k8s_resources(
-        "pod", "label", "component=flame-po", namespace=namespace
-    )[0]
-    pod_orchestration_ip = None
-    while pod_orchestration_ip is None:
-        try:
-            pod_orchestration_pod = core_client.read_namespaced_pod(
-                name=pod_orchestration_name, namespace=namespace
-            )
-        except Exception as e:
-            raise ValueError(
-                f"Could not find pod orchestration pod with name {pod_orchestration_name} in namespace {namespace}. "
-            ) from e
-        if pod_orchestration_pod is not None:
-            pod_orchestration_ip = pod_orchestration_pod.status.pod_ip
-        else:
-            time.sleep(1)
-
-    # await and get analysis pod ip
-    analysis_ip = None
-    while analysis_ip is None:
-        pod_list_object = core_client.list_namespaced_pod(
-            label_selector=f"app={analysis_name}", watch=False, namespace=namespace
-        )
-
-        if len(pod_list_object.items) > 0:
-            analysis_ip = pod_list_object.items[0].status.pod_ip
-        else:
-            time.sleep(1)
-
-    # get the name of the hub adapter, kong proxy, and storage service
-    hub_adapter_service_name = find_k8s_resources(
-        "service", "label", "component=flame-hub-adapter", namespace=namespace
-    )[0]
     kong_proxy_name = find_k8s_resources(
         "service",
         "label",
@@ -615,13 +584,9 @@ def _create_nginx_config_map(
         manual_name_selector="proxy",
         namespace=namespace,
     )[0]
-    storage_service_name = find_k8s_resources(
-        "service", "label", "component=flame-storage-service", namespace=namespace
-    )[0]
 
     nextflow_launcher_locations = ''
     # nextflow_launcher_locations = _build_nextflow_launcher_locations(analysis_name=analysis_name,
-    #                                                                  analysis_ip=analysis_ip,
     #                                                                  analysis_env=analysis_env,
     #                                                                  namespace=namespace)
 
@@ -664,8 +629,6 @@ def _create_nginx_config_map(
                     location /kong {{
                         rewrite     ^/kong(/.*) $1 break;
                         proxy_pass  http://{kong_proxy_name};
-                        allow       {analysis_ip};
-                        deny        all;
                     }}
                     
                     
@@ -673,8 +636,6 @@ def _create_nginx_config_map(
                     location ~ ^/storage/(final|local|intermediate) {{
                         rewrite     ^/storage(/.*) $1 break;
                         proxy_pass http://{storage_service_name}:8080;
-                        allow       {analysis_ip};
-                        deny        all;
                     }}
                     
                     
@@ -682,8 +643,6 @@ def _create_nginx_config_map(
                     location /hub-adapter/kong/datastore/{analysis_env["PROJECT_ID"]} {{
                         rewrite     ^/hub-adapter(/.*) $1 break;
                         proxy_pass http://{hub_adapter_service_name}:5000;
-                        allow       {analysis_ip};
-                        deny        all;
                     }}
                     
                     
@@ -691,22 +650,16 @@ def _create_nginx_config_map(
                     location ~ ^/message-broker/analyses/{analysis_env["ANALYSIS_ID"]}/participants(|/self) {{
                         rewrite     ^/message-broker(/.*) $1 break;
                         proxy_pass  http://{message_broker_service_name};
-                        allow       {analysis_ip};
-                        deny        all;
                     }}
                     # egress: analysis deployment to message broker: analysis message
                     location ~ ^/message-broker/analyses/{analysis_env["ANALYSIS_ID"]}/messages(|/subscriptions) {{
                         rewrite     ^/message-broker(/.*) $1 break;
                         proxy_pass  http://{message_broker_service_name};
-                        allow       {analysis_ip};
-                        deny        all;
                     }}
                     # egress: analysis deployment to message broker: healthz
                     location /message-broker/healthz {{
                         rewrite     ^/message-broker(/.*) $1 break;
                         proxy_pass  http://{message_broker_service_name};
-                        allow       {analysis_ip};
-                        deny        all;
                     }}
                     
                     
@@ -714,8 +667,6 @@ def _create_nginx_config_map(
                     location /po/stream_logs {{
                         #rewrite     ^/po(/.*) $1 break;
                         proxy_pass  http://{po_service_name}:8000;
-                        allow       {analysis_ip};
-                        deny        all;
                         proxy_connect_timeout 10s;
                         proxy_send_timeout    120s;
                         proxy_read_timeout    120s;
@@ -728,9 +679,6 @@ def _create_nginx_config_map(
                     location /analysis {{
                         rewrite     ^/analysis(/.*) $1 break;
                         proxy_pass  http://{analysis_name};
-                        allow       {message_broker_ip};
-                        allow       {pod_orchestration_ip};
-                        deny        all;
                     }}
                 }}
             }}
@@ -752,10 +700,7 @@ def _create_nginx_config_map(
     return name
 
 
-def _build_nextflow_launcher_locations(analysis_name: str,
-                                       analysis_ip: str,
-                                       analysis_env: dict[str, str],
-                                       namespace: str = 'default') -> str:
+def _build_nextflow_launcher_locations(analysis_name: str, analysis_env: dict[str, str], namespace: str = 'default') -> str:
     """Render the nginx locations connecting an analysis to the Nextflow launcher.
 
     The launcher is optional: if no service labeled
@@ -765,12 +710,9 @@ def _build_nextflow_launcher_locations(analysis_name: str,
     Egress allows the analysis to start runs and stop its own runs only; the
     launcher's internal endpoints (e.g. ``/nextflow/conclude``) stay
     unreachable. The analysis and project id are injected as headers so the
-    launcher can trust them instead of the request body. Ingress allows the
-    launcher pod to report run results to ``/analysis/nextflow`` only.
+    launcher can trust them instead of the request body.
 
     Args:
-        analysis_name: Name of the analysis deployment (ingress target).
-        analysis_ip: Pod IP of the analysis, whitelisted for egress.
         analysis_env: Analysis config containing ``ANALYSIS_ID`` and
             ``PROJECT_ID``.
         namespace: Namespace to search for the launcher.
@@ -797,22 +739,21 @@ def _build_nextflow_launcher_locations(analysis_name: str,
                         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                         proxy_set_header X-Forwarded-Proto $scheme;
                         proxy_set_header X-Flame-Analysis-Id {analysis_env['ANALYSIS_ID']};
-                        proxy_set_header X-Flame-Project-Id {analysis_env['PROJECT_ID']};"""
+                        proxy_set_header X-Flame-Project-Id {analysis_env['PROJECT_ID']};
+                    """
 
     locations = f"""
                     # egress: analysis deployment to nextflow launcher: start run
                     location = /nextflow/run {{
                         proxy_pass  http://{nextflow_launcher_service_name}:{nextflow_launcher_port};
-                        allow       {analysis_ip};
-                        deny        all;{proxy_headers}
+                        {proxy_headers}
                     }}
                     # egress: analysis deployment to nextflow launcher: stop own runs
                     location = /nextflow/stop/{analysis_env['ANALYSIS_ID']} {{
                         proxy_pass  http://{nextflow_launcher_service_name}:{nextflow_launcher_port};
-                        allow       {analysis_ip};
-                        deny        all;{proxy_headers}
+                        {proxy_headers}
                     }}
-                    """
+                """
 
     # the launcher pod may be restarting; skip ingress rather than block analysis creation
     nextflow_launcher_pod_name = find_k8s_resources('pod',
@@ -829,15 +770,14 @@ def _build_nextflow_launcher_locations(analysis_name: str,
                        f"Analysis {analysis_name} will not receive nextflow run results.")
         return locations
 
-    return locations + f"""
-                    # ingress: nextflow launcher to analysis deployment: run results
-                    location /analysis/nextflow {{
-                        rewrite     ^/analysis(/.*) $1 break;
-                        proxy_pass  http://{analysis_name};
-                        allow       {nextflow_launcher_ip};
-                        deny        all;
-                    }}
-                    """
+    nf_ingress_rule = f"""
+                        # ingress: nextflow launcher to analysis deployment: run results
+                        location /analysis/nextflow {{
+                            rewrite     ^/analysis(/.*) $1 break;
+                            proxy_pass  http://{analysis_name};
+                        }}
+                        """
+    return locations + nf_ingress_rule
 
 
 def _create_service(
@@ -881,13 +821,13 @@ def _create_service(
     return core_client.create_namespaced_service(body=service_body, namespace=namespace)
 
 
-def _create_analysis_network_policy(
+def _create_analysis_egress_network_policy(
     analysis_name: str, nginx_name: str, namespace: str = "default"
 ) -> None:
     """Install the network policy that isolates an analysis pod.
 
-    Allows egress only to the nginx sidecar and kube-dns, and ingress only
-    from the nginx sidecar.
+    Allows egress only to the nginx sidecar, and ingress only from the nginx
+    sidecar.
 
     Args:
         analysis_name: Target analysis deployment (pod selector).
@@ -899,13 +839,7 @@ def _create_analysis_network_policy(
     # egress to the nginx pod only, on the port it proxies on (ports match the destination pod port, post-DNAT)
     egress = [
         client.V1NetworkPolicyEgressRule(
-            to=[
-                client.V1NetworkPolicyPeer(
-                    pod_selector=client.V1LabelSelector(
-                        match_labels={"app": nginx_name}
-                    )
-                )
-            ],
+            to=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={"app": nginx_name}))],
             ports=[client.V1NetworkPolicyPort(port=PORTS["nginx"][0], protocol="TCP")],
         )
     ]
@@ -913,16 +847,8 @@ def _create_analysis_network_policy(
     # ingress from the nginx pod only, on the analysis port
     ingress = [
         client.V1NetworkPolicyIngressRule(
-            _from=[
-                client.V1NetworkPolicyPeer(
-                    pod_selector=client.V1LabelSelector(
-                        match_labels={"app": nginx_name}
-                    )
-                )
-            ],
-            ports=[
-                client.V1NetworkPolicyPort(port=PORTS["analysis"][0], protocol="TCP")
-            ],
+            _from=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={"app": nginx_name}))],
+            ports=[client.V1NetworkPolicyPort(port=PORTS["analysis"][0], protocol="TCP")],
         )
     ]
 
@@ -935,7 +861,59 @@ def _create_analysis_network_policy(
         egress=egress,
     )
     network_metadata = client.V1ObjectMeta(
-        name=f"nginx-to-{analysis_name}-policy",
+        name=f"egress-{analysis_name}-to-nginx-policy",
+        namespace=namespace,
+        labels={"component": "flame-analysis-to-nginx-policy"},
+    )
+    network_body = client.V1NetworkPolicy(
+        api_version="networking.k8s.io/v1",
+        kind="NetworkPolicy",
+        metadata=network_metadata,
+        spec=network_spec,
+    )
+
+    network_client.create_namespaced_network_policy(
+        namespace=namespace, body=network_body
+    )
+
+
+def _create_nginx_ingress_network_policy(
+        analysis_name: str,
+        nginx_name: str,
+        allowed_ingress_services: list[tuple[str, str]],
+        namespace: str = "default"
+) -> None:
+    """Install the network policy that isolates ingress to an analysis' nginx pod.
+
+    Allows ingress on the nginx port only from pods matching the given
+    labels; egress is unrestricted.
+
+    Args:
+        analysis_name: Analysis deployment name used in the policy name.
+        nginx_name: Target nginx deployment (pod selector).
+        allowed_ingress_services: ``(label, value)`` pairs selecting the pods
+            allowed to reach the nginx.
+        namespace: Namespace in which to create the policy.
+    """
+    network_client = client.NetworkingV1Api()
+
+    # ingress from allowed services, on the nginx port
+    ingress = [
+        client.V1NetworkPolicyIngressRule(
+            _from=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={label: value}))],
+            ports=[client.V1NetworkPolicyPort(port=PORTS["nginx"][0], protocol="TCP")],
+        ) for label, value in allowed_ingress_services
+    ]
+
+    policy_types = ["Ingress"]
+    pod_selector = client.V1LabelSelector(match_labels={"app": nginx_name})
+    network_spec = client.V1NetworkPolicySpec(
+        pod_selector=pod_selector,
+        policy_types=policy_types,
+        ingress=ingress,
+    )
+    network_metadata = client.V1ObjectMeta(
+        name=f"ingress-nginx-to-{analysis_name}-policy",
         namespace=namespace,
         labels={"component": "flame-nginx-to-analysis-policy"},
     )
