@@ -1,9 +1,10 @@
 """Creation and teardown of the Kubernetes resources backing an analysis.
 
 Every analysis owns a small set of namespaced resources: a Deployment running
-the analysis container alongside an nginx reverse-proxy sidecar (and an
-optional network statistics sidecar), a Service fronting it, a NetworkPolicy
-restricting egress to the node's own services, a ConfigMap holding the
+the analysis container alongside a nginx reverse-proxy sidecar (and an
+optional network statistics sidecar), a Service fronting it, NetworkPolicies
+restricting the analysis' traffic to its nginx and the nginx's ingress to
+the analysis and node services, a ConfigMap holding the
 generated nginx configuration, and a Harbor image pull secret.
 
 The public helpers here create that set, read pod status and logs, and delete
@@ -19,7 +20,7 @@ import base64
 from typing import Optional
 import string
 
-from kubernetes import client
+from kubernetes import client, watch
 
 from src.resources.database.entity import Database
 from src.k8s.utils import find_k8s_resources
@@ -30,6 +31,7 @@ logger = get_logger()
 
 
 DEFAULT_NGINX_IMAGE = "nginxinc/nginx-unprivileged:1.31.7-alpine-slim"
+_ANALYSIS_INIT_TIMEOUT = 600
 
 
 PORTS = {"nginx": [8080], "analysis": [8000], "service": [80]}
@@ -154,9 +156,8 @@ def create_analysis_deployment(
     then creates the nginx service whose cluster IP is pinned into the analysis
     pod's hosts file. Creates the analysis ``Deployment`` using the Harbor pull
     secret, exposes it via a ``Service``, and then provisions the companion nginx deployment
-    that reverse-proxies egress to node-local services. Waits 3 seconds after
-    creating the nginx deployment so the analysis pods are registered before
-    they are listed.
+    that reverse-proxies egress to node-local services. Waits until the
+    analysis and nginx pods are created before they are listed.
 
     Args:
         name: Deployment name (typically ``analysis-{analysis_id}-{restart_counter}``).
@@ -232,7 +233,6 @@ def create_analysis_deployment(
     app_client.create_namespaced_deployment(
         async_req=False, namespace=namespace, body=depl_body
     )
-    time.sleep(0.1)
 
     _ = _create_service(
         name,
@@ -242,7 +242,8 @@ def create_analysis_deployment(
         namespace=namespace,
     )
     _create_analysis_nginx_deployment(name, env, namespace)
-    time.sleep(3)
+
+    _await_analysis_start(name, nginx_name, namespace)
 
     return _get_pods(name, namespace)
 
@@ -586,6 +587,7 @@ def _create_nginx_config_map(
     )[0]
 
     nextflow_launcher_locations = ''
+    # TODO: Add this back in
     # nextflow_launcher_locations = _build_nextflow_launcher_locations(analysis_name=analysis_name,
     #                                                                  analysis_env=analysis_env,
     #                                                                  namespace=namespace)
@@ -1114,3 +1116,44 @@ def _get_pods(name: str, namespace: str = "default") -> list[str]:
             namespace=namespace, label_selector=f"app={name}"
         ).items
     ]
+
+
+def _await_analysis_start(
+        analysis_name: str, nginx_name: str, namespace: str = "default", timeout: int = _ANALYSIS_INIT_TIMEOUT
+) -> None:
+    """Wait until the analysis and nginx deployments have created their pods.
+
+    Waits only for the pod objects, not for scheduling or an IP, so that the
+    analysis pod names can be listed afterwards. A timeout is logged, not raised.
+
+    Args:
+        analysis_name: Value of the analysis pod's ``app`` label.
+        nginx_name: Value of the nginx pod's ``app`` label.
+        namespace: Namespace to watch in.
+        timeout: Maximum number of seconds to wait.
+    """
+    core_client = client.CoreV1Api()
+    label_selector = f"app in ({analysis_name},{nginx_name})"
+    pod_list = core_client.list_namespaced_pod(namespace=namespace, label_selector=label_selector)
+    if len(pod_list.items) >= 2:
+        return None
+
+    stream = watch.Watch().stream(
+        core_client.list_namespaced_pod,
+        namespace=namespace,
+        label_selector=label_selector,
+        timeout_seconds=timeout,
+    )
+    try:
+        count = 0
+        for event in stream:
+            if event and event["type"] == "ADDED":
+                if count < 1:
+                    count += 1
+                else:
+                    return None
+    finally:
+        stream.close()
+
+    logger.error(f"Deployment {analysis_name} in namespace {namespace} did not create its pods within {timeout}s.")
+    return None
