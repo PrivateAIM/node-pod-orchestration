@@ -28,6 +28,10 @@ from src.utils.po_logging import get_logger
 
 logger = get_logger()
 
+
+DEFAULT_NGINX_IMAGE = "nginxinc/nginx-unprivileged:1.31.7-alpine-slim"
+
+
 PORTS = {"nginx": [8080], "analysis": [8000], "service": [80]}
 
 
@@ -465,7 +469,7 @@ def _create_analysis_nginx_deployment(
     container = client.V1Container(
         name=nginx_name,
         image=os.getenv(
-            "NGINX_IMAGE", "nginxinc/nginx-unprivileged:1.31.7-alpine-slim"
+            "NGINX_IMAGE", DEFAULT_NGINX_IMAGE
         ),
         image_pull_policy="IfNotPresent",
         ports=[client.V1ContainerPort(PORTS["nginx"][0])],

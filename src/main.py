@@ -12,6 +12,7 @@ from dotenv import load_dotenv, find_dotenv
 
 from src.resources.database.entity import Database
 from src.api.api import PodOrchestrationAPI
+from src.k8s.kubernetes import DEFAULT_NGINX_IMAGE
 from src.k8s.utils import get_current_namespace, load_cluster_config
 from src.status.status import status_loop
 from src.utils.po_logging import get_logger
@@ -32,11 +33,8 @@ def main():
     spawns the FastAPI server in a background thread, and starts the blocking
     status monitoring loop on the main thread.
     """
-    if not os.getenv("NGINX_IMAGE"):
-        logger.warning(
-            "Environment variable 'NGINX_IMAGE' is not set, defaulting to "
-            "'nginxinc/nginx-unprivileged:1.31.4-alpine-perl'."
-        )
+    if not bool(os.getenv("NGINX_IMAGE")):
+        logger.warning(f"Environment variable 'NGINX_IMAGE' is not set, defaulting to '{DEFAULT_NGINX_IMAGE}'.")
 
     # init database
     database = Database()
