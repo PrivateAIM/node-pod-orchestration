@@ -1,36 +1,47 @@
-FROM python:3.11-alpine
-
-RUN adduser -u 10000 -D podorchestrator
-
-RUN pip install poetry==1.7.1
+FROM python:3.11-alpine AS builder
 
 ENV POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_IN_PROJECT=1 \
     POETRY_VIRTUALENVS_CREATE=1 \
-    POETRY_CACHE_DIR=/tmp/poetry_cache
+    POETRY_CACHE_DIR=/tmp/poetry_cache \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN pip install poetry==1.7.1
 
 WORKDIR /app
 
 COPY pyproject.toml poetry.lock ./
 
-RUN touch README.md
+# Install runtime deps into /app/.venv, then strip what isn't needed at runtime
+RUN touch README.md \
+ && poetry install --without dev --no-root \
+ && rm -rf $POETRY_CACHE_DIR \
+ && rm -rf .venv/lib/python3.11/site-packages/pip \
+           .venv/lib/python3.11/site-packages/pip-* \
+           .venv/lib/python3.11/site-packages/setuptools \
+           .venv/lib/python3.11/site-packages/setuptools-* \
+           .venv/lib/python3.11/site-packages/wheel \
+           .venv/lib/python3.11/site-packages/wheel-* \
+ && find .venv -type d -name __pycache__ -prune -exec rm -rf {} +
 
-RUN poetry install --without dev --no-root && rm -rf $POETRY_CACHE_DIR
 
-COPY src ./src
-#COPY .env ./
+FROM python:3.11-alpine
 
+RUN adduser -u 10000 -D podorchestrator
 
-# Make port 8080 available to the world outside this container
-EXPOSE 8000
+WORKDIR /app
 
-# Define environment variable
-ENV POSTGRES_HOST=<postgres_host>
-ENV POSTGRES_DB=<postgres_db>
-ENV POSTGRES_USER=<postgres_user>
-ENV POSTGRES_PASSWORD=<postgres_password>
+# venv must live at the same path as in the builder (absolute paths in scripts/pyvenv.cfg)
+COPY --from=builder --chown=10000:10000 /app/.venv /app/.venv
+COPY --chown=10000:10000 src ./src
 
-RUN chown -R podorchestrator:podorchestrator /app
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
 USER 10000:10000
 
-ENTRYPOINT ["poetry", "run", "python", "-m", "src.main"]
+EXPOSE 8000
+
+ENTRYPOINT ["python", "-m", "src.main"]

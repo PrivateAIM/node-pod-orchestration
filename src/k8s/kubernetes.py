@@ -30,11 +30,10 @@ from src.utils.po_logging import get_logger
 logger = get_logger()
 
 
-DEFAULT_NGINX_IMAGE = "nginxinc/nginx-unprivileged:1.31.7-alpine-slim"
-_ANALYSIS_INIT_TIMEOUT = 600
-
-
 PORTS = {"nginx": [8080], "analysis": [8000], "service": [80]}
+DEFAULT_NGINX_IMAGE = "nginxinc/nginx-unprivileged:1.31.7-alpine-slim"
+
+_ANALYSIS_INIT_TIMEOUT = 600
 
 
 def create_harbor_secret(
