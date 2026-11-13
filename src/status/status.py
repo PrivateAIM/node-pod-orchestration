@@ -298,6 +298,8 @@ def _get_analysis_status(
             AnalysisStatus.FAILED.value,
         ]:
             int_status = db_status
+        elif analysis.pod_ids == 'null':
+            return None
         else:
             int_status = _get_internal_deployment_status(
                 analysis.deployment_name, analysis_id
