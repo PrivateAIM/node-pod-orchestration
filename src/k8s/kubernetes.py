@@ -157,7 +157,7 @@ def create_analysis_deployment(
     pod's hosts file. Creates the analysis ``Deployment`` using the Harbor pull
     secret, exposes it via a ``Service``, and then provisions the companion nginx deployment
     that reverse-proxies egress to node-local services. Waits until the
-    analysis and nginx pods are created before they are listed.
+    analysis and nginx pods are running before they are listed.
 
     Args:
         name: Deployment name (typically ``analysis-{analysis_id}-{restart_counter}``).
@@ -1121,10 +1121,11 @@ def _get_pods(name: str, namespace: str = "default") -> list[str]:
 def _await_analysis_start(
         analysis_name: str, nginx_name: str, namespace: str = "default", timeout: int = _ANALYSIS_INIT_TIMEOUT
 ) -> None:
-    """Wait until the analysis and nginx deployments have created their pods.
+    """Wait until the pods of the analysis and nginx deployments are running.
 
-    Waits only for the pod objects, not for scheduling or an IP, so that the
-    analysis pod names can be listed afterwards. A timeout is logged, not raised.
+    Watches for both pod objects to be created, then polls until all of them
+    report the ``Running`` phase. Both steps share a single ``timeout``. Failed
+    pods and timeouts are logged, not raised.
 
     Args:
         analysis_name: Value of the analysis pod's ``app`` label.
@@ -1132,28 +1133,45 @@ def _await_analysis_start(
         namespace: Namespace to watch in.
         timeout: Maximum number of seconds to wait.
     """
+    start_time = time.time()
+
     core_client = client.CoreV1Api()
     label_selector = f"app in ({analysis_name},{nginx_name})"
     pod_list = core_client.list_namespaced_pod(namespace=namespace, label_selector=label_selector)
-    if len(pod_list.items) >= 2:
-        return None
-
-    stream = watch.Watch().stream(
-        core_client.list_namespaced_pod,
-        namespace=namespace,
-        label_selector=label_selector,
-        timeout_seconds=timeout,
-    )
-    try:
-        count = 0
-        for event in stream:
-            if event and event["type"] == "ADDED":
-                if count < 1:
+    if len(pod_list.items) < 2:
+        stream = watch.Watch().stream(
+            core_client.list_namespaced_pod,
+            namespace=namespace,
+            label_selector=label_selector,
+            timeout_seconds=timeout,
+        )
+        created = False
+        try:
+            count = 0
+            for event in stream:
+                if event and event["type"] == "ADDED":
                     count += 1
-                else:
-                    return None
-    finally:
-        stream.close()
+                    if count >= 2:
+                        created = True
+                        break
+        finally:
+            stream.close()
+        if not created:
+            logger.error(f"Deployment {analysis_name} in namespace {namespace} did not create its pods "
+                         f"within {timeout}s.")
+            return None
 
-    logger.error(f"Deployment {analysis_name} in namespace {namespace} did not create its pods within {timeout}s.")
+    while time.time() < (start_time + timeout):
+        pod_list = core_client.list_namespaced_pod(namespace=namespace, label_selector=label_selector)
+        if pod_list.items and all(pod.status.phase == "Running" for pod in pod_list.items):
+            return None
+        for pod in pod_list.items:
+            if pod.status.phase == "Failed":
+                logger.error(f"Pod {pod.metadata.name} in namespace {namespace} failed "
+                             f"to start (reason={repr(pod.status.reason)}).")
+                return None
+        time.sleep(1)
+
+    logger.error(f"Pods of deployment {analysis_name} in namespace {namespace} did not reach the Running phase "
+                 f"in time.")
     return None
