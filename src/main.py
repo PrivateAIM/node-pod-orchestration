@@ -9,6 +9,7 @@ threads -- the FastAPI server and the background status monitoring loop.
 import os
 from threading import Thread
 from dotenv import load_dotenv, find_dotenv
+from importlib.metadata import version
 
 from src.resources.database.entity import Database
 from src.api.api import PodOrchestrationAPI
@@ -44,6 +45,7 @@ def main():
     )
     api_thread.start()
 
+    logger.info("Initializing PO status loop.")
     # start status loop
     status_loop(
         database, int(os.getenv("STATUS_LOOP_INTERVAL", "10")), namespace=namespace
@@ -57,9 +59,10 @@ def start_po_api(database: Database, namespace: str):
         database: Initialized database wrapper used by the API for persistence.
         namespace: Kubernetes namespace the API will operate within.
     """
+    logger.info(f"Starting PO API server on {namespace}.")
     PodOrchestrationAPI(database, namespace)
 
 
 if __name__ == "__main__":
-    logger.info("Starting server")
+    logger.info(f"Starting Flame Pod-Orchestrator v{version('Node-Pod-Orchestration')}")
     main()
