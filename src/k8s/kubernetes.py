@@ -446,8 +446,9 @@ def _create_analysis_nginx_deployment(
 ) -> str:
     """Deploy the nginx reverse-proxy sidecar for an analysis.
 
-    Builds the nginx ConfigMap, starts the ``nginx-{analysis_name}`` deployment
-    with a liveness probe on ``/healthz``, and creates its service.
+    Builds the nginx ConfigMap and starts the ``nginx-{analysis_name}``
+    deployment with a liveness probe on ``/healthz``. Its service is created
+    beforehand by ``create_analysis_deployment``.
 
     Args:
         analysis_name: Name of the analysis deployment this nginx sidecar fronts.
@@ -714,6 +715,7 @@ def _build_nextflow_launcher_locations(analysis_name: str, analysis_env: dict[st
     launcher can trust them instead of the request body.
 
     Args:
+        analysis_name: Name of the analysis deployment (ingress target).
         analysis_env: Analysis config containing ``ANALYSIS_ID`` and
             ``PROJECT_ID``.
         namespace: Namespace to search for the launcher.

@@ -19,7 +19,10 @@ class TestHealthEndpoint:
     def test_healthz_returns_ok(self, api_test_client):
         response = api_test_client.get("/po/healthz")
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        body = response.json()
+        assert body["status"] == "ok"
+        assert isinstance(body["version"], str) and body["version"]
+        assert isinstance(body["uptime"], float) and body["uptime"] >= 0
 
     def test_healthz_no_auth_required(self, api_test_client):
         """healthz route has no auth dependency — it works even without a token."""

@@ -3,7 +3,8 @@ Tests for src/k8s/kubernetes.py
 
 Covers:
   - create_harbor_secret: success, first-call failure -> delete+retry, Conflict re-raises
-  - create_analysis_deployment: full chain (deployment + service + nginx + network policy)
+  - create_analysis_deployment: full chain (deployment + service + nginx + network policies)
+  - _await_analysis_start: pod creation watch and Running-phase wait
   - _build_nextflow_launcher_locations: optional launcher routes in the nginx config
   - delete_deployment: all resources cleaned up, Not-Found exceptions handled silently
   - get_analysis_logs: structure, pod_id filtering, ApiException returns []
@@ -24,16 +25,18 @@ from src.k8s.kubernetes import (
     get_analysis_logs,
     get_pod_status,
     _build_nextflow_launcher_locations,
+    _await_analysis_start,
 )
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-def _make_pod_item(name: str, pod_ip: str = "10.0.0.1") -> MagicMock:
-    """Build a minimal mock K8s pod item with metadata.name and status.pod_ip."""
+def _make_pod_item(name: str, pod_ip: str = "10.0.0.1", phase: str = "Running") -> MagicMock:
+    """Build a minimal mock K8s pod item with metadata.name, status.pod_ip and status.phase."""
     pod = MagicMock()
     pod.metadata.name = name
     pod.status.pod_ip = pod_ip
+    pod.status.phase = phase
     return pod
 
 
@@ -139,8 +142,9 @@ class TestCreateHarborSecret:
 class TestCreateAnalysisDeployment:
     """Tests for the full deployment chain.
 
-    _create_nginx_config_map contains while-loops waiting for pod IPs and calls
-    find_k8s_resources 8 times, so we patch both aggressively.
+    _create_nginx_config_map looks up services via find_k8s_resources, and
+    _await_analysis_start waits for the analysis and nginx pods, so both are
+    patched to resolve immediately.
     """
 
     _ENV = {
@@ -155,32 +159,27 @@ class TestCreateAnalysisDeployment:
 
     @pytest.fixture
     def _setup_pod_reads(self, mock_k8s_clients):
-        """Return mocks configured so all while-loops exit on first iteration."""
-        mb_pod = MagicMock()
-        mb_pod.status.pod_ip = "10.0.0.1"
-        po_pod = MagicMock()
-        po_pod.status.pod_ip = "10.0.0.2"
-        # read_namespaced_pod: first call = message-broker, second = po
-        mock_k8s_clients.core_v1.read_namespaced_pod.side_effect = [mb_pod, po_pod]
-
-        # list_namespaced_pod: used for analysis IP (config map) and _get_pods at end
+        """Return mocks whose analysis and nginx pods already exist and are running."""
         analysis_pod = _make_pod_item("analysis-my-dep-0-pod", pod_ip="10.0.0.3")
-        pod_list = MagicMock()
-        pod_list.items = [analysis_pod]
-        mock_k8s_clients.core_v1.list_namespaced_pod.return_value = pod_list
+        nginx_pod = _make_pod_item("nginx-my-dep-0-pod", pod_ip="10.0.0.4")
+
+        # list_namespaced_pod: both pods for _await_analysis_start, analysis pod only for _get_pods
+        def _list_pods(namespace, label_selector):
+            pod_list = MagicMock()
+            pod_list.items = [analysis_pod, nginx_pod] if label_selector.startswith("app in") else [analysis_pod]
+            return pod_list
+
+        mock_k8s_clients.core_v1.list_namespaced_pod.side_effect = _list_pods
 
         return mock_k8s_clients
 
     def _find_side_effects(self):
         return [
-            "message-broker-svc",   # service/label/component=flame-message-broker
-            "message-broker-pod",   # pod/label/component=flame-message-broker
-            "po-svc",               # service/label/component=flame-po
-            "po-pod",               # pod/label/component=flame-po
-            "hub-adapter-svc",      # service/label/component=flame-hub-adapter
-            "kong-proxy",           # service/label/app.kubernetes.io/name=kong
-            "storage-svc",          # service/label/component=flame-storage-service
-            [None],                 # service/label/component=flame-nextflow-launcher (not deployed)
+            ["message-broker-svc"],  # service/label/component=flame-message-broker
+            ["po-svc"],              # service/label/component=flame-po
+            ["hub-adapter-svc"],     # service/label/component=flame-hub-adapter
+            ["storage-svc"],         # service/label/component=flame-storage-service
+            ["kong-proxy"],          # service/label/app.kubernetes.io/name=kong
         ]
 
     def test_creates_analysis_deployment(self, mock_k8s_clients, _setup_pod_reads):
@@ -227,16 +226,17 @@ class TestCreateAnalysisDeployment:
         ]
         assert "registry.local/nginx:custom" in images
 
-    def test_pod_ip_loops_do_not_sleep_when_ips_are_ready(self, mock_k8s_clients, _setup_pod_reads):
-        """Sleeps in the IP-wait loops only happen on a miss; the fixed waits remain."""
+    def test_does_not_wait_when_pods_are_running(self, mock_k8s_clients, _setup_pod_reads):
+        """No watch and no sleep happen if the analysis and nginx pods are already running."""
         with (
             patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()),
             patch("src.k8s.kubernetes.time.sleep") as mock_sleep,
+            patch("src.k8s.kubernetes.watch.Watch") as mock_watch,
         ):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
-        assert 1 not in [c.args[0] for c in mock_sleep.call_args_list]
-        mock_sleep.assert_any_call(3)
+        mock_watch.assert_not_called()
+        mock_sleep.assert_not_called()
 
     def test_creates_services(self, mock_k8s_clients, _setup_pod_reads):
         with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
@@ -273,11 +273,30 @@ class TestCreateAnalysisDeployment:
         assert "proxy_connect_timeout 10s;" in nginx_conf
         assert "proxy_read_timeout    900s;" in nginx_conf
 
-    def test_creates_network_policy(self, mock_k8s_clients, _setup_pod_reads):
+    def test_creates_network_policies(self, mock_k8s_clients, _setup_pod_reads):
         with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
-        mock_k8s_clients.networking_v1.create_namespaced_network_policy.assert_called_once()
+        bodies = {
+            c[1]["body"].metadata.name: c[1]["body"]
+            for c in mock_k8s_clients.networking_v1.create_namespaced_network_policy.call_args_list
+        }
+        assert set(bodies) == {"egress-my-dep-to-nginx-policy", "ingress-nginx-to-my-dep-policy"}
+
+        egress = bodies["egress-my-dep-to-nginx-policy"].spec
+        assert egress.pod_selector.match_labels == {"app": "my-dep"}
+        assert egress.policy_types == ["Ingress", "Egress"]
+        assert egress.egress[0].to[0].pod_selector.match_labels == {"app": "nginx-my-dep"}
+        assert egress.ingress[0]._from[0].pod_selector.match_labels == {"app": "nginx-my-dep"}
+
+        ingress = bodies["ingress-nginx-to-my-dep-policy"].spec
+        assert ingress.pod_selector.match_labels == {"app": "nginx-my-dep"}
+        assert ingress.policy_types == ["Ingress"]
+        assert [r._from[0].pod_selector.match_labels for r in ingress.ingress] == [
+            {"component": "flame-po"},
+            {"component": "flame-message-broker"},
+            {"app": "my-dep"},
+        ]
 
     def test_returns_pod_names(self, mock_k8s_clients, _setup_pod_reads):
         with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
@@ -300,6 +319,69 @@ class TestCreateAnalysisDeployment:
             assert ns == "flame-ns"
 
 
+# ─── _await_analysis_start ──────────────────────────────────────────────────
+
+class TestAwaitAnalysisStart:
+    @staticmethod
+    def _pod_list(*phases):
+        pod_list = MagicMock()
+        pod_list.items = [_make_pod_item(f"pod-{i}", phase=phase) for i, phase in enumerate(phases)]
+        return pod_list
+
+    def test_returns_immediately_when_pods_are_running(self, mock_k8s_clients):
+        mock_k8s_clients.core_v1.list_namespaced_pod.return_value = self._pod_list("Running", "Running")
+        with (
+            patch("src.k8s.kubernetes.watch.Watch") as mock_watch,
+            patch("src.k8s.kubernetes.time.sleep") as mock_sleep,
+        ):
+            _await_analysis_start("analysis-my-dep", "nginx-analysis-my-dep")
+
+        mock_watch.assert_not_called()
+        mock_sleep.assert_not_called()
+        assert mock_k8s_clients.core_v1.list_namespaced_pod.call_args.kwargs["label_selector"] == (
+            "app in (analysis-my-dep,nginx-analysis-my-dep)"
+        )
+
+    def test_watches_until_both_pods_are_created(self, mock_k8s_clients):
+        mock_k8s_clients.core_v1.list_namespaced_pod.side_effect = [
+            self._pod_list(),
+            self._pod_list("Running", "Running"),
+        ]
+        with patch("src.k8s.kubernetes.watch.Watch") as mock_watch:
+            mock_watch.return_value.stream.return_value = (e for e in [{"type": "ADDED"}, {"type": "ADDED"}])
+            _await_analysis_start("analysis-my-dep", "nginx-analysis-my-dep", timeout=5)
+
+        assert mock_watch.return_value.stream.call_args.kwargs["timeout_seconds"] == 5
+        assert mock_k8s_clients.core_v1.list_namespaced_pod.call_count == 2
+
+    def test_stops_when_pods_are_not_created(self, mock_k8s_clients):
+        mock_k8s_clients.core_v1.list_namespaced_pod.return_value = self._pod_list()
+        with patch("src.k8s.kubernetes.watch.Watch") as mock_watch:
+            mock_watch.return_value.stream.return_value = (e for e in [{"type": "ADDED"}])
+            _await_analysis_start("analysis-my-dep", "nginx-analysis-my-dep", timeout=5)
+
+        # only the initial listing; the Running-phase wait is skipped
+        assert mock_k8s_clients.core_v1.list_namespaced_pod.call_count == 1
+
+    def test_polls_until_pods_are_running(self, mock_k8s_clients):
+        mock_k8s_clients.core_v1.list_namespaced_pod.side_effect = [
+            self._pod_list("Pending", "Pending"),
+            self._pod_list("Pending", "Running"),
+            self._pod_list("Running", "Running"),
+        ]
+        with patch("src.k8s.kubernetes.time.sleep") as mock_sleep:
+            _await_analysis_start("analysis-my-dep", "nginx-analysis-my-dep")
+
+        mock_sleep.assert_called_once_with(1)
+
+    def test_failed_pod_stops_waiting(self, mock_k8s_clients):
+        mock_k8s_clients.core_v1.list_namespaced_pod.return_value = self._pod_list("Failed", "Running")
+        with patch("src.k8s.kubernetes.time.sleep") as mock_sleep:
+            _await_analysis_start("analysis-my-dep", "nginx-analysis-my-dep")  # must not raise
+
+        mock_sleep.assert_not_called()
+
+
 # ─── _build_nextflow_launcher_locations ─────────────────────────────────────
 
 class TestBuildNextflowLauncherLocations:
@@ -318,7 +400,7 @@ class TestBuildNextflowLauncherLocations:
 
     def _build(self, find_results):
         with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=find_results):
-            return _build_nextflow_launcher_locations("analysis-my-dep", "10.0.0.3", self._ENV)
+            return _build_nextflow_launcher_locations("analysis-my-dep", self._ENV)
 
     def test_no_launcher_returns_empty(self, mock_k8s_clients):
         assert self._build([[None]]) == ""
@@ -330,7 +412,6 @@ class TestBuildNextflowLauncherLocations:
         assert "location = /nextflow/stop/analysis-456 {" in locations
         assert "conclude" not in locations
         assert locations.count("proxy_pass  http://nextflow-launcher:8000;") == 2
-        assert locations.count("allow       10.0.0.3;") == 2
 
     def test_egress_injects_analysis_and_project_id(self, _launcher_deployed):
         locations = self._build([["nextflow-launcher"], ["launcher-pod"]])
@@ -338,12 +419,11 @@ class TestBuildNextflowLauncherLocations:
         assert locations.count("proxy_set_header X-Flame-Analysis-Id analysis-456;") == 2
         assert locations.count("proxy_set_header X-Flame-Project-Id project-123;") == 2
 
-    def test_ingress_allows_launcher_pod(self, _launcher_deployed):
+    def test_ingress_routes_launcher_results(self, _launcher_deployed):
         locations = self._build([["nextflow-launcher"], ["launcher-pod"]])
 
         assert "location /analysis/nextflow {" in locations
         assert "proxy_pass  http://analysis-my-dep;" in locations
-        assert "allow       10.0.0.9;" in locations
 
     def test_launcher_pod_missing_skips_ingress(self, _launcher_deployed):
         locations = self._build([["nextflow-launcher"], [None]])
@@ -371,12 +451,13 @@ class TestDeleteDeployment:
         assert "analysis-123-0" in names
         assert "nginx-analysis-123-0" in names
 
-    def test_deletes_network_policy(self, mock_k8s_clients):
+    def test_deletes_network_policies(self, mock_k8s_clients):
         delete_deployment("analysis-123-0")
 
-        mock_k8s_clients.networking_v1.delete_namespaced_network_policy.assert_called_once_with(
-            name="nginx-to-analysis-123-0-policy", namespace="default", propagation_policy="Background"
-        )
+        assert mock_k8s_clients.networking_v1.delete_namespaced_network_policy.call_args_list == [
+            call(name="egress-analysis-123-0-to-nginx-policy", namespace="default", propagation_policy="Background"),
+            call(name="ingress-nginx-to-analysis-123-0-policy", namespace="default", propagation_policy="Background"),
+        ]
 
     def test_deletes_config_map(self, mock_k8s_clients):
         delete_deployment("analysis-123-0")
@@ -402,9 +483,9 @@ class TestDeleteDeployment:
 
         calls = mock_k8s_clients.apps_v1.delete_namespaced_deployment.call_args_list
         assert all(c[1]["namespace"] == "flame-ns" for c in calls)
-        mock_k8s_clients.networking_v1.delete_namespaced_network_policy.assert_called_once_with(
-            name="nginx-to-analysis-123-0-policy", namespace="flame-ns", propagation_policy="Background"
-        )
+        policy_calls = mock_k8s_clients.networking_v1.delete_namespaced_network_policy.call_args_list
+        assert len(policy_calls) == 2
+        assert all(c[1]["namespace"] == "flame-ns" for c in policy_calls)
 
 
 # ─── get_analysis_logs ───────────────────────────────────────────────────────
