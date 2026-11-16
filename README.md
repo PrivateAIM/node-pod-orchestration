@@ -114,7 +114,7 @@ If `AUTHUP_JWKS_URL` is missing, every Authup-verified endpoint answers with `50
 | PUT    | `/po/stop` · `/po/stop/{id}`   | Stop analyses                      |
 | DELETE | `/po/delete` · `/po/delete/{id}` | Delete analyses                  |
 | DELETE | `/po/cleanup/{cleanup_type}`   | Bulk cleanup by type               |
-| GET    | `/po/healthz`                  | Liveness probe (no auth)           |
+| GET    | `/po/healthz`                  | Liveness probe with version and uptime (no auth) |
 
 Interactive docs: `/api/docs` (Swagger), `/api/redoc` (ReDoc).
 

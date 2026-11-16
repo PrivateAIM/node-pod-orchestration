@@ -254,22 +254,24 @@ def inform_analysis_of_partner_statuses(
     """
     node_statuses = get_partner_node_statuses(hub_client, analysis_id, node_analysis_id)
     if node_statuses:
-        deployment_name = database.get_latest_deployment(analysis_id).deployment_name
-        client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['service'][0]}")
-        try:  # try except, in case analysis api is not yet ready
-            response = client.post(
-                url="/analysis/partner_status",
-                headers=[("Connection", "close")],
-                json={"partner_status": node_statuses},
-            )
-            response.raise_for_status()
+        analysis = database.get_latest_deployment(analysis_id)
+        if analysis.pod_ids != 'null':
+            deployment_name = analysis.deployment_name
+            client = Client(base_url=f"http://nginx-{deployment_name}:{PORTS['service'][0]}")
+            try:  # try except, in case analysis api is not yet ready
+                response = client.post(
+                    url="/analysis/partner_status",
+                    headers=[("Connection", "close")],
+                    json={"partner_status": node_statuses},
+                )
+                response.raise_for_status()
+                client.close()
+                return response.json()
+            except HTTPError as e:
+                logger.warning(
+                    f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}"
+                )
             client.close()
-            return response.json()
-        except HTTPError as e:
-            logger.warning(
-                f"Connection to http://nginx-{deployment_name}:{PORTS['service'][0]} yielded an error: {repr(e)}"
-            )
-        client.close()
     return None
 
 
@@ -298,6 +300,8 @@ def _get_analysis_status(
             AnalysisStatus.FAILED.value,
         ]:
             int_status = db_status
+        elif analysis.pod_ids == 'null':
+            return None
         else:
             int_status = _get_internal_deployment_status(
                 analysis.deployment_name, analysis_id

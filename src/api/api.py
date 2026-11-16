@@ -11,11 +11,12 @@ demand so Hub status updates keep working across Hub restarts.
 import time
 import uvicorn
 from typing import Optional
-import threading
+from threading import main_thread
 from fastapi import APIRouter, FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src import __version__
 from src.utils.hub_client import (
     RegistryCredentialsError,
     init_hub_client,
@@ -72,6 +73,7 @@ class PodOrchestrationAPI:
         self.node_id = None
         self.hub_client = None
         self.enable_hub_logging = None
+        self._start_time = time.time()
         self._set_node_id_and_hub_client(max_attempts=100)
 
         self.namespace = namespace
@@ -560,16 +562,22 @@ class PodOrchestrationAPI:
         """``GET /po/healthz`` — unauthenticated liveness probe.
 
         Returns:
-            ``{'status': 'ok'}`` when the main thread is alive.
+            ``{'status': 'ok', 'version': ..., 'uptime': ...}`` when the main
+            thread is alive, with the service version and the API
+            uptime in seconds.
 
         Raises:
             RuntimeError: If the main thread has died.
         """
-        main_alive = threading.main_thread().is_alive()
+        main_alive = main_thread().is_alive()
         if not main_alive:
             raise RuntimeError("Main thread is not alive.")
         else:
-            return {"status": "ok"}
+            return {
+                "status": "ok",
+                "version": __version__,
+                "uptime": time.time() - self._start_time,
+            }
 
     def _set_node_id_and_hub_client(self, max_attempts: Optional[int] = None) -> None:
         """Ensure a usable Hub client and a resolved ``node_id`` are available.
