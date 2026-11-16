@@ -9,8 +9,8 @@ threads -- the FastAPI server and the background status monitoring loop.
 import os
 from threading import Thread
 from dotenv import load_dotenv, find_dotenv
-from importlib.metadata import version
 
+from src import __version__
 from src.resources.database.entity import Database
 from src.api.api import PodOrchestrationAPI
 from src.k8s.kubernetes import DEFAULT_NGINX_IMAGE
@@ -64,5 +64,5 @@ def start_po_api(database: Database, namespace: str):
 
 
 if __name__ == "__main__":
-    logger.info(f"Starting Flame Pod-Orchestrator v{version('Node-Pod-Orchestration')}")
+    logger.info(f"Starting Flame Pod-Orchestrator v{__version__}")
     main()

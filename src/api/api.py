@@ -11,12 +11,12 @@ demand so Hub status updates keep working across Hub restarts.
 import time
 import uvicorn
 from typing import Optional
-from importlib.metadata import version
 from threading import main_thread
 from fastapi import APIRouter, FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src import __version__
 from src.utils.hub_client import (
     RegistryCredentialsError,
     init_hub_client,
@@ -74,7 +74,6 @@ class PodOrchestrationAPI:
         self.hub_client = None
         self.enable_hub_logging = None
         self._start_time = time.time()
-        self._version = version("Node-Pod-Orchestration")
         self._set_node_id_and_hub_client(max_attempts=100)
 
         self.namespace = namespace
@@ -564,7 +563,7 @@ class PodOrchestrationAPI:
 
         Returns:
             ``{'status': 'ok', 'version': ..., 'uptime': ...}`` when the main
-            thread is alive, with the installed package version and the API
+            thread is alive, with the service version and the API
             uptime in seconds.
 
         Raises:
@@ -576,7 +575,7 @@ class PodOrchestrationAPI:
         else:
             return {
                 "status": "ok",
-                "version": self._version,
+                "version": __version__,
                 "uptime": time.time() - self._start_time,
             }
 
