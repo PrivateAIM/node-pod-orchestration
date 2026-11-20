@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - canary
   pull_request:
     types:
       - opened
@@ -19,8 +20,10 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install dependencies
-        run: poetry install --with dev
+      - name: Run image
+        uses: abatilo/actions-poetry@v3
+        with:
+          poetry-version: "latest"
 
       - name: Test
         run: poetry run pytest -vra -m "not integration"
