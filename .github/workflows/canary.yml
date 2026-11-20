@@ -1,0 +1,26 @@
+name: Canary
+
+on:
+  push:
+    branches:
+      - canary
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: privateaim/node-pod-orchestration
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      -   name: Checkout repository
+          uses: actions/checkout@v4
+
+      -   name: Publish Docker Image
+          uses: tada5hi/craneship@v4
+          with:
+            registryTag: |
+              canary
