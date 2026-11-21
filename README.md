@@ -149,7 +149,7 @@ lags behind them.
 | `HUB_LOGGING` | Forward analysis logs to the FLAME Hub | unset |
 | `EXTRA_CA_CERTS` | Additional CA bundle path | unset |
 | `STATUS_LOOP_INTERVAL` | Status-loop interval in seconds | `10` |
-| `NGINX_IMAGE` | Image for the reverse-proxy sidecar | `nginxinc/nginx-unprivileged:1.31.7-alpine-slim` |
+| `NGINX_IMAGE` | Image for the reverse-proxy sidecar | `nginx/nginx-unprivileged:1.31.9-alpine-slim` |
 | `NET_STATS_ENABLED` | Enable the network-statistics sidecar (`1` / `true`) | disabled |
 | `NET_STATS_IMAGE` | Image for that sidecar | `busybox:1.37` |
 | `KEYCLOAK_URL`, `KEYCLOAK_REALM` | Deprecated. A non-empty `KEYCLOAK_URL` switches the API to Keycloak mode (see [API](#api)) | unset, `flame` |
