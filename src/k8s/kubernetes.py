@@ -31,7 +31,7 @@ logger = get_logger()
 
 
 PORTS = {"nginx": [8080], "analysis": [8000], "service": [80]}
-DEFAULT_NGINX_IMAGE = "nginxinc/nginx-unprivileged:1.31.7-alpine-slim"
+DEFAULT_NGINX_IMAGE = "nginx/nginx-unprivileged:1.31.9-alpine-slim"
 
 _ANALYSIS_INIT_TIMEOUT = 600
 
