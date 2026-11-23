@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 0.8.32)'
+        required: true
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  packages: write
+  contents: write
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+
+    steps:
+      -   uses: googleapis/release-please-action@v5
+          if: github.event_name == 'push'
+          id: release
+          with:
+            token: ${{ secrets.GITHUB_TOKEN }}
+
+      -   name: Set publish flags
+          id: flags
+          env:
+            INPUT_VERSION: ${{ inputs.version }}
+            RELEASE_CREATED: ${{ steps.release.outputs.releases_created }}
+            RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+          run: |
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              echo "should_publish=true" >> "$GITHUB_OUTPUT"
+              VERSION="$INPUT_VERSION"
+            else
+              echo "should_publish=$RELEASE_CREATED" >> "$GITHUB_OUTPUT"
+              VERSION="$RELEASE_TAG"
+            fi
+  
+            VERSION="${VERSION#v}"
+  
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "ref=v$VERSION" >> "$GITHUB_OUTPUT"            
+
+
+      -   name: Checkout
+          if: steps.flags.outputs.should_publish == 'true'
+          uses: actions/checkout@v6
+          with:
+            ref: ${{ steps.flags.outputs.ref }}
+
+      -   name: Publish Docker Image
+          if: steps.flags.outputs.should_publish == 'true'
+          uses: tada5hi/craneship@v4
+          with:
+            registryTag: |
+              latest
+                ${{ steps.flags.outputs.version }}

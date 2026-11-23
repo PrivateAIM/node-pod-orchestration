@@ -1,0 +1,32 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+      - canary
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run image
+        uses: abatilo/actions-poetry@v3
+        with:
+          poetry-version: "latest"
+
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Test
+        run: poetry run pytest -vra -m "not integration"
