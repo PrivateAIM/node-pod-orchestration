@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/PrivateAIM/node-pod-orchestration/compare/v1.5.0...v1.5.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* rename PyPI distribution to flame-node-pod-orchestration  ([#91](https://github.com/PrivateAIM/node-pod-orchestration/issues/91)) ([6dc084d](https://github.com/PrivateAIM/node-pod-orchestration/commit/6dc084da4c0550ddaab51c7fcc9410d224352677))
+
 ## [1.5.0](https://github.com/PrivateAIM/node-pod-orchestration/compare/v1.4.2...v1.5.0) (2026-11-24)
 
 
