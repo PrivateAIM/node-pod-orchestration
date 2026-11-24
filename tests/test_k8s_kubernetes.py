@@ -212,7 +212,7 @@ class TestCreateAnalysisDeployment:
         )
         assert (
             nginx_body.spec.template.spec.containers[0].image
-            == "nginxinc/nginx-unprivileged:1.31.7-alpine-slim"
+            == "nginx/nginx-unprivileged:1.31.9-alpine-slim"
         )
 
     def test_nginx_image_overridable_via_env(self, mock_k8s_clients, _setup_pod_reads, monkeypatch):
