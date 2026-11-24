@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/PrivateAIM/node-pod-orchestration/compare/v1.4.2...v1.5.0) (2026-11-24)
+
+
+### Features
+
+* rename package to flame_po and made changes needed for PyPI ([#89](https://github.com/PrivateAIM/node-pod-orchestration/issues/89)) ([c995b6a](https://github.com/PrivateAIM/node-pod-orchestration/commit/c995b6a5365018fdb2eff8a7bddc84ef1ec8fdfe))
+
 ## [1.4.2](https://github.com/PrivateAIM/node-pod-orchestration/compare/v1.4.1...v1.4.2) (2026-11-24)
 
 
