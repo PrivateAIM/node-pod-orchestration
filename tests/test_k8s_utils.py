@@ -1,5 +1,5 @@
 """
-Tests for src/k8s/utils.py
+Tests for flame_po/k8s/utils.py
 
 Covers:
   - load_cluster_config
@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch, mock_open
 
 from kubernetes.client.exceptions import ApiException
 
-from src.k8s.utils import (
+from flame_po.k8s.utils import (
     load_cluster_config,
     get_current_namespace,
     find_k8s_resources,
@@ -39,7 +39,7 @@ def _make_resource_list(names: list[str]) -> MagicMock:
 
 class TestLoadClusterConfig:
     def test_delegates_to_incluster_config(self):
-        with patch("src.k8s.utils.config.load_incluster_config") as mock_load:
+        with patch("flame_po.k8s.utils.config.load_incluster_config") as mock_load:
             load_cluster_config()
             mock_load.assert_called_once_with()
 

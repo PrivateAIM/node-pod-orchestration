@@ -1,11 +1,11 @@
 [tool.poetry]
 name = "Node-Pod-Orchestration"
 version = "1.4.2"
-description = ""
+description = "Kubernetes orchestration service that manages the lifecycle of analysis pods on a FLAME node"
 authors = ["Alexander Röhl <alexander.roehl@uni-tuebingen.de>", "David Hieber <david.hieber@uni-tuebingen.de>"]
-license = "Apache 2.0"
+license = "Apache-2.0"
 readme = "README.md"
-packages = [{ include = "src" }]
+packages = [{ include = "flame_po" }]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
@@ -17,7 +17,6 @@ psycopg2-binary = "^2.9.9"
 sqlalchemy = "^2.0.51"
 PyJWT = "^2.13.0"
 python-dotenv = "^1.2.2"
-kong-admin-client = {git = "https://github.com/PrivateAIM/kong-admin-python-client.git"}
 flame-hub-client = "^2.0.0"
 httpx2 = "^2.9.1"
 cryptography="^49.0.0"

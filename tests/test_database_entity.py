@@ -1,4 +1,4 @@
-"""Tests for src/resources/database/entity.py — SQLite in-memory backend."""
+"""Tests for flame_po/resources/database/entity.py — SQLite in-memory backend."""
 
 import json
 import time
@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.resources.database.db_models import Base
+from flame_po.resources.database.db_models import Base
 
 
 # ─── Fixture ─────────────────────────────────────────────────────────────────
@@ -21,8 +21,8 @@ def db():
         "sqlite:///:memory:", connect_args={"check_same_thread": False}
     )
 
-    with patch("src.resources.database.entity.create_engine", return_value=sqlite_engine):
-        from src.resources.database.entity import Database
+    with patch("flame_po.resources.database.entity.create_engine", return_value=sqlite_engine):
+        from flame_po.resources.database.entity import Database
 
         database = Database()
 
@@ -376,8 +376,8 @@ class TestLegacyRegistryColumns:
                 )
             )
 
-        with patch("src.resources.database.entity.create_engine", return_value=sqlite_engine):
-            from src.resources.database.entity import Database
+        with patch("flame_po.resources.database.entity.create_engine", return_value=sqlite_engine):
+            from flame_po.resources.database.entity import Database
 
             database = Database()
 

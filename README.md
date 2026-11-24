@@ -47,7 +47,7 @@ poetry install
 cp .env.template .env
 
 # Run the service
-poetry run python -m src.main
+poetry run python -m flame_po.main
 ```
 
 The API is then available at `http://localhost:8000/po/` with Swagger docs at `http://localhost:8000/api/docs`.
@@ -63,8 +63,8 @@ docker run --env-file .env -p 8000:8000 node-pod-orchestration:latest
 
 ```bash
 pytest
-poetry run ruff check --fix src/
-poetry run ruff format src/
+poetry run ruff check --fix flame_po/
+poetry run ruff format flame_po/
 ```
 
 ## Architecture
@@ -157,7 +157,7 @@ lags behind them.
 ## Project Layout
 
 ```
-src/
+flame_po/
 ├── main.py               # Entry point: config load + API and status threads
 ├── api/
 │   ├── api.py            # FastAPI app + all REST endpoints
@@ -182,7 +182,7 @@ tests/                    # Pytest suite
 
 - **Commits:** Conventional Commits (enforced by pre-commit).
 - **Hooks:** ruff check/format, trailing whitespace, large-file check, YAML/TOML validation.
-- **Logs:** Single JSON object per line via `src/utils/po_logging.py`; use `get_logger()` in new modules.
+- **Logs:** Single JSON object per line via `flame_po/utils/po_logging.py`; use `get_logger()` in new modules.
 - **CI/CD:** GitHub Actions builds and pushes the image to GHCR on push to `main`, `canary`, and `new_hub`.
 
 ## License

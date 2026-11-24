@@ -22,9 +22,9 @@ import string
 
 from kubernetes import client, watch
 
-from src.resources.database.entity import Database
-from src.k8s.utils import find_k8s_resources
-from src.utils.po_logging import get_logger
+from flame_po.resources.database.entity import Database
+from flame_po.k8s.utils import find_k8s_resources
+from flame_po.utils.po_logging import get_logger
 
 
 logger = get_logger()

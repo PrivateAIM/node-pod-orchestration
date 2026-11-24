@@ -1,9 +1,9 @@
-"""Tests that src.__version__ matches the version declared in pyproject.toml."""
+"""Tests that flame_po.__version__ matches the version declared in pyproject.toml."""
 
 import tomllib
 from pathlib import Path
 
-from src import __version__
+from flame_po import __version__
 
 
 def test_version_matches_pyproject():

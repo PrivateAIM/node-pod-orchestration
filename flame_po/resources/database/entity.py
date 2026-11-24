@@ -14,9 +14,9 @@ from typing import Optional
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
-from src.status.constants import AnalysisStatus
-from src.resources.database.db_models import Base, AnalysisDB, ArchiveDB
-from src.utils.po_logging import get_logger
+from flame_po.status.constants import AnalysisStatus
+from flame_po.resources.database.db_models import Base, AnalysisDB, ArchiveDB
+from flame_po.utils.po_logging import get_logger
 
 
 logger = get_logger()

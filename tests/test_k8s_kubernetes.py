@@ -1,5 +1,5 @@
 """
-Tests for src/k8s/kubernetes.py
+Tests for flame_po/k8s/kubernetes.py
 
 Covers:
   - create_harbor_secret: success, first-call failure -> delete+retry, Conflict re-raises
@@ -17,7 +17,7 @@ import pytest
 from unittest.mock import MagicMock, patch, call
 from kubernetes.client.exceptions import ApiException
 
-from src.k8s.kubernetes import (
+from flame_po.k8s.kubernetes import (
     get_harbor_secret_auth,
     create_harbor_secret,
     create_analysis_deployment,
@@ -154,7 +154,7 @@ class TestCreateAnalysisDeployment:
 
     @pytest.fixture(autouse=True)
     def _patch_sleep(self):
-        with patch("src.k8s.kubernetes.time.sleep"):
+        with patch("flame_po.k8s.kubernetes.time.sleep"):
             yield
 
     @pytest.fixture
@@ -183,7 +183,7 @@ class TestCreateAnalysisDeployment:
         ]
 
     def test_creates_analysis_deployment(self, mock_k8s_clients, _setup_pod_reads):
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
         mock_k8s_clients.apps_v1.create_namespaced_deployment.assert_called()
@@ -191,7 +191,7 @@ class TestCreateAnalysisDeployment:
         assert first_call_kwargs["namespace"] == "default"
 
     def test_creates_nginx_deployment(self, mock_k8s_clients, _setup_pod_reads):
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
         deployment_names = [
@@ -202,7 +202,7 @@ class TestCreateAnalysisDeployment:
 
     def test_nginx_default_image_is_slim(self, mock_k8s_clients, _setup_pod_reads, monkeypatch):
         monkeypatch.delenv("NGINX_IMAGE", raising=False)
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
         nginx_body = next(
@@ -217,7 +217,7 @@ class TestCreateAnalysisDeployment:
 
     def test_nginx_image_overridable_via_env(self, mock_k8s_clients, _setup_pod_reads, monkeypatch):
         monkeypatch.setenv("NGINX_IMAGE", "registry.local/nginx:custom")
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
         images = [
@@ -229,9 +229,9 @@ class TestCreateAnalysisDeployment:
     def test_does_not_wait_when_pods_are_running(self, mock_k8s_clients, _setup_pod_reads):
         """No watch and no sleep happen if the analysis and nginx pods are already running."""
         with (
-            patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()),
-            patch("src.k8s.kubernetes.time.sleep") as mock_sleep,
-            patch("src.k8s.kubernetes.watch.Watch") as mock_watch,
+            patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()),
+            patch("flame_po.k8s.kubernetes.time.sleep") as mock_sleep,
+            patch("flame_po.k8s.kubernetes.watch.Watch") as mock_watch,
         ):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
@@ -239,19 +239,19 @@ class TestCreateAnalysisDeployment:
         mock_sleep.assert_not_called()
 
     def test_creates_services(self, mock_k8s_clients, _setup_pod_reads):
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
         mock_k8s_clients.core_v1.create_namespaced_service.assert_called()
 
     def test_creates_config_map(self, mock_k8s_clients, _setup_pod_reads):
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
         mock_k8s_clients.core_v1.create_namespaced_config_map.assert_called_once()
 
     def test_config_map_sets_default_proxy_timeouts(self, mock_k8s_clients, _setup_pod_reads):
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
         _, call_kwargs = mock_k8s_clients.core_v1.create_namespaced_config_map.call_args
@@ -264,7 +264,7 @@ class TestCreateAnalysisDeployment:
     def test_config_map_proxy_timeouts_are_not_env_overridable(self, mock_k8s_clients, _setup_pod_reads):
         """Proxy timeouts are hardcoded by design; env vars must not change them."""
         env_override = {"NGINX_PROXY_TIMEOUT": "1800", "NGINX_PROXY_CONNECT_TIMEOUT": "5"}
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()), \
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()), \
                 patch.dict(os.environ, env_override):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
@@ -274,7 +274,7 @@ class TestCreateAnalysisDeployment:
         assert "proxy_read_timeout    900s;" in nginx_conf
 
     def test_creates_network_policies(self, mock_k8s_clients, _setup_pod_reads):
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
         bodies = {
@@ -299,14 +299,14 @@ class TestCreateAnalysisDeployment:
         ]
 
     def test_returns_pod_names(self, mock_k8s_clients, _setup_pod_reads):
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             result = create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
         assert isinstance(result, list)
         assert result == ["analysis-my-dep-0-pod"]
 
     def test_custom_namespace_propagated(self, mock_k8s_clients, _setup_pod_reads):
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             create_analysis_deployment(
                 "my-dep", "harbor.test/image:latest", env=self._ENV, namespace="flame-ns"
             )
@@ -331,8 +331,8 @@ class TestAwaitAnalysisStart:
     def test_returns_immediately_when_pods_are_running(self, mock_k8s_clients):
         mock_k8s_clients.core_v1.list_namespaced_pod.return_value = self._pod_list("Running", "Running")
         with (
-            patch("src.k8s.kubernetes.watch.Watch") as mock_watch,
-            patch("src.k8s.kubernetes.time.sleep") as mock_sleep,
+            patch("flame_po.k8s.kubernetes.watch.Watch") as mock_watch,
+            patch("flame_po.k8s.kubernetes.time.sleep") as mock_sleep,
         ):
             _await_analysis_start("analysis-my-dep", "nginx-analysis-my-dep")
 
@@ -347,7 +347,7 @@ class TestAwaitAnalysisStart:
             self._pod_list(),
             self._pod_list("Running", "Running"),
         ]
-        with patch("src.k8s.kubernetes.watch.Watch") as mock_watch:
+        with patch("flame_po.k8s.kubernetes.watch.Watch") as mock_watch:
             mock_watch.return_value.stream.return_value = (e for e in [{"type": "ADDED"}, {"type": "ADDED"}])
             _await_analysis_start("analysis-my-dep", "nginx-analysis-my-dep", timeout=5)
 
@@ -356,7 +356,7 @@ class TestAwaitAnalysisStart:
 
     def test_stops_when_pods_are_not_created(self, mock_k8s_clients):
         mock_k8s_clients.core_v1.list_namespaced_pod.return_value = self._pod_list()
-        with patch("src.k8s.kubernetes.watch.Watch") as mock_watch:
+        with patch("flame_po.k8s.kubernetes.watch.Watch") as mock_watch:
             mock_watch.return_value.stream.return_value = (e for e in [{"type": "ADDED"}])
             _await_analysis_start("analysis-my-dep", "nginx-analysis-my-dep", timeout=5)
 
@@ -369,14 +369,14 @@ class TestAwaitAnalysisStart:
             self._pod_list("Pending", "Running"),
             self._pod_list("Running", "Running"),
         ]
-        with patch("src.k8s.kubernetes.time.sleep") as mock_sleep:
+        with patch("flame_po.k8s.kubernetes.time.sleep") as mock_sleep:
             _await_analysis_start("analysis-my-dep", "nginx-analysis-my-dep")
 
         mock_sleep.assert_called_once_with(1)
 
     def test_failed_pod_stops_waiting(self, mock_k8s_clients):
         mock_k8s_clients.core_v1.list_namespaced_pod.return_value = self._pod_list("Failed", "Running")
-        with patch("src.k8s.kubernetes.time.sleep") as mock_sleep:
+        with patch("flame_po.k8s.kubernetes.time.sleep") as mock_sleep:
             _await_analysis_start("analysis-my-dep", "nginx-analysis-my-dep")  # must not raise
 
         mock_sleep.assert_not_called()
@@ -399,7 +399,7 @@ class TestBuildNextflowLauncherLocations:
         return mock_k8s_clients
 
     def _build(self, find_results):
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=find_results):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=find_results):
             return _build_nextflow_launcher_locations("analysis-my-dep", self._ENV)
 
     def test_no_launcher_returns_empty(self, mock_k8s_clients):

@@ -16,18 +16,18 @@ from fastapi import APIRouter, FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src import __version__
-from src.utils.hub_client import (
+from flame_po import __version__
+from flame_po.utils.hub_client import (
     RegistryCredentialsError,
     init_hub_client,
     get_node_id_by_client,
 )
-from src.utils.other import extract_hub_envs
-from src.api.oauth import valid_access_token, valid_analysis_token
-from src.resources.database.entity import Database
-from src.resources.analysis.entity import CreateAnalysis
-from src.resources.log.entity import CreateLogEntity, AnalysisStoppedLog
-from src.resources.utils import (
+from flame_po.utils.other import extract_hub_envs
+from flame_po.api.oauth import valid_access_token, valid_analysis_token
+from flame_po.resources.database.entity import Database
+from flame_po.resources.analysis.entity import CreateAnalysis
+from flame_po.resources.log.entity import CreateLogEntity, AnalysisStoppedLog
+from flame_po.resources.utils import (
     create_analysis,
     retrieve_history,
     retrieve_logs,
@@ -38,8 +38,8 @@ from src.resources.utils import (
     cleanup,
     stream_logs,
 )
-from src.utils.po_logging import get_logger
-from src.api.constants import KEYCLOAK_URL_FOUND
+from flame_po.utils.po_logging import get_logger
+from flame_po.api.constants import KEYCLOAK_URL_FOUND
 
 
 logger = get_logger()
