@@ -10,7 +10,7 @@ from typing import Literal, Optional
 
 from kubernetes import config, client
 
-from src.utils.po_logging import get_logger
+from flame_po.utils.po_logging import get_logger
 
 
 logger = get_logger()

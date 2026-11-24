@@ -1,11 +1,11 @@
-"""Tests for src/resources/analysis/entity.py"""
+"""Tests for flame_po/resources/analysis/entity.py"""
 
 import json
 import pytest
 from unittest.mock import MagicMock, patch
 
-from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
-from src.status.constants import AnalysisStatus
+from flame_po.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
+from flame_po.status.constants import AnalysisStatus
 
 
 # ─── Analysis model ───────────────────────────────────────────────────────────
@@ -65,8 +65,8 @@ class TestAnalysisStart:
     def test_start_sets_status_to_started(self, analysis, mock_database):
         mock_tokens = {"DATA_SOURCE_TOKEN": "kong-tok", "AUTHUP_TOKEN": "authup-tok"}
         with (
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
-            patch("src.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
+            patch("flame_po.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
         ):
             analysis.start(database=mock_database)
         assert analysis.status == AnalysisStatus.STARTED.value
@@ -74,8 +74,8 @@ class TestAnalysisStart:
     def test_start_sets_deployment_name(self, analysis, mock_database):
         mock_tokens = {"DATA_SOURCE_TOKEN": "k", "AUTHUP_TOKEN": "a"}
         with (
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
-            patch("src.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
+            patch("flame_po.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
         ):
             analysis.start(database=mock_database)
         assert analysis.deployment_name == "analysis-test-analysis-0"
@@ -90,8 +90,8 @@ class TestAnalysisStart:
         )
         mock_tokens = {"DATA_SOURCE_TOKEN": "k", "AUTHUP_TOKEN": "a"}
         with (
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
-            patch("src.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
+            patch("flame_po.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
         ):
             analysis.start(database=mock_database)
         assert analysis.deployment_name == "analysis-test-analysis-3"
@@ -99,8 +99,8 @@ class TestAnalysisStart:
     def test_start_sets_analysis_config_with_ids(self, analysis, mock_database):
         mock_tokens = {"DATA_SOURCE_TOKEN": "kong-tok", "AUTHUP_TOKEN": "authup-tok"}
         with (
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
-            patch("src.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
+            patch("flame_po.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
         ):
             analysis.start(database=mock_database)
         assert analysis.analysis_config["ANALYSIS_ID"] == "test-analysis"
@@ -110,9 +110,9 @@ class TestAnalysisStart:
     def test_start_stores_pod_ids(self, analysis, mock_database):
         mock_tokens = {"DATA_SOURCE_TOKEN": "k", "AUTHUP_TOKEN": "a"}
         with (
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
             patch(
-                "src.resources.analysis.entity.create_analysis_deployment",
+                "flame_po.resources.analysis.entity.create_analysis_deployment",
                 return_value=["pod-1", "pod-2"],
             ),
         ):
@@ -122,8 +122,8 @@ class TestAnalysisStart:
     def test_start_calls_database_create_analysis(self, analysis, mock_database):
         mock_tokens = {"DATA_SOURCE_TOKEN": "k", "AUTHUP_TOKEN": "a"}
         with (
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
-            patch("src.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
+            patch("flame_po.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
         ):
             analysis.start(database=mock_database)
         mock_database.create_analysis.assert_called_once()
@@ -134,8 +134,8 @@ class TestAnalysisStart:
     def test_start_uses_provided_namespace(self, analysis, mock_database):
         mock_tokens = {"DATA_SOURCE_TOKEN": "k", "AUTHUP_TOKEN": "a"}
         with (
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
-            patch("src.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
+            patch("flame_po.resources.analysis.entity.create_analysis_deployment", return_value=["pod-1"]),
         ):
             analysis.start(database=mock_database, namespace="flame-ns")
         assert analysis.namespace == "flame-ns"
@@ -143,12 +143,12 @@ class TestAnalysisStart:
         assert call_kwargs["namespace"] == "flame-ns"
 
     def test_start_raises_and_deploys_nothing_without_authup_token(self, analysis, mock_database):
-        from src.utils.token import AnalysisTokenError
+        from flame_po.utils.token import AnalysisTokenError
 
         mock_tokens = {"DATA_SOURCE_TOKEN": "k", "AUTHUP_TOKEN": None}
         with (
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
-            patch("src.resources.analysis.entity.create_analysis_deployment") as mock_deploy,
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value=mock_tokens),
+            patch("flame_po.resources.analysis.entity.create_analysis_deployment") as mock_deploy,
         ):
             with pytest.raises(AnalysisTokenError):
                 analysis.start(database=mock_database)
@@ -173,27 +173,27 @@ class TestAnalysisStop:
 
     def test_stop_sets_status_to_stopped(self, started_analysis, mock_database):
         with (
-            patch("src.resources.analysis.entity.delete_deployment"),
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
-            patch("src.resources.analysis.entity.delete_subscription"),
+            patch("flame_po.resources.analysis.entity.delete_deployment"),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("flame_po.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database)
         assert started_analysis.status == AnalysisStatus.STOPPED.value
 
     def test_stop_with_custom_status(self, started_analysis, mock_database):
         with (
-            patch("src.resources.analysis.entity.delete_deployment"),
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
-            patch("src.resources.analysis.entity.delete_subscription"),
+            patch("flame_po.resources.analysis.entity.delete_deployment"),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("flame_po.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database, status=AnalysisStatus.FAILED.value)
         assert started_analysis.status == AnalysisStatus.FAILED.value
 
     def test_stop_sets_log_when_provided(self, started_analysis, mock_database):
         with (
-            patch("src.resources.analysis.entity.delete_deployment"),
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
-            patch("src.resources.analysis.entity.delete_subscription"),
+            patch("flame_po.resources.analysis.entity.delete_deployment"),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("flame_po.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database, log="something went wrong")
         assert started_analysis.log == "something went wrong"
@@ -201,28 +201,28 @@ class TestAnalysisStop:
     def test_stop_preserves_existing_log_when_none_provided(self, started_analysis, mock_database):
         started_analysis.log = "original log"
         with (
-            patch("src.resources.analysis.entity.delete_deployment"),
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
-            patch("src.resources.analysis.entity.delete_subscription"),
+            patch("flame_po.resources.analysis.entity.delete_deployment"),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("flame_po.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database)
         assert started_analysis.log == "original log"
 
     def test_stop_calls_delete_deployment(self, started_analysis, mock_database):
         with (
-            patch("src.resources.analysis.entity.delete_deployment") as mock_del,
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
-            patch("src.resources.analysis.entity.delete_subscription"),
+            patch("flame_po.resources.analysis.entity.delete_deployment") as mock_del,
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("flame_po.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database)
         mock_del.assert_called_once_with("analysis-test-analysis-0", namespace="default")
 
     def test_stop_skips_delete_subscription_without_authup_token(self, started_analysis, mock_database):
         with (
-            patch("src.resources.analysis.entity.delete_deployment") as mock_del,
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": None, "DATA_SOURCE_TOKEN": "tok"}),
-            patch("src.resources.analysis.entity.delete_subscription") as mock_unsub,
-            patch("src.resources.analysis.entity.logger") as mock_logger,
+            patch("flame_po.resources.analysis.entity.delete_deployment") as mock_del,
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": None, "DATA_SOURCE_TOKEN": "tok"}),
+            patch("flame_po.resources.analysis.entity.delete_subscription") as mock_unsub,
+            patch("flame_po.resources.analysis.entity.logger") as mock_logger,
         ):
             started_analysis.stop(database=mock_database, log="final log")
         mock_unsub.assert_not_called()
@@ -234,9 +234,9 @@ class TestAnalysisStop:
 
     def test_stop_updates_database_deployment_status(self, started_analysis, mock_database):
         with (
-            patch("src.resources.analysis.entity.delete_deployment"),
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
-            patch("src.resources.analysis.entity.delete_subscription"),
+            patch("flame_po.resources.analysis.entity.delete_deployment"),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("flame_po.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database)
         calls = mock_database.update_deployment.call_args_list
@@ -247,9 +247,9 @@ class TestAnalysisStop:
 
     def test_stop_updates_database_deployment_log(self, started_analysis, mock_database):
         with (
-            patch("src.resources.analysis.entity.delete_deployment"),
-            patch("src.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
-            patch("src.resources.analysis.entity.delete_subscription"),
+            patch("flame_po.resources.analysis.entity.delete_deployment"),
+            patch("flame_po.resources.analysis.entity.create_analysis_tokens", return_value={"AUTHUP_TOKEN": "tok", "DATA_SOURCE_TOKEN": "tok"}),
+            patch("flame_po.resources.analysis.entity.delete_subscription"),
         ):
             started_analysis.stop(database=mock_database, log="bye")
         calls = mock_database.update_deployment.call_args_list

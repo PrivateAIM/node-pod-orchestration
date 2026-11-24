@@ -11,9 +11,9 @@ from typing import Optional
 
 from httpx2 import HTTPError
 
-from src.utils.hub_client import init_hub_client, init_proxied_http_client, get_analysis_client_credentials
-from src.utils.other import extract_hub_envs
-from src.utils.po_logging import get_logger
+from flame_po.utils.hub_client import init_hub_client, init_proxied_http_client, get_analysis_client_credentials
+from flame_po.utils.other import extract_hub_envs
+from flame_po.utils.po_logging import get_logger
 
 
 logger = get_logger()

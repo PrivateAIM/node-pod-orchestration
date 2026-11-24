@@ -15,12 +15,12 @@ class TestInitHubClientWithClient:
         mock_ssl_ctx = MagicMock()
 
         with (
-            patch("src.utils.hub_client.get_ssl_context", return_value=mock_ssl_ctx),
-            patch("src.utils.hub_client.Client") as mock_httpx_client,
-            patch("src.utils.hub_client.ClientAuth") as mock_auth,
-            patch("src.utils.hub_client.HubClient", return_value=mock_core_client),
+            patch("flame_po.utils.hub_client.get_ssl_context", return_value=mock_ssl_ctx),
+            patch("flame_po.utils.hub_client.Client") as mock_httpx_client,
+            patch("flame_po.utils.hub_client.ClientAuth") as mock_auth,
+            patch("flame_po.utils.hub_client.HubClient", return_value=mock_core_client),
         ):
-            from src.utils.hub_client import init_hub_client
+            from flame_po.utils.hub_client import init_hub_client
             result = init_hub_client(
                 client_id="cid",
                 client_secret="csec",
@@ -34,10 +34,10 @@ class TestInitHubClientWithClient:
 
     def test_exception_returns_none(self):
         with (
-            patch("src.utils.hub_client.get_ssl_context", return_value=MagicMock()),
-            patch("src.utils.hub_client.Client", side_effect=Exception("conn failed")),
+            patch("flame_po.utils.hub_client.get_ssl_context", return_value=MagicMock()),
+            patch("flame_po.utils.hub_client.Client", side_effect=Exception("conn failed")),
         ):
-            from src.utils.hub_client import init_hub_client
+            from flame_po.utils.hub_client import init_hub_client
             result = init_hub_client(
                 client_id="cid",
                 client_secret="csec",
@@ -54,13 +54,13 @@ class TestInitHubClientWithClient:
         mock_transport = MagicMock()
 
         with (
-            patch("src.utils.hub_client.get_ssl_context", return_value=mock_ssl_ctx),
-            patch("src.utils.hub_client.HTTPTransport", return_value=mock_transport) as mock_transport_cls,
-            patch("src.utils.hub_client.Client") as mock_httpx_client,
-            patch("src.utils.hub_client.ClientAuth"),
-            patch("src.utils.hub_client.HubClient"),
+            patch("flame_po.utils.hub_client.get_ssl_context", return_value=mock_ssl_ctx),
+            patch("flame_po.utils.hub_client.HTTPTransport", return_value=mock_transport) as mock_transport_cls,
+            patch("flame_po.utils.hub_client.Client") as mock_httpx_client,
+            patch("flame_po.utils.hub_client.ClientAuth"),
+            patch("flame_po.utils.hub_client.HubClient"),
         ):
-            from src.utils.hub_client import init_hub_client
+            from flame_po.utils.hub_client import init_hub_client
             init_hub_client(
                 client_id="cid",
                 client_secret="csec",
@@ -81,12 +81,12 @@ class TestInitHubClientWithClient:
         mock_ssl_ctx = MagicMock()
 
         with (
-            patch("src.utils.hub_client.get_ssl_context", return_value=mock_ssl_ctx),
-            patch("src.utils.hub_client.Client") as mock_httpx_client,
-            patch("src.utils.hub_client.ClientAuth"),
-            patch("src.utils.hub_client.HubClient"),
+            patch("flame_po.utils.hub_client.get_ssl_context", return_value=mock_ssl_ctx),
+            patch("flame_po.utils.hub_client.Client") as mock_httpx_client,
+            patch("flame_po.utils.hub_client.ClientAuth"),
+            patch("flame_po.utils.hub_client.HubClient"),
         ):
-            from src.utils.hub_client import init_hub_client
+            from flame_po.utils.hub_client import init_hub_client
             init_hub_client(
                 client_id="cid",
                 client_secret="csec",
@@ -104,14 +104,14 @@ class TestInitHubClientWithClient:
 
 class TestProxiedHttpClient:
     def test_proxy_mounts_none_without_both_proxies(self):
-        from src.utils.hub_client import get_proxy_mounts
+        from flame_po.utils.hub_client import get_proxy_mounts
         assert get_proxy_mounts("", "", MagicMock()) is None
         assert get_proxy_mounts("http://proxy:3128", None, MagicMock()) is None
 
     def test_proxy_mounts_with_both_proxies(self):
         ssl_ctx = MagicMock()
-        with patch("src.utils.hub_client.HTTPTransport") as mock_transport:
-            from src.utils.hub_client import get_proxy_mounts
+        with patch("flame_po.utils.hub_client.HTTPTransport") as mock_transport:
+            from flame_po.utils.hub_client import get_proxy_mounts
             mounts = get_proxy_mounts("http://p:1", "http://p:2", ssl_ctx)
         assert set(mounts) == {"http://", "https://"}
         mock_transport.assert_any_call(proxy="http://p:1")
@@ -122,11 +122,11 @@ class TestProxiedHttpClient:
         monkeypatch.setenv("PO_HTTPS_PROXY", "http://p:2")
         ssl_ctx = MagicMock()
         with (
-            patch("src.utils.hub_client.get_ssl_context", return_value=ssl_ctx),
-            patch("src.utils.hub_client.get_proxy_mounts", return_value={"m": 1}) as mock_mounts,
-            patch("src.utils.hub_client.Client") as mock_client,
+            patch("flame_po.utils.hub_client.get_ssl_context", return_value=ssl_ctx),
+            patch("flame_po.utils.hub_client.get_proxy_mounts", return_value={"m": 1}) as mock_mounts,
+            patch("flame_po.utils.hub_client.Client") as mock_client,
         ):
-            from src.utils.hub_client import init_proxied_http_client
+            from flame_po.utils.hub_client import init_proxied_http_client
             result = init_proxied_http_client(timeout=5)
         mock_mounts.assert_called_once_with("http://p:1", "http://p:2", ssl_ctx)
         mock_client.assert_called_once_with(mounts={"m": 1}, verify=ssl_ctx, timeout=5)
@@ -135,19 +135,19 @@ class TestProxiedHttpClient:
 
 class TestGetSslContext:
     def setup_method(self):
-        from src.utils.hub_client import get_ssl_context
+        from flame_po.utils.hub_client import get_ssl_context
         get_ssl_context.cache_clear()
 
     def teardown_method(self):
-        from src.utils.hub_client import get_ssl_context
+        from flame_po.utils.hub_client import get_ssl_context
         get_ssl_context.cache_clear()
 
     def test_without_extra_certs_does_not_load_verify_locations(self, monkeypatch):
         monkeypatch.delenv("EXTRA_CA_CERTS", raising=False)
         mock_ctx = MagicMock(spec=ssl.SSLContext)
 
-        with patch("src.utils.hub_client.truststore.SSLContext", return_value=mock_ctx):
-            from src.utils.hub_client import get_ssl_context
+        with patch("flame_po.utils.hub_client.truststore.SSLContext", return_value=mock_ctx):
+            from flame_po.utils.hub_client import get_ssl_context
             result = get_ssl_context()
 
         assert result is mock_ctx
@@ -159,8 +159,8 @@ class TestGetSslContext:
         monkeypatch.setenv("EXTRA_CA_CERTS", str(cert_file))
         mock_ctx = MagicMock(spec=ssl.SSLContext)
 
-        with patch("src.utils.hub_client.truststore.SSLContext", return_value=mock_ctx):
-            from src.utils.hub_client import get_ssl_context
+        with patch("flame_po.utils.hub_client.truststore.SSLContext", return_value=mock_ctx):
+            from flame_po.utils.hub_client import get_ssl_context
             result = get_ssl_context()
 
         assert result is mock_ctx
@@ -170,8 +170,8 @@ class TestGetSslContext:
         monkeypatch.setenv("EXTRA_CA_CERTS", "/nonexistent/path/ca.crt")
         mock_ctx = MagicMock(spec=ssl.SSLContext)
 
-        with patch("src.utils.hub_client.truststore.SSLContext", return_value=mock_ctx):
-            from src.utils.hub_client import get_ssl_context
+        with patch("flame_po.utils.hub_client.truststore.SSLContext", return_value=mock_ctx):
+            from flame_po.utils.hub_client import get_ssl_context
             result = get_ssl_context()
 
         assert result is mock_ctx
@@ -186,7 +186,7 @@ class TestGetNodeIdByClient:
         mock_node.id = "node-uuid-123"
         mock_hub_client.find_nodes.return_value = [mock_node]
 
-        from src.utils.hub_client import get_node_id_by_client
+        from flame_po.utils.hub_client import get_node_id_by_client
         result = get_node_id_by_client(mock_hub_client, "my-client-id")
 
         assert result == "node-uuid-123"
@@ -197,7 +197,7 @@ class TestGetNodeIdByClient:
             "404", request=MagicMock(), response=MagicMock()
         )
 
-        from src.utils.hub_client import get_node_id_by_client
+        from flame_po.utils.hub_client import get_node_id_by_client
         result = get_node_id_by_client(mock_hub_client, "cid")
 
         assert result is None
@@ -205,7 +205,7 @@ class TestGetNodeIdByClient:
     def test_json_decode_error_returns_none(self, mock_hub_client):
         mock_hub_client.find_nodes.side_effect = JSONDecodeError("err", "", 0)
 
-        from src.utils.hub_client import get_node_id_by_client
+        from flame_po.utils.hub_client import get_node_id_by_client
         result = get_node_id_by_client(mock_hub_client, "cid")
 
         assert result is None
@@ -213,7 +213,7 @@ class TestGetNodeIdByClient:
     def test_connect_timeout_returns_none(self, mock_hub_client):
         mock_hub_client.find_nodes.side_effect = ConnectTimeout("timeout")
 
-        from src.utils.hub_client import get_node_id_by_client
+        from flame_po.utils.hub_client import get_node_id_by_client
         result = get_node_id_by_client(mock_hub_client, "cid")
 
         assert result is None
@@ -221,7 +221,7 @@ class TestGetNodeIdByClient:
     def test_attribute_error_returns_none(self, mock_hub_client):
         mock_hub_client.find_nodes.side_effect = AttributeError("no attr")
 
-        from src.utils.hub_client import get_node_id_by_client
+        from flame_po.utils.hub_client import get_node_id_by_client
         result = get_node_id_by_client(mock_hub_client, "cid")
 
         assert result is None
@@ -231,7 +231,7 @@ class TestGetNodeIdByClient:
             "hub error", request=MagicMock()
         )
 
-        from src.utils.hub_client import get_node_id_by_client
+        from flame_po.utils.hub_client import get_node_id_by_client
         result = get_node_id_by_client(mock_hub_client, "cid")
 
         assert result is None
@@ -241,7 +241,7 @@ class TestGetNodeIdByClient:
 
 class TestGetRegistryCredentials:
     def test_success_returns_credentials(self, mock_hub_client):
-        from src.utils.hub_client import get_registry_credentials
+        from flame_po.utils.hub_client import get_registry_credentials
 
         result = get_registry_credentials(mock_hub_client, "node-uuid")
 
@@ -252,7 +252,7 @@ class TestGetRegistryCredentials:
 
     @pytest.mark.parametrize("hub_client, node_id", [(None, "node-uuid"), (MagicMock(), None)])
     def test_missing_client_or_node_raises(self, hub_client, node_id):
-        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+        from flame_po.utils.hub_client import RegistryCredentialsError, get_registry_credentials
 
         with pytest.raises(RegistryCredentialsError):
             get_registry_credentials(hub_client, node_id)
@@ -268,7 +268,7 @@ class TestGetRegistryCredentials:
         ],
     )
     def test_transport_errors_raise(self, mock_hub_client, error):
-        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+        from flame_po.utils.hub_client import RegistryCredentialsError, get_registry_credentials
 
         mock_hub_client.get_node_registry_credentials.side_effect = error
 
@@ -278,7 +278,7 @@ class TestGetRegistryCredentials:
     def test_hub_api_error_raises(self, mock_hub_client):
         from flame_hub._exceptions import HubAPIError
 
-        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+        from flame_po.utils.hub_client import RegistryCredentialsError, get_registry_credentials
 
         mock_hub_client.get_node_registry_credentials.side_effect = HubAPIError(
             "The node has no registry project provisioned yet.", request=MagicMock()
@@ -288,7 +288,7 @@ class TestGetRegistryCredentials:
             get_registry_credentials(mock_hub_client, "node-uuid")
 
     def test_unknown_node_raises(self, mock_hub_client):
-        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+        from flame_po.utils.hub_client import RegistryCredentialsError, get_registry_credentials
 
         mock_hub_client.get_node_registry_credentials.return_value = None
 
@@ -301,7 +301,7 @@ class TestGetRegistryCredentials:
     def test_empty_host_or_project_raises(self, mock_hub_client, host, external_name):
         from flame_hub.models import NodeRegistryCredentials
 
-        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+        from flame_po.utils.hub_client import RegistryCredentialsError, get_registry_credentials
 
         mock_hub_client.get_node_registry_credentials.return_value = NodeRegistryCredentials(
             host=host,
@@ -316,7 +316,7 @@ class TestGetRegistryCredentials:
     def test_missing_robot_account_raises(self, mock_hub_client):
         from flame_hub.models import NodeRegistryCredentials
 
-        from src.utils.hub_client import RegistryCredentialsError, get_registry_credentials
+        from flame_po.utils.hub_client import RegistryCredentialsError, get_registry_credentials
 
         mock_hub_client.get_node_registry_credentials.return_value = NodeRegistryCredentials(
             host="harbor.privateaim",
@@ -337,7 +337,7 @@ class TestGetNodeAnalysisId:
         mock_node_analysis.id = "na-uuid-456"
         mock_hub_client.find_analysis_nodes.return_value = [mock_node_analysis]
 
-        from src.utils.hub_client import get_node_analysis_id
+        from flame_po.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id")
 
         assert result == "na-uuid-456"
@@ -348,7 +348,7 @@ class TestGetNodeAnalysisId:
     def test_empty_list_returns_empty_list(self, mock_hub_client):
         mock_hub_client.find_analysis_nodes.return_value = []
 
-        from src.utils.hub_client import get_node_analysis_id
+        from flame_po.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id")
 
         assert result == []
@@ -358,7 +358,7 @@ class TestGetNodeAnalysisId:
             "500", request=MagicMock(), response=MagicMock()
         )
 
-        from src.utils.hub_client import get_node_analysis_id
+        from flame_po.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id")
 
         assert result is None
@@ -368,7 +368,7 @@ class TestGetNodeAnalysisId:
             "err", request=MagicMock()
         )
 
-        from src.utils.hub_client import get_node_analysis_id
+        from flame_po.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id")
 
         assert result is None
@@ -376,7 +376,7 @@ class TestGetNodeAnalysisId:
     def test_attribute_error_returns_none(self, mock_hub_client):
         mock_hub_client.find_analysis_nodes.side_effect = AttributeError("no attr")
 
-        from src.utils.hub_client import get_node_analysis_id
+        from flame_po.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id")
 
         assert result is None
@@ -386,7 +386,7 @@ class TestGetNodeAnalysisId:
 
 class TestUpdateHubStatus:
     def test_success_without_progress(self, mock_hub_client):
-        from src.utils.hub_client import update_hub_status
+        from flame_po.utils.hub_client import update_hub_status
         update_hub_status(mock_hub_client, "na-id", "started")
 
         mock_hub_client.update_analysis_node.assert_called_once_with(
@@ -394,7 +394,7 @@ class TestUpdateHubStatus:
         )
 
     def test_success_with_progress(self, mock_hub_client):
-        from src.utils.hub_client import update_hub_status
+        from flame_po.utils.hub_client import update_hub_status
         update_hub_status(mock_hub_client, "na-id", "executing", run_progress=42)
 
         mock_hub_client.update_analysis_node.assert_called_once_with(
@@ -402,8 +402,8 @@ class TestUpdateHubStatus:
         )
 
     def test_stuck_status_mapped_to_failed(self, mock_hub_client):
-        from src.utils.hub_client import update_hub_status
-        from src.status.constants import AnalysisStatus
+        from flame_po.utils.hub_client import update_hub_status
+        from flame_po.status.constants import AnalysisStatus
         update_hub_status(mock_hub_client, "na-id", AnalysisStatus.STUCK.value)
 
         mock_hub_client.update_analysis_node.assert_called_once_with(
@@ -415,20 +415,20 @@ class TestUpdateHubStatus:
             "500", request=MagicMock(), response=MagicMock()
         )
 
-        from src.utils.hub_client import update_hub_status
+        from flame_po.utils.hub_client import update_hub_status
         # Should not raise
         update_hub_status(mock_hub_client, "na-id", "started")
 
     def test_connect_error_does_not_raise(self, mock_hub_client):
         mock_hub_client.update_analysis_node.side_effect = ConnectError("conn refused")
 
-        from src.utils.hub_client import update_hub_status
+        from flame_po.utils.hub_client import update_hub_status
         update_hub_status(mock_hub_client, "na-id", "started")
 
     def test_attribute_error_does_not_raise(self, mock_hub_client):
         mock_hub_client.update_analysis_node.side_effect = AttributeError("no attr")
 
-        from src.utils.hub_client import update_hub_status
+        from flame_po.utils.hub_client import update_hub_status
         update_hub_status(mock_hub_client, "na-id", "started")
 
     def test_hub_api_error_does_not_raise(self, mock_hub_client):
@@ -436,7 +436,7 @@ class TestUpdateHubStatus:
             "err", request=MagicMock()
         )
 
-        from src.utils.hub_client import update_hub_status
+        from flame_po.utils.hub_client import update_hub_status
         update_hub_status(mock_hub_client, "na-id", "started")
 
 
@@ -452,7 +452,7 @@ class TestGetPartnerNodeStatuses:
         node_b.execution_status = "executing"
         mock_hub_client.find_analysis_nodes.return_value = [node_a, node_b]
 
-        from src.utils.hub_client import get_partner_node_statuses
+        from flame_po.utils.hub_client import get_partner_node_statuses
         result = get_partner_node_statuses(mock_hub_client, "analysis-1", "self-id")
 
         assert result == {"partner-id": "executing"}
@@ -467,7 +467,7 @@ class TestGetPartnerNodeStatuses:
         node_b.execution_status = "finished"
         mock_hub_client.find_analysis_nodes.return_value = [node_a, node_b]
 
-        from src.utils.hub_client import get_partner_node_statuses
+        from flame_po.utils.hub_client import get_partner_node_statuses
         result = get_partner_node_statuses(mock_hub_client, "analysis-1", "self-id")
 
         assert result == {"partner-a": "started", "partner-b": "finished"}
@@ -477,7 +477,7 @@ class TestGetPartnerNodeStatuses:
             "500", request=MagicMock(), response=MagicMock()
         )
 
-        from src.utils.hub_client import get_partner_node_statuses
+        from flame_po.utils.hub_client import get_partner_node_statuses
         result = get_partner_node_statuses(mock_hub_client, "analysis-1", "self-id")
 
         assert result is None
@@ -485,7 +485,7 @@ class TestGetPartnerNodeStatuses:
     def test_empty_analysis_nodes_returns_empty_dict(self, mock_hub_client):
         mock_hub_client.find_analysis_nodes.return_value = []
 
-        from src.utils.hub_client import get_partner_node_statuses
+        from flame_po.utils.hub_client import get_partner_node_statuses
         result = get_partner_node_statuses(mock_hub_client, "analysis-1", "self-id")
 
         assert result == {}
@@ -507,28 +507,28 @@ _TRANSPORT_ERRORS = [
 class TestHubWrappersCatchAllTransportErrors:
     @pytest.mark.parametrize("error", _TRANSPORT_ERRORS)
     def test_get_node_id_by_client_returns_none(self, mock_hub_client, error):
-        from src.utils.hub_client import get_node_id_by_client
+        from flame_po.utils.hub_client import get_node_id_by_client
         mock_hub_client.find_nodes.side_effect = error
 
         assert get_node_id_by_client(mock_hub_client, "cid") is None
 
     @pytest.mark.parametrize("error", _TRANSPORT_ERRORS)
     def test_get_node_analysis_id_returns_none(self, mock_hub_client, error):
-        from src.utils.hub_client import get_node_analysis_id
+        from flame_po.utils.hub_client import get_node_analysis_id
         mock_hub_client.find_analysis_nodes.side_effect = error
 
         assert get_node_analysis_id(mock_hub_client, "analysis-1", "node-obj-id") is None
 
     @pytest.mark.parametrize("error", _TRANSPORT_ERRORS)
     def test_update_hub_status_does_not_raise(self, mock_hub_client, error):
-        from src.utils.hub_client import update_hub_status
+        from flame_po.utils.hub_client import update_hub_status
         mock_hub_client.update_analysis_node.side_effect = error
 
         update_hub_status(mock_hub_client, "na-id", "started")
 
     @pytest.mark.parametrize("error", _TRANSPORT_ERRORS)
     def test_get_analysis_node_statuses_returns_none(self, mock_hub_client, error):
-        from src.utils.hub_client import get_analysis_node_statuses
+        from flame_po.utils.hub_client import get_analysis_node_statuses
         mock_hub_client.find_analysis_nodes.side_effect = error
 
         assert get_analysis_node_statuses(mock_hub_client, "analysis-1") is None
@@ -542,7 +542,7 @@ class TestGetNodeAnalysisIdWithoutNode:
         node_a.id, node_b.id = "na-1", "na-2"
         mock_hub_client.find_analysis_nodes.return_value = [node_a, node_b]
 
-        from src.utils.hub_client import get_node_analysis_id
+        from flame_po.utils.hub_client import get_node_analysis_id
         result = get_node_analysis_id(mock_hub_client, "analysis-1")
 
         assert result == ["na-1", "na-2"]
@@ -560,24 +560,24 @@ class TestGetNodeAnalysisStatus:
         partner.id, partner.execution_status = "partner-id", "executing"
         mock_hub_client.find_analysis_nodes.return_value = [partner, own]
 
-        from src.utils.hub_client import get_node_analysis_status
+        from flame_po.utils.hub_client import get_node_analysis_status
         assert get_node_analysis_status(mock_hub_client, "analysis-1", "self-id") == "executed"
 
     def test_unknown_node_returns_none(self, mock_hub_client):
-        from src.utils.hub_client import get_node_analysis_status
+        from flame_po.utils.hub_client import get_node_analysis_status
         assert get_node_analysis_status(mock_hub_client, "analysis-1", "other-id") is None
 
     def test_no_analysis_nodes_returns_none(self, mock_hub_client):
         """The Hub returning no analysis-nodes (e.g. deleted analysis) yields None, not ''."""
         mock_hub_client.find_analysis_nodes.return_value = []
 
-        from src.utils.hub_client import get_node_analysis_status
+        from flame_po.utils.hub_client import get_node_analysis_status
         assert get_node_analysis_status(mock_hub_client, "analysis-1", "self-id") is None
 
     def test_hub_failure_returns_none(self, mock_hub_client):
         mock_hub_client.find_analysis_nodes.side_effect = ConnectError("down")
 
-        from src.utils.hub_client import get_node_analysis_status
+        from flame_po.utils.hub_client import get_node_analysis_status
         assert get_node_analysis_status(mock_hub_client, "analysis-1", "self-id") is None
 
 
@@ -585,7 +585,7 @@ class TestGetNodeAnalysisStatus:
 
 class TestCreateAnalysisNodeLog:
     def test_forwards_log_to_hub(self, mock_hub_client):
-        from src.utils.hub_client import create_analysis_node_log
+        from flame_po.utils.hub_client import create_analysis_node_log
         create_analysis_node_log(mock_hub_client, "analysis-1", "node-1", "executing", "info", "msg")
 
         mock_hub_client.create_analysis_node_log.assert_called_once_with(
@@ -602,8 +602,8 @@ class TestCreateAnalysisNodeLog:
     def test_errors_are_logged_not_raised(self, mock_hub_client, error):
         mock_hub_client.create_analysis_node_log.side_effect = error
 
-        from src.utils.hub_client import create_analysis_node_log
-        with patch("src.utils.hub_client.logger") as mock_logger:
+        from flame_po.utils.hub_client import create_analysis_node_log
+        with patch("flame_po.utils.hub_client.logger") as mock_logger:
             create_analysis_node_log(mock_hub_client, "analysis-1", "node-1", "executing", "info", "msg")
 
         mock_logger.error.assert_called_once()
@@ -616,7 +616,7 @@ class TestGetAnalysisClientCredentials:
         creds = MagicMock(id="client-id", secret="secret")
         mock_hub_client.get_analysis_client_credentials.return_value = creds
 
-        from src.utils.hub_client import get_analysis_client_credentials
+        from flame_po.utils.hub_client import get_analysis_client_credentials
         assert get_analysis_client_credentials(mock_hub_client, "analysis-1") is creds
         mock_hub_client.get_analysis_client_credentials.assert_called_once_with("analysis-1")
 
@@ -626,5 +626,5 @@ class TestGetAnalysisClientCredentials:
     def test_errors_return_none(self, mock_hub_client, error):
         mock_hub_client.get_analysis_client_credentials.side_effect = error
 
-        from src.utils.hub_client import get_analysis_client_credentials
+        from flame_po.utils.hub_client import get_analysis_client_credentials
         assert get_analysis_client_credentials(mock_hub_client, "analysis-1") is None

@@ -1,7 +1,7 @@
 """Bearer token validation for the Pod Orchestration API.
 
-Two FastAPI dependencies verify bearer tokens; :mod:`src.api.api` wires them
-according to :data:`~src.api.constants.KEYCLOAK_URL_FOUND`:
+Two FastAPI dependencies verify bearer tokens; :mod:`flame_po.api.api` wires them
+according to :data:`~flame_po.api.constants.KEYCLOAK_URL_FOUND`:
 
 * :func:`valid_analysis_token` verifies against the global Authup instance's
   JWKS and only accepts Authup *client* tokens (``sub_kind == "client"``).
@@ -10,7 +10,7 @@ according to :data:`~src.api.constants.KEYCLOAK_URL_FOUND`:
 * :func:`valid_access_token` verifies against the local Keycloak realm. It
   guards every protected route except ``POST /po/stream_logs`` in Keycloak
   mode (``KEYCLOAK_URL`` set). It must only be wired in Keycloak mode: it
-  depends on :data:`~src.api.constants.KEYCLOAK_SCHEME`, which is ``None``
+  depends on :data:`~flame_po.api.constants.KEYCLOAK_SCHEME`, which is ``None``
   otherwise, and FastAPI cannot register a route with ``Depends(None)``.
 """
 
@@ -21,8 +21,8 @@ from jwt import PyJWKClient, decode
 from jwt.exceptions import InvalidTokenError, PyJWKClientError, PyJWKClientConnectionError
 from typing import Annotated
 
-from src.api.constants import AUTHUP_CLIENT, AUTHUP_SCHEME, KEYCLOAK_URL_FOUND, KEYCLOAK_REALM_BASE, KEYCLOAK_SCHEME
-from src.utils.po_logging import get_logger
+from flame_po.api.constants import AUTHUP_CLIENT, AUTHUP_SCHEME, KEYCLOAK_URL_FOUND, KEYCLOAK_REALM_BASE, KEYCLOAK_SCHEME
+from flame_po.utils.po_logging import get_logger
 
 
 logger = get_logger()
@@ -40,7 +40,7 @@ def valid_access_token(token: Annotated[str, Depends(KEYCLOAK_SCHEME)]) -> dict:
 
     Args:
         token: The raw bearer token extracted by
-            :data:`~src.api.constants.KEYCLOAK_SCHEME`.
+            :data:`~flame_po.api.constants.KEYCLOAK_SCHEME`.
 
     Returns:
         The decoded JWT claims as a dictionary.
@@ -78,7 +78,7 @@ def valid_analysis_token(auth_creds: Annotated[HTTPAuthorizationCredentials, Dep
     """FastAPI dependency that validates an Authup client bearer token.
 
     The token is checked against Authup's signing keys via the cached
-    :data:`~src.api.constants.AUTHUP_CLIENT`; signature and expiration are
+    :data:`~flame_po.api.constants.AUTHUP_CLIENT`; signature and expiration are
     verified (``exp`` is required), audience validation is intentionally
     disabled. The token must be an Authup *client* token
     (``sub_kind == "client"``), as minted via the client_credentials grant, e.g.
@@ -87,7 +87,7 @@ def valid_analysis_token(auth_creds: Annotated[HTTPAuthorizationCredentials, Dep
 
     Args:
         auth_creds: The bearer credentials extracted by
-            :data:`~src.api.constants.AUTHUP_SCHEME`.
+            :data:`~flame_po.api.constants.AUTHUP_SCHEME`.
 
     Returns:
         The decoded JWT claims as a dictionary.

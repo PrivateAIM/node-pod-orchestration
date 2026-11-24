@@ -12,7 +12,7 @@ class TestExtractHubEnvs:
         monkeypatch.setenv("PO_HTTP_PROXY", "http://proxy")
         monkeypatch.setenv("PO_HTTPS_PROXY", "https://proxy")
 
-        from src.utils.other import extract_hub_envs
+        from flame_po.utils.other import extract_hub_envs
         result = extract_hub_envs()
 
         assert result == (
@@ -34,7 +34,7 @@ class TestExtractHubEnvs:
         monkeypatch.delenv("PO_HTTP_PROXY", raising=False)
         monkeypatch.delenv("PO_HTTPS_PROXY", raising=False)
 
-        from src.utils.other import extract_hub_envs
+        from flame_po.utils.other import extract_hub_envs
         result = extract_hub_envs()
 
         assert result[4] is False  # HUB_LOGGING defaults to False
@@ -50,7 +50,7 @@ class TestExtractHubEnvs:
         monkeypatch.delenv("PO_HTTP_PROXY", raising=False)
         monkeypatch.delenv("PO_HTTPS_PROXY", raising=False)
 
-        from src.utils.other import extract_hub_envs
+        from flame_po.utils.other import extract_hub_envs
         result = extract_hub_envs()
 
         assert result[0] is None
@@ -72,7 +72,7 @@ class TestExtractHubEnvs:
     def test_hub_logging_variants(self, monkeypatch, value, expected):
         monkeypatch.setenv("HUB_LOGGING", value)
 
-        from src.utils.other import extract_hub_envs
+        from flame_po.utils.other import extract_hub_envs
         result = extract_hub_envs()
 
         assert result[4] is expected
@@ -80,31 +80,31 @@ class TestExtractHubEnvs:
 
 class TestResourceNameToAnalysis:
     def test_single_split(self):
-        from src.utils.other import resource_name_to_analysis
+        from flame_po.utils.other import resource_name_to_analysis
         # deployment_name = "analysis-{analysis_id}-{restart_counter}"
         result = resource_name_to_analysis("analysis-abc123-0")
         assert result == "abc123"
 
     def test_double_split(self):
-        from src.utils.other import resource_name_to_analysis
+        from flame_po.utils.other import resource_name_to_analysis
         # analysis_id itself contains a hyphen
         result = resource_name_to_analysis("analysis-abc-123-0")
         assert result == "abc-123"
 
     def test_nginx_prefix(self):
-        from src.utils.other import resource_name_to_analysis
+        from flame_po.utils.other import resource_name_to_analysis
         # nginx sidecar container name includes extra prefix before "analysis-"
         result = resource_name_to_analysis("nginx-analysis-abc123-0")
         assert result == "abc123"
 
     def test_extra_trailing_segment(self):
-        from src.utils.other import resource_name_to_analysis
+        from flame_po.utils.other import resource_name_to_analysis
         # extra segment between analysis_id and restart_counter — last segment stripped only
         result = resource_name_to_analysis("analysis-abc123-pod-0")
         assert result == "abc123-pod"
 
     def test_no_restart_counter(self):
-        from src.utils.other import resource_name_to_analysis
+        from flame_po.utils.other import resource_name_to_analysis
         # edge case: no trailing segment to strip — returns empty string
         result = resource_name_to_analysis("analysis-abc123")
         assert result == ""

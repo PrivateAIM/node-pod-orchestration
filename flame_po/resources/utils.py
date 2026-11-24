@@ -15,17 +15,17 @@ from fastapi import HTTPException
 
 from flame_hub import CoreClient as HubClient
 
-from src.resources.database.entity import Database
-from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
-from src.resources.log.entity import CreateLogEntity
-from src.status.constants import AnalysisStatus
-from src.k8s.kubernetes import (
+from flame_po.resources.database.entity import Database
+from flame_po.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
+from flame_po.resources.log.entity import CreateLogEntity
+from flame_po.status.constants import AnalysisStatus
+from flame_po.k8s.kubernetes import (
     create_harbor_secret,
     get_analysis_logs,
     get_harbor_secret_auth,
 )
-from src.k8s.utils import find_k8s_resources, delete_k8s_resource
-from src.utils.hub_client import (
+from flame_po.k8s.utils import find_k8s_resources, delete_k8s_resource
+from flame_po.utils.hub_client import (
     RegistryCredentialsError,
     get_registry_credentials,
     init_hub_client_and_update_hub_status,
@@ -33,9 +33,9 @@ from src.utils.hub_client import (
     get_node_analysis_id,
     create_analysis_node_log
 )
-from src.utils.other import resource_name_to_analysis
-from src.utils.po_logging import get_logger
-from src.utils.other import is_uuid
+from flame_po.utils.other import resource_name_to_analysis
+from flame_po.utils.po_logging import get_logger
+from flame_po.utils.other import is_uuid
 
 
 logger = get_logger()

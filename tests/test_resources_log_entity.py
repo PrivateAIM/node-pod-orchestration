@@ -1,14 +1,14 @@
-"""Tests for src/resources/log/entity.py"""
+"""Tests for flame_po/resources/log/entity.py"""
 
 import pytest
 
-from src.resources.log.entity import (
+from flame_po.resources.log.entity import (
     LogEntity,
     CreateLogEntity,
     CreateStartUpErrorLog,
     AnalysisStoppedLog,
 )
-from src.status.constants import MAX_RESTARTS
+from flame_po.status.constants import MAX_RESTARTS
 
 
 # ─── LogEntity ────────────────────────────────────────────────────────────────

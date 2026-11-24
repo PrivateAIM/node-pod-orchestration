@@ -10,13 +10,13 @@ import os
 from threading import Thread
 from dotenv import load_dotenv, find_dotenv
 
-from src import __version__
-from src.resources.database.entity import Database
-from src.api.api import PodOrchestrationAPI
-from src.k8s.kubernetes import DEFAULT_NGINX_IMAGE
-from src.k8s.utils import get_current_namespace, load_cluster_config
-from src.status.status import status_loop
-from src.utils.po_logging import get_logger
+from flame_po import __version__
+from flame_po.resources.database.entity import Database
+from flame_po.api.api import PodOrchestrationAPI
+from flame_po.k8s.kubernetes import DEFAULT_NGINX_IMAGE
+from flame_po.k8s.utils import get_current_namespace, load_cluster_config
+from flame_po.status.status import status_loop
+from flame_po.utils.po_logging import get_logger
 
 
 # connect logger

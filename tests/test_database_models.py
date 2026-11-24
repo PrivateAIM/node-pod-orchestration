@@ -1,8 +1,8 @@
-"""Tests for src/resources/database/db_models.py"""
+"""Tests for flame_po/resources/database/db_models.py"""
 
 from sqlalchemy import JSON, Float, Integer, String
 
-from src.resources.database.db_models import AnalysisDB, ArchiveDB
+from flame_po.resources.database.db_models import AnalysisDB, ArchiveDB
 
 _SHARED_COLUMNS = [
     "id",
@@ -160,7 +160,7 @@ class TestSharedSchema:
         assert AnalysisDB.__tablename__ != ArchiveDB.__tablename__
 
     def test_both_inherit_from_base(self):
-        from src.resources.database.db_models import Base
+        from flame_po.resources.database.db_models import Base
 
         assert issubclass(AnalysisDB, Base)
         assert issubclass(ArchiveDB, Base)

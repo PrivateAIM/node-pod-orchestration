@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from src.status.constants import MAX_RESTARTS, AnalysisStatus
+from flame_po.status.constants import MAX_RESTARTS, AnalysisStatus
 
 
 class LogEntity(BaseModel):

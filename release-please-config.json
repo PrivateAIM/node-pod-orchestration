@@ -6,7 +6,7 @@
   "packages": {
     ".": {
       "extra-files": [
-        "src/__init__.py"
+        "flame_po/__init__.py"
       ]
     }
   },

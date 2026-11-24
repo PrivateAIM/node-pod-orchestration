@@ -22,9 +22,9 @@ from flame_hub._exceptions import HubAPIError
 from flame_hub.auth import ClientAuth
 from flame_hub.models import ClientCredentials, NodeRegistryCredentials
 
-from src.status.constants import AnalysisStatus
-from src.utils.po_logging import get_logger
-from src.utils.other import extract_hub_envs
+from flame_po.status.constants import AnalysisStatus
+from flame_po.utils.po_logging import get_logger
+from flame_po.utils.other import extract_hub_envs
 
 
 logger = get_logger()

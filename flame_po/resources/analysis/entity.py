@@ -11,13 +11,13 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from src.k8s.kubernetes import create_analysis_deployment, delete_deployment
-from src.utils.token import AnalysisTokenError, create_analysis_tokens
-from src.resources.database.db_models import AnalysisDB
-from src.resources.database.entity import Database
-from src.status.constants import AnalysisStatus
-from src.utils.mb_client import delete_subscription
-from src.utils.po_logging import get_logger
+from flame_po.k8s.kubernetes import create_analysis_deployment, delete_deployment
+from flame_po.utils.token import AnalysisTokenError, create_analysis_tokens
+from flame_po.resources.database.db_models import AnalysisDB
+from flame_po.resources.database.entity import Database
+from flame_po.status.constants import AnalysisStatus
+from flame_po.utils.mb_client import delete_subscription
+from flame_po.utils.po_logging import get_logger
 
 
 logger = get_logger()
@@ -164,7 +164,7 @@ class CreateAnalysis(BaseModel):
     """Request body accepted by ``POST /po/`` to create a new analysis.
 
     The image and its registry credentials are resolved from the Hub, not
-    taken from the request (see :func:`~src.resources.utils.create_analysis`).
+    taken from the request (see :func:`~flame_po.resources.utils.create_analysis`).
     Clients that still send ``registry_*`` / ``image_url`` fields are
     accepted; the fields are ignored.
     """

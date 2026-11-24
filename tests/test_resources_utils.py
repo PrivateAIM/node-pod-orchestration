@@ -1,5 +1,5 @@
 """
-Tests for src/resources/utils.py — business logic layer.
+Tests for flame_po/resources/utils.py — business logic layer.
 
 All external dependencies are mocked:
   - create_harbor_secret
@@ -15,9 +15,9 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
-from src.resources.analysis.entity import CreateAnalysis
-from src.resources.log.entity import CreateLogEntity
-from src.status.constants import AnalysisStatus
+from flame_po.resources.analysis.entity import CreateAnalysis
+from flame_po.resources.log.entity import CreateLogEntity
+from flame_po.status.constants import AnalysisStatus
 
 # Sample log string: a valid Python literal representing the log dict stored in the DB.
 # retrieve_history calls ast.literal_eval() on this, then reads ['analysis'][id] and ['nginx'][id].
@@ -73,13 +73,13 @@ class TestCreateAnalysis:
             "progress": 0,
         }
 
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
-    @patch("src.resources.utils.Analysis")
-    @patch("src.resources.utils.create_harbor_secret")
+    @patch("flame_po.resources.utils.init_hub_client_and_update_hub_status")
+    @patch("flame_po.resources.utils.Analysis")
+    @patch("flame_po.resources.utils.create_harbor_secret")
     def test_from_create_analysis_body(
         self, mock_harbor, mock_analysis_cls, mock_hub, mock_database, mock_hub_client
     ):
-        from src.resources.utils import create_analysis
+        from flame_po.resources.utils import create_analysis
 
         mock_inst = _analysis_mock(
             analysis_id=self._VALID_UUID, status=AnalysisStatus.STARTED.value
@@ -102,14 +102,14 @@ class TestCreateAnalysis:
         mock_hub.assert_called_once_with(self._VALID_UUID, AnalysisStatus.STARTED.value)
         assert result == {self._VALID_UUID: AnalysisStatus.STARTED.value}
 
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
-    @patch("src.resources.utils.Analysis")
-    @patch("src.resources.utils.create_harbor_secret")
+    @patch("flame_po.resources.utils.init_hub_client_and_update_hub_status")
+    @patch("flame_po.resources.utils.Analysis")
+    @patch("flame_po.resources.utils.create_harbor_secret")
     def test_from_string_refreshes_credentials_on_restart(
         self, mock_harbor, mock_analysis_cls, mock_hub, mock_database, mock_hub_client
     ):
         """A restart resolves the credentials again instead of reusing stored ones."""
-        from src.resources.utils import create_analysis
+        from flame_po.resources.utils import create_analysis
 
         mock_inst = _analysis_mock(
             analysis_id=self._VALID_UUID, status=AnalysisStatus.STARTED.value
@@ -131,13 +131,13 @@ class TestCreateAnalysis:
         mock_hub.assert_called_once()
         assert self._VALID_UUID in result
 
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
-    @patch("src.resources.utils.Analysis")
-    @patch("src.resources.utils.create_harbor_secret")
+    @patch("flame_po.resources.utils.init_hub_client_and_update_hub_status")
+    @patch("flame_po.resources.utils.Analysis")
+    @patch("flame_po.resources.utils.create_harbor_secret")
     def test_restart_without_hub_keeps_existing_secret_and_image(
         self, mock_harbor, mock_analysis_cls, mock_hub, mock_database
     ):
-        from src.resources.utils import create_analysis
+        from flame_po.resources.utils import create_analysis
 
         mock_analysis_cls.return_value = _analysis_mock(
             analysis_id=self._VALID_UUID, status=AnalysisStatus.STARTED.value
@@ -151,15 +151,15 @@ class TestCreateAnalysis:
             "harbor.privateaim/node_project/stored"
         )
 
-    @patch("src.resources.utils.Analysis")
-    @patch("src.resources.utils.create_harbor_secret")
+    @patch("flame_po.resources.utils.Analysis")
+    @patch("flame_po.resources.utils.create_harbor_secret")
     def test_new_analysis_without_credentials_raises(
         self, mock_harbor, mock_analysis_cls, mock_database, mock_hub_client
     ):
         from flame_hub._exceptions import HubAPIError
 
-        from src.resources.utils import create_analysis
-        from src.utils.hub_client import RegistryCredentialsError
+        from flame_po.resources.utils import create_analysis
+        from flame_po.utils.hub_client import RegistryCredentialsError
 
         mock_hub_client.get_node_registry_credentials.side_effect = HubAPIError(
             "forbidden", request=MagicMock()
@@ -179,7 +179,7 @@ class TestCreateAnalysis:
 
     def test_from_string_not_found_returns_status_message(self, mock_database, mock_hub_client):
         """When extract_analysis_body returns None, return a status error dict."""
-        from src.resources.utils import create_analysis
+        from flame_po.resources.utils import create_analysis
 
         mock_database.extract_analysis_body.return_value = None
 
@@ -194,7 +194,7 @@ class TestCreateAnalysis:
 
 class TestRetrieveHistory:
     def test_single_stopped_analysis(self, mock_database, sample_analysis_db):
-        from src.resources.utils import retrieve_history
+        from flame_po.resources.utils import retrieve_history
 
         db_row = sample_analysis_db(status=AnalysisStatus.STOPPED.value, log=_SAMPLE_LOG)
         mock_database.get_latest_deployment.return_value = db_row
@@ -205,7 +205,7 @@ class TestRetrieveHistory:
         assert result["nginx"][_ANALYSIS_ID] == ["nginx log line"]
 
     def test_single_executed_analysis(self, mock_database, sample_analysis_db):
-        from src.resources.utils import retrieve_history
+        from flame_po.resources.utils import retrieve_history
 
         db_row = sample_analysis_db(status=AnalysisStatus.EXECUTED.value, log=_SAMPLE_LOG)
         mock_database.get_latest_deployment.return_value = db_row
@@ -216,7 +216,7 @@ class TestRetrieveHistory:
 
     def test_running_analysis_excluded(self, mock_database, sample_analysis_db):
         """A running (started) analysis is not included in history."""
-        from src.resources.utils import retrieve_history
+        from flame_po.resources.utils import retrieve_history
 
         db_row = sample_analysis_db(status=AnalysisStatus.STARTED.value)
         mock_database.get_latest_deployment.return_value = db_row
@@ -226,7 +226,7 @@ class TestRetrieveHistory:
         assert result == {"analysis": {}, "nginx": {}}
 
     def test_all_analyses_queries_all_ids(self, mock_database, sample_analysis_db):
-        from src.resources.utils import retrieve_history
+        from flame_po.resources.utils import retrieve_history
 
         db_row = sample_analysis_db(status=AnalysisStatus.STOPPED.value, log=_SAMPLE_LOG)
         mock_database.get_analysis_ids.return_value = [_ANALYSIS_ID]
@@ -238,7 +238,7 @@ class TestRetrieveHistory:
         assert _ANALYSIS_ID in result["analysis"]
 
     def test_not_found_excluded(self, mock_database):
-        from src.resources.utils import retrieve_history
+        from flame_po.resources.utils import retrieve_history
 
         mock_database.get_latest_deployment.return_value = None
 
@@ -250,9 +250,9 @@ class TestRetrieveHistory:
 # ─── retrieve_logs ────────────────────────────────────────────────────────────
 
 class TestRetrieveLogs:
-    @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
+    @patch("flame_po.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
     def test_single_executing_deployment(self, mock_get_logs, mock_database, sample_analysis_db):
-        from src.resources.utils import retrieve_logs
+        from flame_po.resources.utils import retrieve_logs
 
         db_row = sample_analysis_db(
             status=AnalysisStatus.EXECUTING.value,
@@ -266,10 +266,10 @@ class TestRetrieveLogs:
             {_ANALYSIS_ID: "analysis-analysis_id-0"}, database=mock_database, namespace="default"
         )
 
-    @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
+    @patch("flame_po.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
     def test_non_executing_excluded(self, mock_get_logs, mock_database, sample_analysis_db):
         """Non-executing deployments are not passed to get_analysis_logs."""
-        from src.resources.utils import retrieve_logs
+        from flame_po.resources.utils import retrieve_logs
 
         db_row = sample_analysis_db(status=AnalysisStatus.STARTED.value)
         mock_database.get_latest_deployment.return_value = db_row
@@ -278,9 +278,9 @@ class TestRetrieveLogs:
 
         mock_get_logs.assert_called_once_with({}, database=mock_database, namespace="default")
 
-    @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
+    @patch("flame_po.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
     def test_all_analyses(self, mock_get_logs, mock_database, sample_analysis_db):
-        from src.resources.utils import retrieve_logs
+        from flame_po.resources.utils import retrieve_logs
 
         db_row = sample_analysis_db(status=AnalysisStatus.EXECUTING.value)
         mock_database.get_analysis_ids.return_value = [_ANALYSIS_ID]
@@ -295,7 +295,7 @@ class TestRetrieveLogs:
 
 class TestGetStatusAndProgress:
     def test_single_analysis(self, mock_database, sample_analysis_db):
-        from src.resources.utils import get_status_and_progress
+        from flame_po.resources.utils import get_status_and_progress
 
         db_row = sample_analysis_db(status="executing", progress=50)
         mock_database.get_latest_deployment.return_value = db_row
@@ -306,7 +306,7 @@ class TestGetStatusAndProgress:
         assert result[_ANALYSIS_ID]["progress"] == 50
 
     def test_all_analyses(self, mock_database, sample_analysis_db):
-        from src.resources.utils import get_status_and_progress
+        from flame_po.resources.utils import get_status_and_progress
 
         db_row = sample_analysis_db(status="started")
         mock_database.get_analysis_ids.return_value = [_ANALYSIS_ID]
@@ -318,7 +318,7 @@ class TestGetStatusAndProgress:
         assert _ANALYSIS_ID in result
 
     def test_not_found_excluded(self, mock_database):
-        from src.resources.utils import get_status_and_progress
+        from flame_po.resources.utils import get_status_and_progress
 
         mock_database.get_latest_deployment.return_value = None
 
@@ -331,7 +331,7 @@ class TestGetStatusAndProgress:
 
 class TestGetPods:
     def test_single_analysis(self, mock_database):
-        from src.resources.utils import get_pods
+        from flame_po.resources.utils import get_pods
 
         mock_database.get_analysis_pod_ids.return_value = ["pod-1", "pod-2"]
 
@@ -340,7 +340,7 @@ class TestGetPods:
         assert result == {_ANALYSIS_ID: ["pod-1", "pod-2"]}
 
     def test_all_analyses(self, mock_database):
-        from src.resources.utils import get_pods
+        from flame_po.resources.utils import get_pods
 
         mock_database.get_analysis_ids.return_value = [_ANALYSIS_ID]
         mock_database.get_analysis_pod_ids.return_value = ["pod-1"]
@@ -354,11 +354,11 @@ class TestGetPods:
 # ─── stop_analysis ────────────────────────────────────────────────────────────
 
 class TestStopAnalysis:
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
-    @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("flame_po.resources.utils.init_hub_client_and_update_hub_status")
+    @patch("flame_po.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
+    @patch("flame_po.resources.utils.read_db_analysis")
     def test_running_analysis_stopped(self, mock_read, mock_logs, mock_hub, mock_database):
-        from src.resources.utils import stop_analysis
+        from flame_po.resources.utils import stop_analysis
 
         mock_deployment = _analysis_mock(status=AnalysisStatus.STARTED.value)
         mock_read.return_value = mock_deployment
@@ -370,11 +370,11 @@ class TestStopAnalysis:
         assert mock_deployment.stop.call_args.kwargs["status"] == AnalysisStatus.STARTED.value
         mock_hub.assert_called_once_with(_ANALYSIS_ID, AnalysisStatus.STARTED.value)
 
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
-    @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("flame_po.resources.utils.init_hub_client_and_update_hub_status")
+    @patch("flame_po.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
+    @patch("flame_po.resources.utils.read_db_analysis")
     def test_executed_analysis_keeps_executed_status(self, mock_read, mock_logs, mock_hub, mock_database):
-        from src.resources.utils import stop_analysis
+        from flame_po.resources.utils import stop_analysis
 
         mock_deployment = _analysis_mock(status=AnalysisStatus.EXECUTED.value)
         mock_read.return_value = mock_deployment
@@ -385,11 +385,11 @@ class TestStopAnalysis:
         assert call_kwargs["status"] == AnalysisStatus.EXECUTED.value
         mock_hub.assert_called_once_with(_ANALYSIS_ID, AnalysisStatus.EXECUTED.value)
 
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
-    @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("flame_po.resources.utils.init_hub_client_and_update_hub_status")
+    @patch("flame_po.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
+    @patch("flame_po.resources.utils.read_db_analysis")
     def test_failed_analysis_keeps_failed_status(self, mock_read, mock_logs, mock_hub, mock_database):
-        from src.resources.utils import stop_analysis
+        from flame_po.resources.utils import stop_analysis
 
         mock_deployment = _analysis_mock(status=AnalysisStatus.FAILED.value)
         mock_read.return_value = mock_deployment
@@ -400,11 +400,11 @@ class TestStopAnalysis:
         assert call_kwargs["status"] == AnalysisStatus.FAILED.value
         mock_hub.assert_called_once_with(_ANALYSIS_ID, AnalysisStatus.FAILED.value)
 
-    @patch("src.resources.utils.init_hub_client_and_update_hub_status")
-    @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("flame_po.resources.utils.init_hub_client_and_update_hub_status")
+    @patch("flame_po.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
+    @patch("flame_po.resources.utils.read_db_analysis")
     def test_all_analyses(self, mock_read, mock_logs, mock_hub, mock_database):
-        from src.resources.utils import stop_analysis
+        from flame_po.resources.utils import stop_analysis
 
         mock_deployment = _analysis_mock(status=AnalysisStatus.STARTED.value)
         mock_read.return_value = mock_deployment
@@ -416,7 +416,7 @@ class TestStopAnalysis:
         assert _ANALYSIS_ID in result
 
     def test_not_found_returns_empty(self, mock_database):
-        from src.resources.utils import stop_analysis
+        from flame_po.resources.utils import stop_analysis
 
         mock_database.get_latest_deployment.return_value = None
 
@@ -428,10 +428,10 @@ class TestStopAnalysis:
 # ─── delete_analysis ──────────────────────────────────────────────────────────
 
 class TestDeleteAnalysis:
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("flame_po.resources.utils.read_db_analysis")
     def test_stopped_analysis_also_stopped(self, mock_read, mock_database):
         """New behavior: delete_analysis unconditionally calls stop() on the deployment."""
-        from src.resources.utils import delete_analysis
+        from flame_po.resources.utils import delete_analysis
 
         mock_deployment = _analysis_mock(status=AnalysisStatus.STOPPED.value)
         mock_read.return_value = mock_deployment
@@ -441,9 +441,9 @@ class TestDeleteAnalysis:
         mock_deployment.stop.assert_called_once_with(mock_database, log="")
         mock_database.delete_analysis.assert_called_once_with(_ANALYSIS_ID)
 
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("flame_po.resources.utils.read_db_analysis")
     def test_running_analysis_stopped_then_deleted(self, mock_read, mock_database):
-        from src.resources.utils import delete_analysis
+        from flame_po.resources.utils import delete_analysis
 
         mock_deployment = _analysis_mock(status=AnalysisStatus.STARTED.value)
         mock_read.return_value = mock_deployment
@@ -454,7 +454,7 @@ class TestDeleteAnalysis:
         mock_database.delete_analysis.assert_called_once_with(_ANALYSIS_ID)
 
     def test_not_found_returns_empty(self, mock_database):
-        from src.resources.utils import delete_analysis
+        from flame_po.resources.utils import delete_analysis
 
         mock_database.get_latest_deployment.return_value = None
 
@@ -462,9 +462,9 @@ class TestDeleteAnalysis:
 
         assert result == {}
 
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("flame_po.resources.utils.read_db_analysis")
     def test_all_analyses(self, mock_read, mock_database):
-        from src.resources.utils import delete_analysis
+        from flame_po.resources.utils import delete_analysis
 
         mock_deployment = _analysis_mock(status=AnalysisStatus.STOPPED.value)
         mock_read.return_value = mock_deployment
@@ -479,42 +479,42 @@ class TestDeleteAnalysis:
 # ─── refresh_registry_credentials ─────────────────────────────────────────────
 
 class TestRefreshRegistryCredentials:
-    @patch("src.resources.utils.create_harbor_secret")
+    @patch("flame_po.resources.utils.create_harbor_secret")
     @patch(
-        "src.resources.utils.get_harbor_secret_auth",
+        "flame_po.resources.utils.get_harbor_secret_auth",
         return_value=("harbor.privateaim", "robot$node_project", "old_secret"),
     )
     def test_rotated_secret_rewrites_pull_secret(self, mock_read, mock_harbor, mock_hub_client):
-        from src.resources.utils import refresh_registry_credentials
+        from flame_po.resources.utils import refresh_registry_credentials
 
         assert refresh_registry_credentials(mock_hub_client, "node-id", "ns") is True
         mock_harbor.assert_called_once_with(
             "harbor.privateaim", "robot$node_project", "robot_secret", namespace="ns"
         )
 
-    @patch("src.resources.utils.create_harbor_secret")
+    @patch("flame_po.resources.utils.create_harbor_secret")
     @patch(
-        "src.resources.utils.get_harbor_secret_auth",
+        "flame_po.resources.utils.get_harbor_secret_auth",
         return_value=("harbor.privateaim", "robot$node_project", "robot_secret"),
     )
     def test_unchanged_secret_is_left_alone(self, mock_read, mock_harbor, mock_hub_client):
-        from src.resources.utils import refresh_registry_credentials
+        from flame_po.resources.utils import refresh_registry_credentials
 
         assert refresh_registry_credentials(mock_hub_client, "node-id", "ns") is False
         mock_harbor.assert_not_called()
 
-    @patch("src.resources.utils.create_harbor_secret")
-    @patch("src.resources.utils.get_harbor_secret_auth", return_value=None)
+    @patch("flame_po.resources.utils.create_harbor_secret")
+    @patch("flame_po.resources.utils.get_harbor_secret_auth", return_value=None)
     def test_missing_secret_is_created(self, mock_read, mock_harbor, mock_hub_client):
-        from src.resources.utils import refresh_registry_credentials
+        from flame_po.resources.utils import refresh_registry_credentials
 
         assert refresh_registry_credentials(mock_hub_client, "node-id", "ns") is True
         mock_harbor.assert_called_once()
 
-    @patch("src.resources.utils.create_harbor_secret")
-    @patch("src.resources.utils.get_harbor_secret_auth")
+    @patch("flame_po.resources.utils.create_harbor_secret")
+    @patch("flame_po.resources.utils.get_harbor_secret_auth")
     def test_hub_failure_never_raises(self, mock_read, mock_harbor, mock_hub_client):
-        from src.resources.utils import refresh_registry_credentials
+        from flame_po.resources.utils import refresh_registry_credentials
 
         mock_hub_client.get_node_registry_credentials.side_effect = ConnectionError("down")
 
@@ -526,11 +526,11 @@ class TestRefreshRegistryCredentials:
 # ─── unstuck_analysis_deployments ─────────────────────────────────────────────
 
 class TestUnstuckAnalysisDeployments:
-    @patch("src.resources.utils.create_analysis")
-    @patch("src.resources.utils.stop_analysis")
-    @patch("src.resources.utils.time.sleep")
+    @patch("flame_po.resources.utils.create_analysis")
+    @patch("flame_po.resources.utils.stop_analysis")
+    @patch("flame_po.resources.utils.time.sleep")
     def test_restartable_analysis(self, mock_sleep, mock_stop, mock_create, mock_database):
-        from src.resources.utils import unstuck_analysis_deployments
+        from flame_po.resources.utils import unstuck_analysis_deployments
 
         hub_client = MagicMock()
         unstuck_analysis_deployments(_ANALYSIS_ID, mock_database, hub_client, "node-id")
@@ -547,11 +547,11 @@ class TestUnstuckAnalysisDeployments:
         mock_database.delete_old_deployments_from_db.assert_called_once_with(_ANALYSIS_ID)
 
     def test_not_found_does_nothing(self, mock_database):
-        from src.resources.utils import unstuck_analysis_deployments
+        from flame_po.resources.utils import unstuck_analysis_deployments
 
         mock_database.get_latest_deployment.return_value = None
 
-        with patch("src.resources.utils.stop_analysis") as mock_stop:
+        with patch("flame_po.resources.utils.stop_analysis") as mock_stop:
             unstuck_analysis_deployments("nonexistent_id", mock_database, None, None)
             mock_stop.assert_not_called()
 
@@ -559,9 +559,9 @@ class TestUnstuckAnalysisDeployments:
 # ─── cleanup ──────────────────────────────────────────────────────────────────
 
 class TestCleanup:
-    @patch("src.resources.utils.clean_up_the_rest", return_value="")
+    @patch("flame_po.resources.utils.clean_up_the_rest", return_value="")
     def test_analyzes_resets_db(self, mock_cztr, mock_database):
-        from src.resources.utils import cleanup
+        from flame_po.resources.utils import cleanup
 
         mock_database.get_analysis_ids.return_value = ["id1", "id2"]
         result = cleanup("analyzes", mock_database, None)
@@ -569,14 +569,14 @@ class TestCleanup:
         mock_database.reset_db.assert_called_once()
         assert "analyzes" in result
 
-    @patch("src.resources.utils.clean_up_the_rest", return_value="")
-    @patch("src.resources.utils.delete_k8s_resource")
+    @patch("flame_po.resources.utils.clean_up_the_rest", return_value="")
+    @patch("flame_po.resources.utils.delete_k8s_resource")
     @patch(
-        "src.resources.utils.find_k8s_resources",
+        "flame_po.resources.utils.find_k8s_resources",
         return_value=["flame-message-broker-pod"],
     )
     def test_mb_reinitializes_message_broker(self, mock_find, mock_delete, mock_cztr, mock_database):
-        from src.resources.utils import cleanup
+        from flame_po.resources.utils import cleanup
 
         result = cleanup("mb", mock_database, None)
 
@@ -586,14 +586,14 @@ class TestCleanup:
         mock_delete.assert_called_once_with("flame-message-broker-pod", "pod", "default")
         assert result["mb"] == "Reset message broker"
 
-    @patch("src.resources.utils.clean_up_the_rest", return_value="")
-    @patch("src.resources.utils.delete_k8s_resource")
+    @patch("flame_po.resources.utils.clean_up_the_rest", return_value="")
+    @patch("flame_po.resources.utils.delete_k8s_resource")
     @patch(
-        "src.resources.utils.find_k8s_resources",
+        "flame_po.resources.utils.find_k8s_resources",
         return_value=["flame-storage-service-pod"],
     )
     def test_rs_reinitializes_storage_service(self, mock_find, mock_delete, mock_cztr, mock_database):
-        from src.resources.utils import cleanup
+        from flame_po.resources.utils import cleanup
 
         result = cleanup("rs", mock_database, None)
 
@@ -603,29 +603,29 @@ class TestCleanup:
         mock_delete.assert_called_once_with("flame-storage-service-pod", "pod", "default")
         assert result["rs"] == "Reset storage service"
 
-    @patch("src.resources.utils.clean_up_the_rest", return_value="")
+    @patch("flame_po.resources.utils.clean_up_the_rest", return_value="")
     def test_unknown_type_returns_error_message(self, mock_cztr, mock_database):
-        from src.resources.utils import cleanup
+        from flame_po.resources.utils import cleanup
 
         result = cleanup("unknown_type", mock_database, None)
 
         assert "unknown_type" in result["unknown_type"]
         assert "Unknown cleanup type" in result["unknown_type"]
 
-    @patch("src.resources.utils.clean_up_the_rest", return_value="")
-    @patch("src.resources.utils.delete_k8s_resource")
-    @patch("src.resources.utils.find_k8s_resources", return_value=["pod-name"])
+    @patch("flame_po.resources.utils.clean_up_the_rest", return_value="")
+    @patch("flame_po.resources.utils.delete_k8s_resource")
+    @patch("flame_po.resources.utils.find_k8s_resources", return_value=["pod-name"])
     def test_comma_separated_processes_both_types(self, mock_find, mock_delete, mock_cztr, mock_database):
-        from src.resources.utils import cleanup
+        from flame_po.resources.utils import cleanup
 
         result = cleanup("mb,rs", mock_database, None)
 
         # mb calls find for message-broker, rs calls find for storage-service
         assert mock_find.call_count == 2
 
-    @patch("src.resources.utils.clean_up_the_rest", return_value="zombie cleanup done")
+    @patch("flame_po.resources.utils.clean_up_the_rest", return_value="zombie cleanup done")
     def test_always_calls_clean_up_the_rest(self, mock_cztr, mock_database):
-        from src.resources.utils import cleanup
+        from flame_po.resources.utils import cleanup
 
         result = cleanup("unknown_type", mock_database, None)
 
@@ -636,14 +636,14 @@ class TestCleanup:
 # ─── clean_up_the_rest ────────────────────────────────────────────────────────
 
 class TestCleanUpTheRest:
-    @patch("src.resources.utils.delete_k8s_resource")
-    @patch("src.resources.utils.resource_name_to_analysis", return_value="zombie_id")
+    @patch("flame_po.resources.utils.delete_k8s_resource")
+    @patch("flame_po.resources.utils.resource_name_to_analysis", return_value="zombie_id")
     @patch(
-        "src.resources.utils.find_k8s_resources",
+        "flame_po.resources.utils.find_k8s_resources",
         return_value=["analysis-zombie_id-0"],
     )
     def test_deletes_zombie_resources(self, mock_find, mock_name_to_analysis, mock_delete, mock_database):
-        from src.resources.utils import clean_up_the_rest
+        from flame_po.resources.utils import clean_up_the_rest
 
         mock_database.get_analysis_ids.return_value = ["known_id"]
 
@@ -653,14 +653,14 @@ class TestCleanUpTheRest:
         assert mock_delete.call_count > 0
         assert "Deleted" in result
 
-    @patch("src.resources.utils.delete_k8s_resource")
-    @patch("src.resources.utils.resource_name_to_analysis", return_value="known_id")
+    @patch("flame_po.resources.utils.delete_k8s_resource")
+    @patch("flame_po.resources.utils.resource_name_to_analysis", return_value="known_id")
     @patch(
-        "src.resources.utils.find_k8s_resources",
+        "flame_po.resources.utils.find_k8s_resources",
         return_value=["analysis-known_id-0"],
     )
     def test_skips_known_resources(self, mock_find, mock_name_to_analysis, mock_delete, mock_database):
-        from src.resources.utils import clean_up_the_rest
+        from flame_po.resources.utils import clean_up_the_rest
 
         mock_database.get_analysis_ids.return_value = ["known_id"]
 
@@ -668,10 +668,10 @@ class TestCleanUpTheRest:
 
         mock_delete.assert_not_called()
 
-    @patch("src.resources.utils.delete_k8s_resource")
-    @patch("src.resources.utils.find_k8s_resources", return_value=[None])
+    @patch("flame_po.resources.utils.delete_k8s_resource")
+    @patch("flame_po.resources.utils.find_k8s_resources", return_value=[None])
     def test_handles_none_resources(self, mock_find, mock_delete, mock_database):
-        from src.resources.utils import clean_up_the_rest
+        from flame_po.resources.utils import clean_up_the_rest
 
         mock_database.get_analysis_ids.return_value = []
 
@@ -680,15 +680,15 @@ class TestCleanUpTheRest:
         mock_delete.assert_not_called()
         assert isinstance(result, str)
 
-    @patch("src.resources.utils.delete_k8s_resource")
-    @patch("src.resources.utils.resource_name_to_analysis", return_value="zombie_id")
+    @patch("flame_po.resources.utils.delete_k8s_resource")
+    @patch("flame_po.resources.utils.resource_name_to_analysis", return_value="zombie_id")
     @patch(
-        "src.resources.utils.find_k8s_resources",
+        "flame_po.resources.utils.find_k8s_resources",
         return_value="analysis-zombie_id-0",  # str, not list
     )
     def test_wraps_string_result_in_list(self, mock_find, mock_name_to_analysis, mock_delete, mock_database):
         """find_k8s_resources returning a str (single result) is wrapped in a list."""
-        from src.resources.utils import clean_up_the_rest
+        from flame_po.resources.utils import clean_up_the_rest
 
         mock_database.get_analysis_ids.return_value = ["known_id"]
 
@@ -711,13 +711,13 @@ class TestStreamLogs:
         )
 
     def test_always_updates_database_log(self, mock_database, mock_hub_client):
-        from src.resources.utils import stream_logs
+        from flame_po.resources.utils import stream_logs
 
         log_entity = self._make_log_entity()
         mock_database.progress_valid.return_value = False
 
-        with patch("src.resources.utils.get_node_analysis_id", return_value="node_analysis_id"):
-            with patch("src.resources.utils.update_hub_status"):
+        with patch("flame_po.resources.utils.get_node_analysis_id", return_value="node_analysis_id"):
+            with patch("flame_po.resources.utils.update_hub_status"):
                 stream_logs(log_entity, "node-id", False, mock_database, mock_hub_client)
 
         mock_database.update_analysis_log.assert_called_once()
@@ -727,25 +727,25 @@ class TestStreamLogs:
         assert "log_type=info" in args[1]
 
     def test_hub_logging_disabled_skips_hub_log(self, mock_database, mock_hub_client):
-        from src.resources.utils import stream_logs
+        from flame_po.resources.utils import stream_logs
 
         log_entity = self._make_log_entity()
         mock_database.progress_valid.return_value = False
 
-        with patch("src.resources.utils.get_node_analysis_id", return_value="na"):
-            with patch("src.resources.utils.update_hub_status"):
+        with patch("flame_po.resources.utils.get_node_analysis_id", return_value="na"):
+            with patch("flame_po.resources.utils.update_hub_status"):
                 stream_logs(log_entity, "node-id", False, mock_database, mock_hub_client)
 
         mock_hub_client.create_analysis_node_log.assert_not_called()
 
     def test_hub_logging_enabled_calls_hub(self, mock_database, mock_hub_client):
-        from src.resources.utils import stream_logs
+        from flame_po.resources.utils import stream_logs
 
         log_entity = self._make_log_entity()
         mock_database.progress_valid.return_value = False
 
-        with patch("src.resources.utils.get_node_analysis_id", return_value="na"):
-            with patch("src.resources.utils.update_hub_status"):
+        with patch("flame_po.resources.utils.get_node_analysis_id", return_value="na"):
+            with patch("flame_po.resources.utils.update_hub_status"):
                 stream_logs(log_entity, "node-id", True, mock_database, mock_hub_client)
 
         mock_hub_client.create_analysis_node_log.assert_called_once_with(
@@ -759,27 +759,27 @@ class TestStreamLogs:
     def test_hub_log_failure_does_not_break_stream_logs(self, mock_database, mock_hub_client):
         """Hub log errors are swallowed by create_analysis_node_log; local logging and status updates go on."""
         from httpx2 import ReadTimeout
-        from src.resources.utils import stream_logs
+        from flame_po.resources.utils import stream_logs
 
         log_entity = self._make_log_entity()
         mock_database.progress_valid.return_value = False
         mock_hub_client.create_analysis_node_log.side_effect = ReadTimeout("slow")
 
-        with patch("src.resources.utils.get_node_analysis_id", return_value="na"):
-            with patch("src.resources.utils.update_hub_status") as mock_update:
+        with patch("flame_po.resources.utils.get_node_analysis_id", return_value="na"):
+            with patch("flame_po.resources.utils.update_hub_status") as mock_update:
                 stream_logs(log_entity, "node-id", True, mock_database, mock_hub_client)
 
         mock_database.update_analysis_log.assert_called_once()
         mock_update.assert_called_once()
 
     def test_valid_progress_updates_progress_and_hub(self, mock_database, mock_hub_client):
-        from src.resources.utils import stream_logs
+        from flame_po.resources.utils import stream_logs
 
         log_entity = self._make_log_entity(progress=75)
         mock_database.progress_valid.return_value = True
 
-        with patch("src.resources.utils.get_node_analysis_id", return_value="node_analysis_id"):
-            with patch("src.resources.utils.update_hub_status") as mock_hub_update:
+        with patch("flame_po.resources.utils.get_node_analysis_id", return_value="node_analysis_id"):
+            with patch("flame_po.resources.utils.update_hub_status") as mock_hub_update:
                 stream_logs(log_entity, "node-id", False, mock_database, mock_hub_client)
 
         mock_database.update_analysis_progress.assert_called_once_with(_ANALYSIS_ID, 75)
@@ -791,13 +791,13 @@ class TestStreamLogs:
         )
 
     def test_invalid_progress_skips_progress_update(self, mock_database, mock_hub_client):
-        from src.resources.utils import stream_logs
+        from flame_po.resources.utils import stream_logs
 
         log_entity = self._make_log_entity(progress=50)
         mock_database.progress_valid.return_value = False
 
-        with patch("src.resources.utils.get_node_analysis_id", return_value="node_analysis_id"):
-            with patch("src.resources.utils.update_hub_status") as mock_hub_update:
+        with patch("flame_po.resources.utils.get_node_analysis_id", return_value="node_analysis_id"):
+            with patch("flame_po.resources.utils.update_hub_status") as mock_hub_update:
                 stream_logs(log_entity, "node-id", False, mock_database, mock_hub_client)
 
         mock_database.update_analysis_progress.assert_not_called()
@@ -808,26 +808,26 @@ class TestStreamLogs:
         )
 
     def test_empty_node_analysis_id_skips_hub_update(self, mock_database, mock_hub_client):
-        from src.resources.utils import stream_logs
+        from flame_po.resources.utils import stream_logs
 
         log_entity = self._make_log_entity()
         mock_database.progress_valid.return_value = True
 
-        with patch("src.resources.utils.get_node_analysis_id", return_value=[]):
-            with patch("src.resources.utils.update_hub_status") as mock_hub_update:
+        with patch("flame_po.resources.utils.get_node_analysis_id", return_value=[]):
+            with patch("flame_po.resources.utils.update_hub_status") as mock_hub_update:
                 stream_logs(log_entity, "node-id", False, mock_database, mock_hub_client)
 
         mock_database.update_analysis_progress.assert_not_called()
         mock_hub_update.assert_not_called()
 
     def test_none_node_analysis_id_skips_hub_update(self, mock_database, mock_hub_client):
-        from src.resources.utils import stream_logs
+        from flame_po.resources.utils import stream_logs
 
         log_entity = self._make_log_entity()
         mock_database.progress_valid.return_value = True
 
-        with patch("src.resources.utils.get_node_analysis_id", return_value=None):
-            with patch("src.resources.utils.update_hub_status") as mock_hub_update:
+        with patch("flame_po.resources.utils.get_node_analysis_id", return_value=None):
+            with patch("flame_po.resources.utils.update_hub_status") as mock_hub_update:
                 stream_logs(log_entity, "node-id", False, mock_database, mock_hub_client)
 
         mock_database.update_analysis_progress.assert_not_called()
