@@ -5,7 +5,7 @@ Covers:
   - create_harbor_secret: success, first-call failure -> delete+retry, Conflict re-raises
   - create_analysis_deployment: full chain (deployment + service + nginx + network policies)
   - _await_analysis_start: pod creation watch and Running-phase wait
-  - _build_nextflow_launcher_locations: optional launcher routes in the nginx config
+  - _build_plugin_locations: optional plugin (e.g. Nextflow launcher) routes in the nginx config
   - delete_deployment: all resources cleaned up, Not-Found exceptions handled silently
   - get_analysis_logs: structure, pod_id filtering, ApiException returns []
   - get_pod_status: ready/waiting/terminated/no pods
@@ -24,7 +24,7 @@ from src.k8s.kubernetes import (
     delete_deployment,
     get_analysis_logs,
     get_pod_status,
-    _build_nextflow_launcher_locations,
+    _build_plugin_locations,
     _await_analysis_start,
 )
 
@@ -173,14 +173,23 @@ class TestCreateAnalysisDeployment:
 
         return mock_k8s_clients
 
-    def _find_side_effects(self):
-        return [
-            ["message-broker-svc"],  # service/label/component=flame-message-broker
-            ["po-svc"],              # service/label/component=flame-po
-            ["hub-adapter-svc"],     # service/label/component=flame-hub-adapter
-            ["storage-svc"],         # service/label/component=flame-storage-service
-            ["kong-proxy"],          # service/label/app.kubernetes.io/name=kong
-        ]
+    _RESOURCES = {
+        ("service", "component=flame-message-broker"): "message-broker-svc",
+        ("service", "component=flame-po"): "po-svc",
+        ("service", "component=flame-hub-adapter"): "hub-adapter-svc",
+        ("service", "component=flame-storage-service"): "storage-svc",
+        ("service", "app.kubernetes.io/name=kong"): "kong-proxy",
+    }
+
+    def _find_side_effects(self, extra: dict = None):
+        """Stub for find_k8s_resources resolving (resource_type, selector_arg); unknown lookups yield [None]."""
+        resources = {**self._RESOURCES, **(extra or {})}
+
+        def _find(resource_type, selector_type=None, selector_arg=None, manual_name_selector=None,
+                  namespace="default"):
+            return [resources.get((resource_type, selector_arg))]
+
+        return _find
 
     def test_creates_analysis_deployment(self, mock_k8s_clients, _setup_pod_reads):
         with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
@@ -296,7 +305,50 @@ class TestCreateAnalysisDeployment:
             {"component": "flame-po"},
             {"component": "flame-message-broker"},
             {"app": "my-dep"},
+            {"component": "flame-nextflow-launcher"},
         ]
+
+    def test_ingress_network_policy_allows_configured_plugins(self, mock_k8s_clients, _setup_pod_reads):
+        plugins = [
+            {"name": "A", "component": "plugin-a", "location": "/a", "endpoints": ["/x"]},
+            {"name": "B", "component": "plugin-b", "location": "/b", "endpoints": ["/y"]},
+        ]
+        with (
+            patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()),
+            patch("src.k8s.kubernetes.get_plugins", return_value=plugins),
+        ):
+            create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
+
+        ingress = next(
+            c[1]["body"].spec
+            for c in mock_k8s_clients.networking_v1.create_namespaced_network_policy.call_args_list
+            if c[1]["body"].metadata.name == "ingress-nginx-to-my-dep-policy"
+        )
+        assert [r._from[0].pod_selector.match_labels for r in ingress.ingress][-2:] == [
+            {"component": "plugin-a"},
+            {"component": "plugin-b"},
+        ]
+
+    def test_config_map_without_plugin_service_has_no_plugin_locations(self, mock_k8s_clients, _setup_pod_reads):
+        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+            create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
+
+        _, call_kwargs = mock_k8s_clients.core_v1.create_namespaced_config_map.call_args
+        assert "/nextflow" not in call_kwargs["body"].data["nginx.conf"]
+
+    def test_config_map_contains_plugin_locations(self, mock_k8s_clients, _setup_pod_reads):
+        service = MagicMock()
+        service.spec.ports = [MagicMock(port=8000)]
+        mock_k8s_clients.core_v1.read_namespaced_service.return_value = service
+        extra = {("service", "component=flame-nextflow-launcher"): "nextflow-launcher"}
+        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects(extra)):
+            create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
+
+        _, call_kwargs = mock_k8s_clients.core_v1.create_namespaced_config_map.call_args
+        nginx_conf = call_kwargs["body"].data["nginx.conf"]
+        assert "location = /nextflow/run {" in nginx_conf
+        assert "proxy_pass  http://nextflow-launcher:8000;" in nginx_conf
+        assert "location /analysis/nextflow" not in nginx_conf
 
     def test_returns_pod_names(self, mock_k8s_clients, _setup_pod_reads):
         with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
@@ -382,54 +434,99 @@ class TestAwaitAnalysisStart:
         mock_sleep.assert_not_called()
 
 
-# ─── _build_nextflow_launcher_locations ─────────────────────────────────────
+# ─── _build_plugin_locations ───────────────────────────────────────────────
 
-class TestBuildNextflowLauncherLocations:
+class TestBuildPluginLocations:
     _ENV = {
         "PROJECT_ID": "project-123",
         "ANALYSIS_ID": "analysis-456",
     }
+    _NEXTFLOW = {
+        "name": "Nextflow Launcher",
+        "component": "flame-nextflow-launcher",
+        "location": "/nextflow",
+        "endpoints": ["/run", "/delete"],
+    }
+    _OTHER = {
+        "name": "Other Plugin",
+        "component": "flame-other-plugin",
+        "location": "/other",
+        "endpoints": ["/do"],
+    }
 
     @pytest.fixture
-    def _launcher_deployed(self, mock_k8s_clients):
-        service = MagicMock()
-        service.spec.ports = [MagicMock(port=8000)]
-        mock_k8s_clients.core_v1.read_namespaced_service.return_value = service
-        mock_k8s_clients.core_v1.read_namespaced_pod.return_value = _make_pod_item("launcher-pod", pod_ip="10.0.0.9")
+    def _plugins_deployed(self, mock_k8s_clients):
+        ports = {"nextflow-launcher": 8000, "other-plugin": 9000}
+
+        def _read_service(name, namespace):
+            service = MagicMock()
+            service.spec.ports = [MagicMock(port=ports[name])]
+            return service
+
+        mock_k8s_clients.core_v1.read_namespaced_service.side_effect = _read_service
         return mock_k8s_clients
 
-    def _build(self, find_results):
+    def _build(self, find_results, plugins=None):
         with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=find_results):
-            return _build_nextflow_launcher_locations("analysis-my-dep", self._ENV)
+            return _build_plugin_locations(
+                [self._NEXTFLOW] if plugins is None else plugins, self._ENV
+            )
 
-    def test_no_launcher_returns_empty(self, mock_k8s_clients):
-        assert self._build([[None]]) == ""
+    def test_no_plugins_returns_only_header(self, mock_k8s_clients):
+        assert self._build([], plugins=[]).strip() == "# plugins"
 
-    def test_egress_routes_only_run_and_own_stop(self, _launcher_deployed):
-        locations = self._build([["nextflow-launcher"], ["launcher-pod"]])
+    def test_missing_plugin_service_is_skipped(self, mock_k8s_clients):
+        locations = self._build([[None]])
+
+        assert "location" not in locations
+        mock_k8s_clients.core_v1.read_namespaced_service.assert_not_called()
+
+    def test_egress_routes_only_configured_endpoints(self, _plugins_deployed):
+        locations = self._build([["nextflow-launcher"]])
 
         assert "location = /nextflow/run {" in locations
-        assert "location = /nextflow/stop/analysis-456 {" in locations
+        assert "location = /nextflow/delete {" in locations
         assert "conclude" not in locations
         assert locations.count("proxy_pass  http://nextflow-launcher:8000;") == 2
 
-    def test_egress_injects_analysis_and_project_id(self, _launcher_deployed):
-        locations = self._build([["nextflow-launcher"], ["launcher-pod"]])
+    def test_proxy_pass_uses_service_name(self, _plugins_deployed):
+        """Regression: proxy_pass must contain the service name, not the V1Service object."""
+        locations = self._build([["nextflow-launcher"]])
+
+        egress_passes = [line.strip() for line in locations.splitlines() if "proxy_pass" in line]
+        assert egress_passes == ["proxy_pass  http://nextflow-launcher:8000;"] * 2
+
+    def test_egress_injects_analysis_and_project_id(self, _plugins_deployed):
+        locations = self._build([["nextflow-launcher"]])
 
         assert locations.count("proxy_set_header X-Flame-Analysis-Id analysis-456;") == 2
         assert locations.count("proxy_set_header X-Flame-Project-Id project-123;") == 2
 
-    def test_ingress_routes_launcher_results(self, _launcher_deployed):
-        locations = self._build([["nextflow-launcher"], ["launcher-pod"]])
+    def test_no_plugin_ingress_location(self, _plugins_deployed):
+        """Plugins reach the analysis via the generic /analysis location; no dedicated one is rendered."""
+        locations = self._build([["nextflow-launcher"]])
 
-        assert "location /analysis/nextflow {" in locations
-        assert "proxy_pass  http://analysis-my-dep;" in locations
+        assert "/analysis" not in locations
+        _plugins_deployed.core_v1.read_namespaced_pod.assert_not_called()
 
-    def test_launcher_pod_missing_skips_ingress(self, _launcher_deployed):
-        locations = self._build([["nextflow-launcher"], [None]])
+    def test_multiple_plugins_rendered_independently(self, _plugins_deployed):
+        locations = self._build(
+            [["nextflow-launcher"], ["other-plugin"]],
+            plugins=[self._NEXTFLOW, self._OTHER],
+        )
 
         assert "location = /nextflow/run {" in locations
-        assert "/analysis/nextflow" not in locations
+        assert "location = /other/do {" in locations
+        assert "proxy_pass  http://other-plugin:9000;" in locations
+
+    def test_missing_plugin_does_not_affect_others(self, _plugins_deployed):
+        locations = self._build(
+            [[None], ["other-plugin"]],
+            plugins=[self._NEXTFLOW, self._OTHER],
+        )
+
+        assert "/nextflow" not in locations
+        assert "location = /other/do {" in locations
 
 
 # ─── delete_deployment ───────────────────────────────────────────────────────

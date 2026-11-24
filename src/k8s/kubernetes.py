@@ -17,7 +17,7 @@ import os
 import time
 import json
 import base64
-from typing import Optional
+from typing import Any, Optional
 import string
 
 from kubernetes import client, watch
@@ -25,6 +25,7 @@ from kubernetes import client, watch
 from src.resources.database.entity import Database
 from src.k8s.utils import find_k8s_resources
 from src.utils.po_logging import get_logger
+from src.plugins.constants import get_plugins
 
 
 logger = get_logger()
@@ -155,7 +156,8 @@ def create_analysis_deployment(
     then creates the nginx service whose cluster IP is pinned into the analysis
     pod's hosts file. Creates the analysis ``Deployment`` using the Harbor pull
     secret, exposes it via a ``Service``, and then provisions the companion nginx deployment
-    that reverse-proxies egress to node-local services. Waits until the
+    that reverse-proxies egress to node-local services and configured plugins
+    (whose pods are also allowed ingress to the nginx). Waits until the
     analysis and nginx pods are running before they are listed.
 
     Args:
@@ -179,8 +181,10 @@ def create_analysis_deployment(
         ("component", "flame-po"),
         ("component", "flame-message-broker"),
         ("app", name),
-        # TODO: ("component", "flame-nextflow-launcher"),
     ]
+    plugins = get_plugins()
+    service_names.extend(("component", plugin_vals["component"]) for plugin_vals in plugins)
+
     _create_nginx_ingress_network_policy(name, nginx_name, service_names, namespace)
     # the nginx service is created up front so that its cluster IP can be pinned into the analysis pod
     nginx_service = _create_service(
@@ -240,7 +244,7 @@ def create_analysis_deployment(
         meta_data_labels=labels,
         namespace=namespace,
     )
-    _create_analysis_nginx_deployment(name, env, namespace)
+    _create_analysis_nginx_deployment(name, env, namespace, plugins)
 
     _await_analysis_start(name, nginx_name, namespace)
 
@@ -443,6 +447,7 @@ def _create_analysis_nginx_deployment(
     analysis_name: str,
     analysis_env: Optional[dict[str, str]] = None,
     namespace: str = "default",
+    plugins: Optional[list[dict[str, Any]]] = None,
 ) -> str:
     """Deploy the nginx reverse-proxy sidecar for an analysis.
 
@@ -455,6 +460,8 @@ def _create_analysis_nginx_deployment(
         analysis_env: Analysis config (must include ``ANALYSIS_ID`` and
             ``PROJECT_ID``) used to template the nginx config.
         namespace: Namespace in which to create the resources.
+        plugins: Optional plugin configs (see ``src.plugins.constants``) for
+            which nginx locations are rendered.
 
     Returns:
         The nginx deployment name.
@@ -467,7 +474,8 @@ def _create_analysis_nginx_deployment(
         analysis_name=analysis_name,
         nginx_name=nginx_name,
         analysis_env=analysis_env,
-        namespace=namespace
+        namespace=namespace,
+        plugins=plugins
     )
 
     liveness_probe = client.V1Probe(
@@ -537,6 +545,7 @@ def _create_nginx_config_map(
     nginx_name: str,
     analysis_env: Optional[dict[str, str]] = None,
     namespace: str = "default",
+    plugins: Optional[list[dict[str, Any]]] = None,
 ) -> str:
     """Build and create the nginx ConfigMap scoped to a single analysis.
 
@@ -552,6 +561,9 @@ def _create_nginx_config_map(
         analysis_env: Analysis config containing ``ANALYSIS_ID`` and
             ``PROJECT_ID`` used in location matches.
         namespace: Namespace in which to create the ConfigMap.
+        plugins: Optional plugin configs (see ``src.plugins.constants``) for
+            which egress locations are appended via
+            ``_build_plugin_locations``.
 
     Returns:
         Name of the created ConfigMap (``{nginx_name}-config``).
@@ -586,11 +598,11 @@ def _create_nginx_config_map(
         namespace=namespace,
     )[0]
 
-    nextflow_launcher_locations = ''
-    # TODO: Add this back in
-    # nextflow_launcher_locations = _build_nextflow_launcher_locations(analysis_name=analysis_name,
-    #                                                                  analysis_env=analysis_env,
-    #                                                                  namespace=namespace)
+    plugin_locations = ''
+    if plugins:
+        plugin_locations = _build_plugin_locations(plugins=plugins,
+                                                   analysis_env=analysis_env,
+                                                   namespace=namespace)
 
     proxy_timeout = 900
     proxy_connect_timeout = 10
@@ -675,9 +687,9 @@ def _create_nginx_config_map(
                         send_timeout          120s;
                     }}
 
-                    {nextflow_launcher_locations}
+                    {plugin_locations}
 
-                    # ingress: message-broker/pod-orchestration to analysis deployment
+                    # ingress: message-broker/pod-orchestration/plugins to analysis deployment
                     location /analysis {{
                         rewrite     ^/analysis(/.*) $1 break;
                         proxy_pass  http://{analysis_name};
@@ -702,85 +714,70 @@ def _create_nginx_config_map(
     return name
 
 
-def _build_nextflow_launcher_locations(analysis_name: str, analysis_env: dict[str, str], namespace: str = 'default') -> str:
-    """Render the nginx locations connecting an analysis to the Nextflow launcher.
+def _build_plugin_locations(
+    plugins: list[dict[str, Any]],
+    analysis_env: dict[str, str],
+    namespace: str = 'default',
+) -> str:
+    """Render the nginx egress locations connecting an analysis to its plugins (e.g. the Nextflow launcher).
 
-    The launcher is optional: if no service labeled
-    ``component=flame-nextflow-launcher`` exists in the namespace, an empty
-    string is returned and the nginx config is unchanged.
+    Every plugin is optional: if no service labeled ``component={plugin["component"]}``
+    exists in the namespace, the plugin is skipped and the nginx config is unchanged.
 
-    Egress allows the analysis to start runs and stop its own runs only; the
-    launcher's internal endpoints (e.g. ``/nextflow/conclude``) stay
-    unreachable. The analysis and project id are injected as headers so the
-    launcher can trust them instead of the request body.
+    Egress allows the analysis to call only the configured ``endpoints`` below
+    the plugin's ``location`` (exact matches), so the plugin's internal endpoints
+    stay unreachable. The analysis and project id are injected as headers so the
+    plugin can trust them instead of the request body.
+
+    Ingress from plugins to the analysis needs no dedicated location: plugin
+    pods are allowed to reach the nginx by its ingress network policy and use
+    the generic ``/analysis`` location.
 
     Args:
-        analysis_name: Name of the analysis deployment (ingress target).
+        plugins: Sanitized plugin configs (see ``src.plugins.constants``), each
+            with ``name``, ``component``, ``location`` and ``endpoints``.
         analysis_env: Analysis config containing ``ANALYSIS_ID`` and
             ``PROJECT_ID``.
-        namespace: Namespace to search for the launcher.
+        namespace: Namespace to search for the plugin services.
 
     Returns:
-        The nginx ``location`` blocks, or an empty string if no launcher is
-        deployed.
+        The nginx ``location`` blocks of all deployed plugins, prefixed by a
+        ``# plugins`` comment.
     """
-    nextflow_launcher_service_name = find_k8s_resources('service',
-                                                        'label',
-                                                        'component=flame-nextflow-launcher',
-                                                        namespace=namespace)[0]
-    if nextflow_launcher_service_name is None:
-        return ""
-
     core_client = client.CoreV1Api()
-    nextflow_launcher_service = core_client.read_namespaced_service(name=nextflow_launcher_service_name,
-                                                                    namespace=namespace)
-    nextflow_launcher_port = nextflow_launcher_service.spec.ports[0].port
-
+    locations = '# plugins\n'
     proxy_headers = f"""
-                        proxy_set_header Host $host;
-                        proxy_set_header X-Real-IP $remote_addr;
-                        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                        proxy_set_header X-Forwarded-Proto $scheme;
-                        proxy_set_header X-Flame-Analysis-Id {analysis_env['ANALYSIS_ID']};
-                        proxy_set_header X-Flame-Project-Id {analysis_env['PROJECT_ID']};
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto $scheme;
+                    proxy_set_header X-Flame-Analysis-Id {analysis_env['ANALYSIS_ID']};
+                    proxy_set_header X-Flame-Project-Id {analysis_env['PROJECT_ID']};
                     """
+    for plugin_vals in plugins:
+        selector_arg = f'component={plugin_vals["component"]}'
+        plugin_service_name = find_k8s_resources('service',
+                                                 'label',
+                                                 selector_arg,
+                                                 namespace=namespace)[0]
+        if plugin_service_name is None:
+            continue
 
-    locations = f"""
-                    # egress: analysis deployment to nextflow launcher: start run
-                    location = /nextflow/run {{
-                        proxy_pass  http://{nextflow_launcher_service_name}:{nextflow_launcher_port};
+        plugin_service = core_client.read_namespaced_service(name=plugin_service_name, namespace=namespace)
+        plugin_port = plugin_service.spec.ports[0].port
+
+        location = plugin_vals["location"]
+        plugin_egress_rules = ""
+        for endpoint in plugin_vals["endpoints"]:
+            plugin_egress_rules += f"""
+                    # egress: analysis deployment to {plugin_vals['name']}: {endpoint}
+                    location = {location + endpoint} {{
+                        proxy_pass  http://{plugin_service_name}:{plugin_port};
                         {proxy_headers}
                     }}
-                    # egress: analysis deployment to nextflow launcher: stop own runs
-                    location = /nextflow/stop/{analysis_env['ANALYSIS_ID']} {{
-                        proxy_pass  http://{nextflow_launcher_service_name}:{nextflow_launcher_port};
-                        {proxy_headers}
-                    }}
-                """
-
-    # the launcher pod may be restarting; skip ingress rather than block analysis creation
-    nextflow_launcher_pod_name = find_k8s_resources('pod',
-                                                    'label',
-                                                    'component=flame-nextflow-launcher',
-                                                    namespace=namespace)[0]
-    nextflow_launcher_ip = None
-    if nextflow_launcher_pod_name is not None:
-        nextflow_launcher_pod = core_client.read_namespaced_pod(name=nextflow_launcher_pod_name,
-                                                                namespace=namespace)
-        nextflow_launcher_ip = nextflow_launcher_pod.status.pod_ip
-    if nextflow_launcher_ip is None:
-        logger.warning(f"Nextflow launcher service {nextflow_launcher_service_name} found, but no running pod. "
-                       f"Analysis {analysis_name} will not receive nextflow run results.")
-        return locations
-
-    nf_ingress_rule = f"""
-                        # ingress: nextflow launcher to analysis deployment: run results
-                        location /analysis/nextflow {{
-                            rewrite     ^/analysis(/.*) $1 break;
-                            proxy_pass  http://{analysis_name};
-                        }}
-                        """
-    return locations + nf_ingress_rule
+                    """
+        locations += plugin_egress_rules
+    return locations
 
 
 def _create_service(
