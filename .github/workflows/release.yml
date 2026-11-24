@@ -78,7 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/node-pod-orchestration
+      url: https://pypi.org/p/flame-node-pod-orchestration
     permissions:
       id-token: write  # required for PyPI Trusted Publishing
       contents: read
