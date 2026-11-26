@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flame-node-pod-orchestration"
-version = "1.5.0"
+version = "1.5.1"
 description = "Kubernetes orchestration service that manages the lifecycle of analysis pods on a FLAME node"
 authors = ["Alexander Röhl <alexander.roehl@uni-tuebingen.de>", "David Hieber <david.hieber@uni-tuebingen.de>"]
 license = "Apache-2.0"
