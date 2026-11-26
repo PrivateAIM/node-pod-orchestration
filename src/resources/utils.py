@@ -16,7 +16,7 @@ from fastapi import HTTPException
 from flame_hub import CoreClient as HubClient
 
 from src.resources.database.entity import Database
-from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
+from src.resources.analysis.entity import Analysis, CreateAnalysis
 from src.resources.log.entity import CreateLogEntity
 from src.status.constants import AnalysisStatus
 from src.k8s.kubernetes import (
@@ -195,14 +195,14 @@ def retrieve_history(
 
     deployments = {}
     for analysis_id in analysis_ids:
-        deployment = database.get_latest_deployment(analysis_id)
-        if deployment is not None:
-            if deployment.status in [
+        db_deployment_entry = database.get_latest_deployment(analysis_id)
+        if db_deployment_entry is not None:
+            if db_deployment_entry.status in [
                 AnalysisStatus.STOPPED.value,
                 AnalysisStatus.EXECUTED.value,
                 AnalysisStatus.FAILED.value,
             ]:
-                deployments[analysis_id] = read_db_analysis(deployment)
+                deployments[analysis_id] = Analysis.from_database_entry(db_deployment_entry)
 
     analysis_logs, nginx_logs = ({}, {})
     for analysis_id, deployment in deployments.items():
@@ -235,14 +235,12 @@ def retrieve_logs(
     namespace = "default"
     deployment_names = {}
     for analysis_id in analysis_ids:
-        deployment = database.get_latest_deployment(analysis_id)
-        if deployment is not None:
-            if deployment.status in [AnalysisStatus.EXECUTING.value]:
-                deployment_names[analysis_id] = read_db_analysis(
-                    deployment
-                ).deployment_name
+        db_deployment_entry = database.get_latest_deployment(analysis_id)
+        if db_deployment_entry is not None:
+            if db_deployment_entry.status in [AnalysisStatus.EXECUTING.value]:
+                deployment_names[analysis_id] = Analysis.from_database_entry(db_deployment_entry).deployment_name
             if namespace == "default":
-                namespace = deployment.namespace
+                namespace = db_deployment_entry.namespace
     return get_analysis_logs(deployment_names, database=database, namespace=namespace)
 
 
@@ -265,9 +263,9 @@ def get_status_and_progress(
 
     deployments = {}
     for analysis_id in analysis_ids:
-        deployment = database.get_latest_deployment(analysis_id)
-        if deployment is not None:
-            deployments[analysis_id] = read_db_analysis(deployment)
+        db_deployment_entry = database.get_latest_deployment(analysis_id)
+        if db_deployment_entry is not None:
+            deployments[analysis_id] = Analysis.from_database_entry(db_deployment_entry)
 
     return {
         analysis_id: {"status": deployment.status, "progress": deployment.progress}
@@ -321,9 +319,9 @@ def stop_analysis(analysis_id_str: str, database: Database) -> dict[str, str]:
 
     deployments = {}
     for analysis_id in analysis_ids:
-        deployment = database.get_latest_deployment(analysis_id)
-        if deployment is not None:
-            deployments[analysis_id] = read_db_analysis(deployment)
+        db_deployment_entry = database.get_latest_deployment(analysis_id)
+        if db_deployment_entry is not None:
+            deployments[analysis_id] = Analysis.from_database_entry(db_deployment_entry)
 
     for analysis_id, deployment in deployments.items():
         # save logs as string to database (will be read as dict in retrieve_history)
@@ -374,9 +372,9 @@ def delete_analysis(analysis_id_str: str, database: Database) -> dict[str, None]
 
     deployments = {}
     for analysis_id in analysis_ids:
-        deployment = database.get_latest_deployment(analysis_id)
-        if deployment is not None:
-            deployments[analysis_id] = read_db_analysis(deployment)
+        db_deployment_entry = database.get_latest_deployment(analysis_id)
+        if db_deployment_entry is not None:
+            deployments[analysis_id] = Analysis.from_database_entry(db_deployment_entry)
 
     for analysis_id, deployment in deployments.items():
         deployment.stop(database, log="")

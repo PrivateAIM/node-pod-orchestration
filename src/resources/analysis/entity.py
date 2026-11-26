@@ -2,7 +2,7 @@
 
 :class:`CreateAnalysis` is the request payload accepted by ``POST /po/``,
 :class:`Analysis` is the richer runtime model that owns the deployment
-lifecycle (``start`` / ``stop``), and :func:`read_db_analysis` converts a
+lifecycle (``start`` / ``stop``), and :meth:`Analysis.from_database_entry` converts a
 persisted :class:`AnalysisDB` row back into an :class:`Analysis`.
 """
 
@@ -45,6 +45,26 @@ class Analysis(BaseModel):
     status: str = AnalysisStatus.STARTING.value
     log: Optional[str] = None
     pod_ids: Optional[list[str]] = None
+
+    @classmethod
+    def from_database_entry(cls, analysis: AnalysisDB) -> 'Analysis':
+        """Convert a persisted :class:`AnalysisDB` row into a runtime :class:`Analysis`.
+
+        Decodes the JSON-encoded ``pod_ids`` column back into a Python list.
+        """
+        return cls(
+            analysis_id=analysis.analysis_id,
+            deployment_name=analysis.deployment_name,
+            project_id=analysis.project_id,
+            image_url=analysis.image_url,
+            status=analysis.status,
+            pod_ids=json.loads(analysis.pod_ids),
+            log=analysis.log,
+            namespace=analysis.namespace,
+            kong_token=analysis.kong_token,
+            restart_counter=analysis.restart_counter,
+            progress=analysis.progress,
+        )
 
     def start(self, database: Database, namespace: str = "default") -> None:
         """Deploy the analysis on Kubernetes and persist it in the database.
@@ -138,26 +158,6 @@ class Analysis(BaseModel):
         delete_subscription(
             self.analysis_id, self.tokens["AUTHUP_TOKEN"], namespace=self.namespace
         )
-
-
-def read_db_analysis(analysis: AnalysisDB) -> Analysis:
-    """Convert a persisted :class:`AnalysisDB` row into a runtime :class:`Analysis`.
-
-    Decodes the JSON-encoded ``pod_ids`` column back into a Python list.
-    """
-    return Analysis(
-        analysis_id=analysis.analysis_id,
-        deployment_name=analysis.deployment_name,
-        project_id=analysis.project_id,
-        image_url=analysis.image_url,
-        status=analysis.status,
-        pod_ids=json.loads(analysis.pod_ids),
-        log=analysis.log,
-        namespace=analysis.namespace,
-        kong_token=analysis.kong_token,
-        restart_counter=analysis.restart_counter,
-        progress=analysis.progress,
-    )
 
 
 class CreateAnalysis(BaseModel):

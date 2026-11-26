@@ -3,7 +3,7 @@ Tests for src/resources/utils.py — business logic layer.
 
 All external dependencies are mocked:
   - create_harbor_secret
-  - Analysis class / read_db_analysis
+  - Analysis class / Analysis.from_database_entry
   - get_analysis_logs
   - init_hub_client_and_update_hub_status
   - find_k8s_resources / delete_k8s_resource
@@ -356,7 +356,7 @@ class TestGetPods:
 class TestStopAnalysis:
     @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("src.resources.utils.Analysis.from_database_entry")
     def test_running_analysis_stopped(self, mock_read, mock_logs, mock_hub, mock_database):
         from src.resources.utils import stop_analysis
 
@@ -372,7 +372,7 @@ class TestStopAnalysis:
 
     @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("src.resources.utils.Analysis.from_database_entry")
     def test_executed_analysis_keeps_executed_status(self, mock_read, mock_logs, mock_hub, mock_database):
         from src.resources.utils import stop_analysis
 
@@ -387,7 +387,7 @@ class TestStopAnalysis:
 
     @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("src.resources.utils.Analysis.from_database_entry")
     def test_failed_analysis_keeps_failed_status(self, mock_read, mock_logs, mock_hub, mock_database):
         from src.resources.utils import stop_analysis
 
@@ -402,7 +402,7 @@ class TestStopAnalysis:
 
     @patch("src.resources.utils.init_hub_client_and_update_hub_status")
     @patch("src.resources.utils.get_analysis_logs", return_value={"analysis": {}, "nginx": {}})
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("src.resources.utils.Analysis.from_database_entry")
     def test_all_analyses(self, mock_read, mock_logs, mock_hub, mock_database):
         from src.resources.utils import stop_analysis
 
@@ -428,7 +428,7 @@ class TestStopAnalysis:
 # ─── delete_analysis ──────────────────────────────────────────────────────────
 
 class TestDeleteAnalysis:
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("src.resources.utils.Analysis.from_database_entry")
     def test_stopped_analysis_also_stopped(self, mock_read, mock_database):
         """New behavior: delete_analysis unconditionally calls stop() on the deployment."""
         from src.resources.utils import delete_analysis
@@ -441,7 +441,7 @@ class TestDeleteAnalysis:
         mock_deployment.stop.assert_called_once_with(mock_database, log="")
         mock_database.delete_analysis.assert_called_once_with(_ANALYSIS_ID)
 
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("src.resources.utils.Analysis.from_database_entry")
     def test_running_analysis_stopped_then_deleted(self, mock_read, mock_database):
         from src.resources.utils import delete_analysis
 
@@ -462,7 +462,7 @@ class TestDeleteAnalysis:
 
         assert result == {}
 
-    @patch("src.resources.utils.read_db_analysis")
+    @patch("src.resources.utils.Analysis.from_database_entry")
     def test_all_analyses(self, mock_read, mock_database):
         from src.resources.utils import delete_analysis
 

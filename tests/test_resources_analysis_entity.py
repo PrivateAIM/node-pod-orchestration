@@ -4,7 +4,7 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 
-from src.resources.analysis.entity import Analysis, CreateAnalysis, read_db_analysis
+from src.resources.analysis.entity import Analysis, CreateAnalysis
 from src.status.constants import AnalysisStatus
 
 
@@ -259,12 +259,12 @@ class TestAnalysisStop:
         )
 
 
-# ─── read_db_analysis() ───────────────────────────────────────────────────────
+# ─── Analysis.from_database_entry() ───────────────────────────────────────────
 
-class TestReadDbAnalysis:
+class TestFromDatabaseEntry:
     def test_returns_analysis_instance(self, sample_analysis_db):
         db_row = sample_analysis_db()
-        result = read_db_analysis(db_row)
+        result = Analysis.from_database_entry(db_row)
         assert isinstance(result, Analysis)
 
     def test_maps_all_fields(self, sample_analysis_db):
@@ -281,7 +281,7 @@ class TestReadDbAnalysis:
             progress=50,
             deployment_name="analysis-a99-2",
         )
-        result = read_db_analysis(db_row)
+        result = Analysis.from_database_entry(db_row)
         assert result.analysis_id == "a99"
         assert result.project_id == "p99"
         assert result.image_url == "harbor.custom/img"
@@ -296,12 +296,12 @@ class TestReadDbAnalysis:
 
     def test_deserializes_pod_ids_from_json(self, sample_analysis_db):
         db_row = sample_analysis_db(pod_ids=json.dumps(["pod-1", "pod-2", "pod-3"]))
-        result = read_db_analysis(db_row)
+        result = Analysis.from_database_entry(db_row)
         assert result.pod_ids == ["pod-1", "pod-2", "pod-3"]
 
     def test_null_log_preserved(self, sample_analysis_db):
         db_row = sample_analysis_db(log=None)
-        result = read_db_analysis(db_row)
+        result = Analysis.from_database_entry(db_row)
         assert result.log is None
 
 
