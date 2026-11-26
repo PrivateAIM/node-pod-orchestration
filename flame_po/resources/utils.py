@@ -3,7 +3,7 @@
 Sits between the REST API and the Kubernetes / database layers: creates
 analyses and their supporting resources, retrieves status, history and logs,
 stops and deletes analyses, restarts stuck deployments, and cleans up orphaned
-Kubernetes objects and Keycloak clients left behind by analyses the Hub no
+Kubernetes objects and database entries left behind by analyses the Hub no
 longer knows about.
 """
 

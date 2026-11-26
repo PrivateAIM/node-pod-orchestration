@@ -27,7 +27,7 @@ class Analysis(BaseModel):
     """Runtime model describing a single analysis deployment.
 
     Combines the user-supplied creation payload with runtime-derived fields
-    (deployment name, Keycloak/Kong tokens, pod ids, current status) and
+    (deployment name, Authup/Kong tokens, pod ids, current status) and
     exposes ``start`` / ``stop`` helpers that drive the Kubernetes resources.
     """
 

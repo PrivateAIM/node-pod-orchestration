@@ -506,8 +506,8 @@ class PodOrchestrationAPI:
 
         Args:
             cleanup_type: Cleanup selector; one or more (comma-separated) of
-                ``all``, ``analyzes``, ``services``, ``mb``, ``rs``,
-                ``keycloak``, or ``zombies``.
+                ``all``, ``analyzes``, ``services``, ``mb``, ``rs``, or
+                ``zombies``. The zombie cleanup runs on every call.
 
         Returns:
             Mapping ``{cleanup_type: summary_string}`` describing what was done.

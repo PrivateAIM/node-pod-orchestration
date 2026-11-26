@@ -362,13 +362,13 @@ def _get_internal_deployment_status(deployment_name: str, analysis_id: str) -> s
     """Poll the analysis ``/healthz`` endpoint and derive the internal status.
 
     Retries on connection errors until ``INTERNAL_STATUS_TIMEOUT`` is hit, at
-    which point ``FAILED`` is returned. Also refreshes the Keycloak token
+    which point ``FAILED`` is returned. Also refreshes the analysis' Authup token
     when the analysis reports it is close to expiry.
 
     Args:
         deployment_name: Name of the analysis deployment (used to resolve
             the nginx sidecar URL).
-        analysis_id: Analysis id used to mint a refreshed Keycloak token.
+        analysis_id: Analysis id used to mint a refreshed Authup token.
 
     Returns:
         One of ``EXECUTED``, ``EXECUTING``, ``STUCK``, or ``FAILED``.
