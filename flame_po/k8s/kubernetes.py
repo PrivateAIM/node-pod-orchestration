@@ -460,7 +460,7 @@ def _create_analysis_nginx_deployment(
         analysis_env: Analysis config (must include ``ANALYSIS_ID`` and
             ``PROJECT_ID``) used to template the nginx config.
         namespace: Namespace in which to create the resources.
-        plugins: Optional plugin configs (see ``src.plugins.constants``) for
+        plugins: Optional plugin configs (see ``flame_po.plugins.constants``) for
             which nginx locations are rendered.
 
     Returns:
@@ -561,7 +561,7 @@ def _create_nginx_config_map(
         analysis_env: Analysis config containing ``ANALYSIS_ID`` and
             ``PROJECT_ID`` used in location matches.
         namespace: Namespace in which to create the ConfigMap.
-        plugins: Optional plugin configs (see ``src.plugins.constants``) for
+        plugins: Optional plugin configs (see ``flame_po.plugins.constants``) for
             which egress locations are appended via
             ``_build_plugin_locations``.
 
@@ -734,7 +734,7 @@ def _build_plugin_locations(
     the generic ``/analysis`` location.
 
     Args:
-        plugins: Sanitized plugin configs (see ``src.plugins.constants``), each
+        plugins: Sanitized plugin configs (see ``flame_po.plugins.constants``), each
             with ``name``, ``component``, ``location`` and ``endpoints``.
         analysis_env: Analysis config containing ``ANALYSIS_ID`` and
             ``PROJECT_ID``.

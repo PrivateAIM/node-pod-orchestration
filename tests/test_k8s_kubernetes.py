@@ -314,8 +314,8 @@ class TestCreateAnalysisDeployment:
             {"name": "B", "component": "plugin-b", "location": "/b", "endpoints": ["/y"]},
         ]
         with (
-            patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()),
-            patch("src.k8s.kubernetes.get_plugins", return_value=plugins),
+            patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()),
+            patch("flame_po.k8s.kubernetes.get_plugins", return_value=plugins),
         ):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
@@ -330,7 +330,7 @@ class TestCreateAnalysisDeployment:
         ]
 
     def test_config_map_without_plugin_service_has_no_plugin_locations(self, mock_k8s_clients, _setup_pod_reads):
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects()):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
         _, call_kwargs = mock_k8s_clients.core_v1.create_namespaced_config_map.call_args
@@ -341,7 +341,7 @@ class TestCreateAnalysisDeployment:
         service.spec.ports = [MagicMock(port=8000)]
         mock_k8s_clients.core_v1.read_namespaced_service.return_value = service
         extra = {("service", "component=flame-nextflow-launcher"): "nextflow-launcher"}
-        with patch("src.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects(extra)):
+        with patch("flame_po.k8s.kubernetes.find_k8s_resources", side_effect=self._find_side_effects(extra)):
             create_analysis_deployment("my-dep", "harbor.test/image:latest", env=self._ENV)
 
         _, call_kwargs = mock_k8s_clients.core_v1.create_namespaced_config_map.call_args

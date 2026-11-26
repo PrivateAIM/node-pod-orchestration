@@ -1,5 +1,5 @@
 """
-Tests for src/plugins/constants.py
+Tests for flame_po/plugins/constants.py
 
 Covers:
   - get_plugins: shipped config is complete and well-formed
@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.plugins.constants import get_plugins, _sanitize_plugin_configs
+from flame_po.plugins.constants import get_plugins, _sanitize_plugin_configs
 
 
 _VALID = {
@@ -22,7 +22,7 @@ _VALID = {
 
 
 def _sanitize(*plugins):
-    with patch("src.plugins.constants._PLUGINS", list(plugins)):
+    with patch("flame_po.plugins.constants._PLUGINS", list(plugins)):
         return _sanitize_plugin_configs()
 
 
