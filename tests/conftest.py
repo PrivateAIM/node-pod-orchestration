@@ -2,10 +2,10 @@
 Shared test fixtures for node-pod-orchestration.
 
 IMPORTANT: mock_env_vars is session-scoped and autouse. It sets all required
-environment variables BEFORE any src modules are imported, which is critical
+environment variables BEFORE any flame_po modules are imported, which is critical
 because api/constants.py and token.py read env vars at module level.
 
-All src imports are deferred (inside fixture bodies) to ensure env vars are set first.
+All flame_po imports are deferred (inside fixture bodies) to ensure env vars are set first.
 """
 
 import json
@@ -23,7 +23,7 @@ _TEST_ENV_VARS = {
     "POSTGRES_PASSWORD": "test_password",
     "POSTGRES_DB": "test_db",
     # Authup JWKS for token verification; KEYCLOAK_URL is deliberately unset so the
-    # session runs in Authup mode (src/api/constants.py decides at import time)
+    # session runs in Authup mode (flame_po/api/constants.py decides at import time)
     "AUTHUP_JWKS_URL": "http://authup.test/jwks",
     "HUB_CLIENT_ID": "test_hub_client",
     "HUB_CLIENT_SECRET": "test_hub_secret",
@@ -43,7 +43,7 @@ def mock_env_vars():
     """Set all required env vars for the entire test session.
 
     Uses os.environ directly because monkeypatch is function-scoped only.
-    Must run before any src module import triggers api/constants.py / token.py
+    Must run before any flame_po module import triggers api/constants.py / token.py
     module-level env var reads.
     """
     original = {}
@@ -73,7 +73,7 @@ def sample_analysis_db():
             default = sample_analysis_db()
             custom = sample_analysis_db(status="failed", restart_counter=5)
     """
-    from src.resources.database.db_models import AnalysisDB
+    from flame_po.resources.database.db_models import AnalysisDB
 
     def _factory(**kwargs):
         defaults = {
@@ -106,7 +106,7 @@ def sample_analysis_db():
 @pytest.fixture
 def mock_database(sample_analysis_db):
     """MagicMock(spec=Database) with sensible default return values."""
-    from src.resources.database.entity import Database
+    from flame_po.resources.database.entity import Database
 
     mock_db = MagicMock(spec=Database)
     default_analysis = sample_analysis_db()
@@ -143,7 +143,7 @@ def mock_database(sample_analysis_db):
 @pytest.fixture
 def sample_create_analysis():
     """CreateAnalysis Pydantic model with all test defaults."""
-    from src.resources.analysis.entity import CreateAnalysis
+    from flame_po.resources.analysis.entity import CreateAnalysis
 
     return CreateAnalysis()
 
@@ -234,7 +234,7 @@ def api_test_client(mock_database, mock_hub_client, mock_k8s_clients):
     Bypasses OAuth via FastAPI dependency_overrides.
     """
     from starlette.testclient import TestClient
-    from src.api.oauth import valid_access_token, valid_analysis_token
+    from flame_po.api.oauth import valid_access_token, valid_analysis_token
 
     captured_app = None
 
@@ -243,9 +243,9 @@ def api_test_client(mock_database, mock_hub_client, mock_k8s_clients):
         captured_app = app
 
     with (
-        patch("src.api.api.uvicorn.run", side_effect=fake_uvicorn_run),
+        patch("flame_po.api.api.uvicorn.run", side_effect=fake_uvicorn_run),
         patch(
-            "src.api.api.extract_hub_envs",
+            "flame_po.api.api.extract_hub_envs",
             return_value=(
                 "test_hub_client",
                 "test_hub_secret",
@@ -257,15 +257,15 @@ def api_test_client(mock_database, mock_hub_client, mock_k8s_clients):
             ),
         ),
         patch(
-            "src.api.api.init_hub_client",
+            "flame_po.api.api.init_hub_client",
             return_value=mock_hub_client,
         ),
         patch(
-            "src.api.api.get_node_id_by_client",
+            "flame_po.api.api.get_node_id_by_client",
             return_value="test-node-id",
         ),
     ):
-        from src.api.api import PodOrchestrationAPI
+        from flame_po.api.api import PodOrchestrationAPI
 
         PodOrchestrationAPI(database=mock_database, namespace="default")
 

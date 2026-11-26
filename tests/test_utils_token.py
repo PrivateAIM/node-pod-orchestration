@@ -5,20 +5,20 @@ from flame_hub._exceptions import HubAPIError
 
 class TestCreateAnalysisTokens:
     def test_returns_both_keys(self):
-        with patch("src.utils.token.get_analysis_token", return_value="authup-token"):
-            from src.utils.token import create_analysis_tokens
+        with patch("flame_po.utils.token.get_analysis_token", return_value="authup-token"):
+            from flame_po.utils.token import create_analysis_tokens
             result = create_analysis_tokens("kong-tok", "analysis-1")
         assert result == {"DATA_SOURCE_TOKEN": "kong-tok", "AUTHUP_TOKEN": "authup-token"}
 
     def test_data_source_token_is_kong_token(self):
-        with patch("src.utils.token.get_analysis_token", return_value="kc"):
-            from src.utils.token import create_analysis_tokens
+        with patch("flame_po.utils.token.get_analysis_token", return_value="kc"):
+            from flame_po.utils.token import create_analysis_tokens
             result = create_analysis_tokens("my-kong-token", "aid")
         assert result["DATA_SOURCE_TOKEN"] == "my-kong-token"
 
     def test_authup_token_from_getter(self):
-        with patch("src.utils.token.get_analysis_token", return_value="authup-abc") as mock_get:
-            from src.utils.token import create_analysis_tokens
+        with patch("flame_po.utils.token.get_analysis_token", return_value="authup-abc") as mock_get:
+            from flame_po.utils.token import create_analysis_tokens
             result = create_analysis_tokens("tok", "aid")
         mock_get.assert_called_once_with("aid")
         assert result["AUTHUP_TOKEN"] == "authup-abc"
@@ -45,12 +45,12 @@ class TestGetAnalysisToken:
         mock_response.json.return_value = {"access_token": "bearer-xyz"}
 
         with (
-            patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
-            patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
-            patch("src.utils.token.init_proxied_http_client", _http_client_ctor(mock_response)[0]),
-            patch("src.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
+            patch("flame_po.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
+            patch("flame_po.utils.token.init_hub_client", return_value=mock_hub_client),
+            patch("flame_po.utils.token.init_proxied_http_client", _http_client_ctor(mock_response)[0]),
+            patch("flame_po.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
         ):
-            from src.utils.token import get_analysis_token
+            from flame_po.utils.token import get_analysis_token
             result = get_analysis_token("analysis-1")
 
         assert result == "bearer-xyz"
@@ -66,12 +66,12 @@ class TestGetAnalysisToken:
         ctor, http_client = _http_client_ctor(mock_response)
 
         with (
-            patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
-            patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
-            patch("src.utils.token.init_proxied_http_client", ctor),
-            patch("src.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
+            patch("flame_po.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
+            patch("flame_po.utils.token.init_hub_client", return_value=mock_hub_client),
+            patch("flame_po.utils.token.init_proxied_http_client", ctor),
+            patch("flame_po.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
         ):
-            from src.utils.token import get_analysis_token
+            from flame_po.utils.token import get_analysis_token
             get_analysis_token("analysis-1")
 
         ctor.assert_called_once_with()
@@ -86,10 +86,10 @@ class TestGetAnalysisToken:
 
     def test_hub_client_init_failure_returns_none(self):
         with (
-            patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
-            patch("src.utils.token.init_hub_client", return_value=None),
+            patch("flame_po.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
+            patch("flame_po.utils.token.init_hub_client", return_value=None),
         ):
-            from src.utils.token import get_analysis_token
+            from flame_po.utils.token import get_analysis_token
             result = get_analysis_token("analysis-1")
 
         assert result is None
@@ -102,10 +102,10 @@ class TestGetAnalysisToken:
         )
 
         with (
-            patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
-            patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
+            patch("flame_po.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
+            patch("flame_po.utils.token.init_hub_client", return_value=mock_hub_client),
         ):
-            from src.utils.token import get_analysis_token
+            from flame_po.utils.token import get_analysis_token
             result = get_analysis_token("analysis-1")
 
         assert result is None
@@ -116,12 +116,12 @@ class TestGetAnalysisToken:
         ctor, _ = _http_client_ctor()
 
         with (
-            patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
-            patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
-            patch("src.utils.token.init_proxied_http_client", ctor),
-            patch("src.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
+            patch("flame_po.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
+            patch("flame_po.utils.token.init_hub_client", return_value=mock_hub_client),
+            patch("flame_po.utils.token.init_proxied_http_client", ctor),
+            patch("flame_po.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
         ):
-            from src.utils.token import get_analysis_token
+            from flame_po.utils.token import get_analysis_token
             result = get_analysis_token("analysis-1")
 
         assert result is None
@@ -133,12 +133,12 @@ class TestGetAnalysisToken:
         ctor, _ = _http_client_ctor()
 
         with (
-            patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
-            patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
-            patch("src.utils.token.init_proxied_http_client", ctor),
-            patch("src.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
+            patch("flame_po.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
+            patch("flame_po.utils.token.init_hub_client", return_value=mock_hub_client),
+            patch("flame_po.utils.token.init_proxied_http_client", ctor),
+            patch("flame_po.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
         ):
-            from src.utils.token import get_analysis_token
+            from flame_po.utils.token import get_analysis_token
             result = get_analysis_token("analysis-1")
 
         assert result is None
@@ -150,15 +150,15 @@ class TestGetAnalysisToken:
         mock_hub_client.get_analysis_client_credentials.return_value = mock_creds
 
         with (
-            patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
-            patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
+            patch("flame_po.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
+            patch("flame_po.utils.token.init_hub_client", return_value=mock_hub_client),
             patch(
-                "src.utils.token.init_proxied_http_client",
+                "flame_po.utils.token.init_proxied_http_client",
                 _http_client_ctor(side_effect=httpx2.ConnectError("conn refused"))[0],
             ),
-            patch("src.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
+            patch("flame_po.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
         ):
-            from src.utils.token import get_analysis_token
+            from flame_po.utils.token import get_analysis_token
             result = get_analysis_token("analysis-1")
 
         assert result is None
@@ -174,12 +174,12 @@ class TestGetAnalysisToken:
         )
 
         with (
-            patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
-            patch("src.utils.token.init_hub_client", return_value=mock_hub_client),
-            patch("src.utils.token.init_proxied_http_client", _http_client_ctor(mock_response)[0]),
-            patch("src.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
+            patch("flame_po.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
+            patch("flame_po.utils.token.init_hub_client", return_value=mock_hub_client),
+            patch("flame_po.utils.token.init_proxied_http_client", _http_client_ctor(mock_response)[0]),
+            patch("flame_po.utils.token._AUTHUP_TOKEN_URL", "http://authup:8080/realms/master/token"),
         ):
-            from src.utils.token import get_analysis_token
+            from flame_po.utils.token import get_analysis_token
             result = get_analysis_token("analysis-1")
 
         assert result is None
@@ -190,12 +190,12 @@ class TestGetAnalysisToken:
         ctor, _ = _http_client_ctor()
 
         with (
-            patch("src.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
-            patch("src.utils.token.init_hub_client", return_value=mock_hub_client) as mock_init_hub,
-            patch("src.utils.token.init_proxied_http_client", ctor),
-            patch("src.utils.token._AUTHUP_TOKEN_URL", None),
+            patch("flame_po.utils.token.extract_hub_envs", return_value=("cid", "csec", "core", "auth", "logging", "", "")),
+            patch("flame_po.utils.token.init_hub_client", return_value=mock_hub_client) as mock_init_hub,
+            patch("flame_po.utils.token.init_proxied_http_client", ctor),
+            patch("flame_po.utils.token._AUTHUP_TOKEN_URL", None),
         ):
-            from src.utils.token import get_analysis_token
+            from flame_po.utils.token import get_analysis_token
             result = get_analysis_token("analysis-1")
 
         assert result is None

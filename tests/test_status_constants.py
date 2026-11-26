@@ -1,6 +1,6 @@
-"""Tests for src/status/constants.py"""
+"""Tests for flame_po/status/constants.py"""
 
-from src.status.constants import AnalysisStatus, MAX_RESTARTS, INTERNAL_STATUS_TIMEOUT
+from flame_po.status.constants import AnalysisStatus, MAX_RESTARTS, INTERNAL_STATUS_TIMEOUT
 
 
 class TestAnalysisStatusEnum:

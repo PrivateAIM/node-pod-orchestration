@@ -1,9 +1,9 @@
-"""Tests for src/api/oauth.py and the auth objects in src/api/constants.py.
+"""Tests for flame_po/api/oauth.py and the auth objects in flame_po/api/constants.py.
 
 The test session runs in Authup mode: conftest sets AUTHUP_JWKS_URL and unsets
-KEYCLOAK_URL before src/api/constants.py is imported, so AUTHUP_CLIENT is the
+KEYCLOAK_URL before flame_po/api/constants.py is imported, so AUTHUP_CLIENT is the
 module-level _ProxiedPyJWKClient and KEYCLOAK_SCHEME / KEYCLOAK_REALM_BASE are
-None. Keycloak mode is exercised by patching src.api.oauth.KEYCLOAK_URL_FOUND /
+None. Keycloak mode is exercised by patching flame_po.api.oauth.KEYCLOAK_URL_FOUND /
 KEYCLOAK_REALM_BASE; import-time backend selection and route wiring in
 Keycloak mode are tested in fresh interpreters (subprocess).
 """
@@ -42,13 +42,13 @@ def _run_isolated(code, **env_overrides):
 
 class TestValidAnalysisToken:
     def test_client_token_returns_decoded_payload(self):
-        from src.api.oauth import valid_analysis_token
+        from flame_po.api.oauth import valid_analysis_token
 
         payload = {"sub": "analysis-client", "sub_kind": "client", "exp": 1}
         mock_jwks_client = MagicMock()
         with (
-            patch("src.api.oauth.AUTHUP_CLIENT", mock_jwks_client),
-            patch("src.api.oauth.decode", return_value=payload) as mock_decode,
+            patch("flame_po.api.oauth.AUTHUP_CLIENT", mock_jwks_client),
+            patch("flame_po.api.oauth.decode", return_value=payload) as mock_decode,
         ):
             assert valid_analysis_token(_credentials()) == payload
 
@@ -61,11 +61,11 @@ class TestValidAnalysisToken:
         assert options["verify_aud"] is False
 
     def test_user_token_raises_401(self):
-        from src.api.oauth import valid_analysis_token
+        from flame_po.api.oauth import valid_analysis_token
 
         with (
-            patch("src.api.oauth.AUTHUP_CLIENT", MagicMock()),
-            patch("src.api.oauth.decode", return_value={"sub": "u", "sub_kind": "user", "exp": 1}),
+            patch("flame_po.api.oauth.AUTHUP_CLIENT", MagicMock()),
+            patch("flame_po.api.oauth.decode", return_value={"sub": "u", "sub_kind": "user", "exp": 1}),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 valid_analysis_token(_credentials())
@@ -74,11 +74,11 @@ class TestValidAnalysisToken:
         assert "Not authenticated" in exc_info.value.detail
 
     def test_token_without_sub_kind_raises_401(self):
-        from src.api.oauth import valid_analysis_token
+        from flame_po.api.oauth import valid_analysis_token
 
         with (
-            patch("src.api.oauth.AUTHUP_CLIENT", MagicMock()),
-            patch("src.api.oauth.decode", return_value={"sub": "x", "exp": 1}),
+            patch("flame_po.api.oauth.AUTHUP_CLIENT", MagicMock()),
+            patch("flame_po.api.oauth.decode", return_value={"sub": "x", "exp": 1}),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 valid_analysis_token(_credentials())
@@ -87,12 +87,12 @@ class TestValidAnalysisToken:
 
     def test_invalid_token_raises_401(self):
         import jwt as jwt_lib
-        from src.api.oauth import valid_analysis_token
+        from flame_po.api.oauth import valid_analysis_token
 
         mock_jwks_client = MagicMock()
         mock_jwks_client.get_signing_key_from_jwt.side_effect = jwt_lib.exceptions.InvalidTokenError("bad token")
 
-        with patch("src.api.oauth.AUTHUP_CLIENT", mock_jwks_client):
+        with patch("flame_po.api.oauth.AUTHUP_CLIENT", mock_jwks_client):
             with pytest.raises(HTTPException) as exc_info:
                 valid_analysis_token(_credentials("bad.token.here"))
 
@@ -101,11 +101,11 @@ class TestValidAnalysisToken:
 
     def test_missing_exp_claim_raises_401(self):
         import jwt as jwt_lib
-        from src.api.oauth import valid_analysis_token
+        from flame_po.api.oauth import valid_analysis_token
 
         with (
-            patch("src.api.oauth.AUTHUP_CLIENT", MagicMock()),
-            patch("src.api.oauth.decode", side_effect=jwt_lib.exceptions.MissingRequiredClaimError("exp")),
+            patch("flame_po.api.oauth.AUTHUP_CLIENT", MagicMock()),
+            patch("flame_po.api.oauth.decode", side_effect=jwt_lib.exceptions.MissingRequiredClaimError("exp")),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 valid_analysis_token(_credentials())
@@ -114,13 +114,13 @@ class TestValidAnalysisToken:
 
     def test_unknown_kid_raises_401(self):
         import jwt as jwt_lib
-        from src.api.oauth import valid_analysis_token
+        from flame_po.api.oauth import valid_analysis_token
 
         mock_jwks_client = MagicMock()
         mock_jwks_client.get_signing_key_from_jwt.side_effect = (
             jwt_lib.exceptions.PyJWKClientError('Unable to find a signing key that matches: "x"')
         )
-        with patch("src.api.oauth.AUTHUP_CLIENT", mock_jwks_client):
+        with patch("flame_po.api.oauth.AUTHUP_CLIENT", mock_jwks_client):
             with pytest.raises(HTTPException) as exc_info:
                 valid_analysis_token(_credentials())
 
@@ -129,15 +129,15 @@ class TestValidAnalysisToken:
 
     def test_jwks_connection_error_raises_503(self):
         import jwt as jwt_lib
-        from src.api.oauth import valid_analysis_token
+        from flame_po.api.oauth import valid_analysis_token
 
         mock_jwks_client = MagicMock()
         mock_jwks_client.get_signing_key_from_jwt.side_effect = (
             jwt_lib.exceptions.PyJWKClientConnectionError("down")
         )
         with (
-            patch("src.api.oauth.AUTHUP_CLIENT", mock_jwks_client),
-            patch("src.api.oauth.logger") as mock_logger,
+            patch("flame_po.api.oauth.AUTHUP_CLIENT", mock_jwks_client),
+            patch("flame_po.api.oauth.logger") as mock_logger,
         ):
             with pytest.raises(HTTPException) as exc_info:
                 valid_analysis_token(_credentials())
@@ -147,11 +147,11 @@ class TestValidAnalysisToken:
         mock_logger.error.assert_called_once()
 
     def test_unconfigured_jwks_url_raises_500(self):
-        from src.api.oauth import valid_analysis_token
+        from flame_po.api.oauth import valid_analysis_token
 
         with (
-            patch("src.api.oauth.AUTHUP_CLIENT", None),
-            patch("src.api.oauth.logger") as mock_logger,
+            patch("flame_po.api.oauth.AUTHUP_CLIENT", None),
+            patch("flame_po.api.oauth.logger") as mock_logger,
         ):
             with pytest.raises(HTTPException) as exc_info:
                 valid_analysis_token(_credentials())
@@ -161,13 +161,13 @@ class TestValidAnalysisToken:
         mock_logger.error.assert_called_once()
 
     def test_jwks_client_is_reused_across_calls(self):
-        from src.api.oauth import valid_analysis_token
+        from flame_po.api.oauth import valid_analysis_token
 
         mock_jwks_client = MagicMock()
         with (
-            patch("src.api.oauth.AUTHUP_CLIENT", mock_jwks_client),
-            patch("src.api.oauth.PyJWKClient") as mock_ctor,
-            patch("src.api.oauth.decode", return_value={"sub": "x", "sub_kind": "client"}),
+            patch("flame_po.api.oauth.AUTHUP_CLIENT", mock_jwks_client),
+            patch("flame_po.api.oauth.PyJWKClient") as mock_ctor,
+            patch("flame_po.api.oauth.decode", return_value={"sub": "x", "sub_kind": "client"}),
         ):
             valid_analysis_token(_credentials())
             valid_analysis_token(_credentials())
@@ -182,20 +182,20 @@ class TestValidAccessToken:
     @staticmethod
     def _keycloak_mode():
         return (
-            patch("src.api.oauth.KEYCLOAK_URL_FOUND", True),
-            patch("src.api.oauth.KEYCLOAK_REALM_BASE", KEYCLOAK_REALM_BASE),
+            patch("flame_po.api.oauth.KEYCLOAK_URL_FOUND", True),
+            patch("flame_po.api.oauth.KEYCLOAK_REALM_BASE", KEYCLOAK_REALM_BASE),
         )
 
     def test_token_verified_against_realm_certs(self):
-        from src.api.oauth import valid_access_token
+        from flame_po.api.oauth import valid_access_token
 
         payload = {"sub": "user-id"}  # Keycloak tokens carry no sub_kind
         mode, realm = self._keycloak_mode()
         with (
             mode,
             realm,
-            patch("src.api.oauth.PyJWKClient") as mock_ctor,
-            patch("src.api.oauth.decode", return_value=payload) as mock_decode,
+            patch("flame_po.api.oauth.PyJWKClient") as mock_ctor,
+            patch("flame_po.api.oauth.decode", return_value=payload) as mock_decode,
         ):
             assert valid_access_token("raw.jwt.token") == payload
 
@@ -208,15 +208,15 @@ class TestValidAccessToken:
         assert options["verify_aud"] is False
 
     def test_logs_deprecation_warning_per_request(self):
-        from src.api.oauth import valid_access_token
+        from flame_po.api.oauth import valid_access_token
 
         mode, realm = self._keycloak_mode()
         with (
             mode,
             realm,
-            patch("src.api.oauth.PyJWKClient"),
-            patch("src.api.oauth.decode", return_value={"sub": "u"}),
-            patch("src.api.oauth.logger") as mock_logger,
+            patch("flame_po.api.oauth.PyJWKClient"),
+            patch("flame_po.api.oauth.decode", return_value={"sub": "u"}),
+            patch("flame_po.api.oauth.logger") as mock_logger,
         ):
             valid_access_token("raw.jwt.token")
             valid_access_token("raw.jwt.token")
@@ -225,12 +225,12 @@ class TestValidAccessToken:
         assert "deprecated" in mock_logger.warning.call_args.args[0]
 
     def test_called_without_keycloak_url_raises_500(self):
-        from src.api.oauth import valid_access_token
+        from flame_po.api.oauth import valid_access_token
 
         # Session default: KEYCLOAK_URL unset -> KEYCLOAK_URL_FOUND is False.
         with (
-            patch("src.api.oauth.PyJWKClient") as mock_ctor,
-            patch("src.api.oauth.logger") as mock_logger,
+            patch("flame_po.api.oauth.PyJWKClient") as mock_ctor,
+            patch("flame_po.api.oauth.logger") as mock_logger,
         ):
             with pytest.raises(HTTPException) as exc_info:
                 valid_access_token("raw.jwt.token")
@@ -242,14 +242,14 @@ class TestValidAccessToken:
 
     def test_invalid_token_raises_401(self):
         import jwt as jwt_lib
-        from src.api.oauth import valid_access_token
+        from flame_po.api.oauth import valid_access_token
 
         mode, realm = self._keycloak_mode()
         with (
             mode,
             realm,
-            patch("src.api.oauth.PyJWKClient"),
-            patch("src.api.oauth.decode", side_effect=jwt_lib.exceptions.InvalidTokenError("bad")),
+            patch("flame_po.api.oauth.PyJWKClient"),
+            patch("flame_po.api.oauth.decode", side_effect=jwt_lib.exceptions.InvalidTokenError("bad")),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 valid_access_token("bad.jwt.token")
@@ -258,10 +258,10 @@ class TestValidAccessToken:
 
     def test_unknown_kid_raises_401(self):
         import jwt as jwt_lib
-        from src.api.oauth import valid_access_token
+        from flame_po.api.oauth import valid_access_token
 
         mode, realm = self._keycloak_mode()
-        with mode, realm, patch("src.api.oauth.PyJWKClient") as mock_ctor:
+        with mode, realm, patch("flame_po.api.oauth.PyJWKClient") as mock_ctor:
             mock_ctor.return_value.get_signing_key_from_jwt.side_effect = (
                 jwt_lib.exceptions.PyJWKClientError('Unable to find a signing key that matches: "x"')
             )
@@ -272,14 +272,14 @@ class TestValidAccessToken:
 
     def test_certs_connection_error_raises_503(self):
         import jwt as jwt_lib
-        from src.api.oauth import valid_access_token
+        from flame_po.api.oauth import valid_access_token
 
         mode, realm = self._keycloak_mode()
         with (
             mode,
             realm,
-            patch("src.api.oauth.PyJWKClient") as mock_ctor,
-            patch("src.api.oauth.logger"),
+            patch("flame_po.api.oauth.PyJWKClient") as mock_ctor,
+            patch("flame_po.api.oauth.logger"),
         ):
             mock_ctor.return_value.get_signing_key_from_jwt.side_effect = (
                 jwt_lib.exceptions.PyJWKClientConnectionError("down")
@@ -321,8 +321,8 @@ class TestDependencyWiring:
     def test_analysis_token_is_resolved_via_bearer_scheme(self):
         """The token must come from the Authorization header, never from query or body."""
         from fastapi.dependencies.utils import get_dependant
-        from src.api.constants import AUTHUP_SCHEME
-        from src.api.oauth import valid_analysis_token
+        from flame_po.api.constants import AUTHUP_SCHEME
+        from flame_po.api.oauth import valid_analysis_token
 
         dependant = get_dependant(path="/x", call=valid_analysis_token)
 
@@ -342,16 +342,16 @@ class TestDependencyWiring:
 import json
 from unittest.mock import MagicMock, patch
 from fastapi.dependencies.utils import get_dependant
-from src.api import constants, oauth
+from flame_po.api import constants, oauth
 
 captured = {}
 with (
-    patch("src.api.api.uvicorn.run", side_effect=lambda app, **kw: captured.setdefault("app", app)),
-    patch("src.api.api.extract_hub_envs", return_value=("c", "s", "http://core", "http://auth", False, None, None)),
-    patch("src.api.api.init_hub_client", return_value=MagicMock()),
-    patch("src.api.api.get_node_id_by_client", return_value="node-id"),
+    patch("flame_po.api.api.uvicorn.run", side_effect=lambda app, **kw: captured.setdefault("app", app)),
+    patch("flame_po.api.api.extract_hub_envs", return_value=("c", "s", "http://core", "http://auth", False, None, None)),
+    patch("flame_po.api.api.init_hub_client", return_value=MagicMock()),
+    patch("flame_po.api.api.get_node_id_by_client", return_value="node-id"),
 ):
-    from src.api.api import PodOrchestrationAPI
+    from flame_po.api.api import PodOrchestrationAPI
     PodOrchestrationAPI(database=MagicMock(), namespace="default")
 
 wiring = route_auth(captured["app"])
@@ -377,13 +377,13 @@ print(json.dumps({
         assert result["access_token_query_params"] == []
 
 
-# ─── Backend selection (src/api/constants.py) ─────────────────────────────────
+# ─── Backend selection (flame_po/api/constants.py) ─────────────────────────────────
 
 class TestBackendSelection:
     """constants.py picks the backend at import time, so each case runs in a fresh interpreter."""
 
     _PROBE = (
-        "import json; from src.api import constants as c; print(json.dumps({"
+        "import json; from flame_po.api import constants as c; print(json.dumps({"
         "'keycloak': c.KEYCLOAK_URL_FOUND, "
         "'keycloak_scheme': type(c.KEYCLOAK_SCHEME).__name__, "
         "'realm_base': c.KEYCLOAK_REALM_BASE, "
@@ -439,14 +439,14 @@ class TestProxiedPyJWKClient:
         return MagicMock(return_value=http_client), http_client
 
     def test_fetches_jwks_through_proxied_client_and_caches(self):
-        from src.api.constants import _ProxiedPyJWKClient
+        from flame_po.api.constants import _ProxiedPyJWKClient
 
         response = MagicMock()
         response.json.return_value = self._JWKS
         ctor, http_client = self._ctor(response)
         client = _ProxiedPyJWKClient("https://authup.test/realms/master/jwks")
 
-        with patch("src.api.constants.init_proxied_http_client", ctor):
+        with patch("flame_po.api.constants.init_proxied_http_client", ctor):
             assert client.fetch_data() == self._JWKS
 
         ctor.assert_called_once_with(timeout=client.timeout)
@@ -457,11 +457,11 @@ class TestProxiedPyJWKClient:
     def test_http_error_raises_connection_error(self):
         import httpx2
         from jwt.exceptions import PyJWKClientConnectionError
-        from src.api.constants import _ProxiedPyJWKClient
+        from flame_po.api.constants import _ProxiedPyJWKClient
 
         ctor, _ = self._ctor(side_effect=httpx2.ConnectError("refused"))
         client = _ProxiedPyJWKClient("https://authup.test/realms/master/jwks")
 
-        with patch("src.api.constants.init_proxied_http_client", ctor):
+        with patch("flame_po.api.constants.init_proxied_http_client", ctor):
             with pytest.raises(PyJWKClientConnectionError):
                 client.fetch_data()

@@ -15,23 +15,23 @@ from httpx2 import Client, HTTPError
 
 from flame_hub import CoreClient as HubClient
 
-from src.resources.log.entity import CreateStartUpErrorLog
-from src.k8s.kubernetes import PORTS, get_pod_status
-from src.resources.database.entity import Database, AnalysisDB
-from src.resources.utils import (
+from flame_po.resources.log.entity import CreateStartUpErrorLog
+from flame_po.k8s.kubernetes import PORTS, get_pod_status
+from flame_po.resources.database.entity import Database, AnalysisDB
+from flame_po.resources.utils import (
     unstuck_analysis_deployments,
     stop_analysis,
     stream_logs,
     clean_up_the_rest,
     refresh_registry_credentials,
 )
-from src.status.constants import (
+from flame_po.status.constants import (
     AnalysisStatus,
     MAX_RESTARTS,
     INTERNAL_STATUS_TIMEOUT,
     REGISTRY_CREDENTIALS_REFRESH_INTERVAL,
 )
-from src.utils.hub_client import (
+from flame_po.utils.hub_client import (
     init_hub_client,
     get_node_id_by_client,
     get_node_analysis_id,
@@ -39,9 +39,9 @@ from src.utils.hub_client import (
     update_hub_status,
     get_node_analysis_status,
 )
-from src.utils.other import extract_hub_envs
-from src.utils.token import get_analysis_token
-from src.utils.po_logging import get_logger
+from flame_po.utils.other import extract_hub_envs
+from flame_po.utils.token import get_analysis_token
+from flame_po.utils.po_logging import get_logger
 
 
 logger = get_logger()

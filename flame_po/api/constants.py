@@ -10,7 +10,7 @@ The backend for the regular API routes is chosen once at import time:
   (``KEYCLOAK_URL`` / ``KEYCLOAK_REALM``), while ``POST /po/stream_logs``
   still uses Authup, as analysis tokens are always minted by Authup.
 
-Module-level objects used by :mod:`src.api.oauth` and :mod:`src.api.api`:
+Module-level objects used by :mod:`flame_po.api.oauth` and :mod:`flame_po.api.api`:
 
 * :data:`AUTHUP_CLIENT`: cached :class:`_ProxiedPyJWKClient` for Authup's
   JWKS, or ``None`` if ``AUTHUP_JWKS_URL`` is unset or empty. Always built,
@@ -32,7 +32,7 @@ from jwt.exceptions import PyJWKClientConnectionError
 from httpx2 import HTTPError
 from fastapi.security import HTTPBearer, OAuth2AuthorizationCodeBearer
 
-from src.utils.hub_client import init_proxied_http_client
+from flame_po.utils.hub_client import init_proxied_http_client
 
 
 KEYCLOAK_URL_FOUND = "KEYCLOAK_URL" in os.environ and bool(os.getenv("KEYCLOAK_URL")) # False -> strictly verify against global Authup, True -> allow local Keycloak

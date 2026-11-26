@@ -39,7 +39,7 @@ class TestJsonFormatter:
         return logging.LogRecord(**defaults)
 
     def test_emits_required_fields(self):
-        from src.utils.po_logging import JsonFormatter
+        from flame_po.utils.po_logging import JsonFormatter
 
         record = self._make_record()
         output = JsonFormatter().format(record)
@@ -50,7 +50,7 @@ class TestJsonFormatter:
         assert parsed["msg"] == "hello"
 
     def test_emits_extra_fields(self):
-        from src.utils.po_logging import JsonFormatter
+        from flame_po.utils.po_logging import JsonFormatter
 
         record = self._make_record(name="my.logger", pathname="/x/foo.py")
         parsed = json.loads(JsonFormatter().format(record))
@@ -59,7 +59,7 @@ class TestJsonFormatter:
         assert parsed["module"] == "foo"
 
     def test_output_is_single_line(self):
-        from src.utils.po_logging import JsonFormatter
+        from flame_po.utils.po_logging import JsonFormatter
 
         record = self._make_record(msg="line1\nline2")
         output = JsonFormatter().format(record)
@@ -69,7 +69,7 @@ class TestJsonFormatter:
         assert json.loads(output)["msg"] == "line1\nline2"
 
     def test_timestamp_format(self):
-        from src.utils.po_logging import JsonFormatter
+        from flame_po.utils.po_logging import JsonFormatter
 
         record = self._make_record()
         parsed = json.loads(JsonFormatter().format(record))
@@ -79,7 +79,7 @@ class TestJsonFormatter:
         assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$", parsed["timestamp"])
 
     def test_message_with_args_is_formatted(self):
-        from src.utils.po_logging import JsonFormatter
+        from flame_po.utils.po_logging import JsonFormatter
 
         record = self._make_record(msg="user %s did %d things", args=("alice", 3))
         parsed = json.loads(JsonFormatter().format(record))
@@ -87,7 +87,7 @@ class TestJsonFormatter:
         assert parsed["msg"] == "user alice did 3 things"
 
     def test_exc_info_adds_error_field(self):
-        from src.utils.po_logging import JsonFormatter
+        from flame_po.utils.po_logging import JsonFormatter
 
         try:
             raise ValueError("boom")
@@ -103,7 +103,7 @@ class TestJsonFormatter:
         assert "boom" in parsed["error"]
 
     def test_no_error_field_when_no_exc_info(self):
-        from src.utils.po_logging import JsonFormatter
+        from flame_po.utils.po_logging import JsonFormatter
 
         record = self._make_record()
         parsed = json.loads(JsonFormatter().format(record))
@@ -111,7 +111,7 @@ class TestJsonFormatter:
         assert "error" not in parsed
 
     def test_non_serializable_msg_falls_back_to_str(self):
-        from src.utils.po_logging import JsonFormatter
+        from flame_po.utils.po_logging import JsonFormatter
 
         class Weird:
             def __str__(self):
@@ -125,7 +125,7 @@ class TestJsonFormatter:
         assert parsed["msg"] == "weird-repr"
 
     def test_custom_level_name_in_output(self):
-        from src.utils.po_logging import JsonFormatter, get_logger
+        from flame_po.utils.po_logging import JsonFormatter, get_logger
 
         get_logger()  # registers ACTION / STATUS_LOOP levels
 
@@ -136,13 +136,13 @@ class TestJsonFormatter:
 
 class TestGetLogger:
     def test_returns_logger(self):
-        from src.utils.po_logging import get_logger
+        from flame_po.utils.po_logging import get_logger
 
         logger = get_logger()
         assert isinstance(logger, logging.Logger)
 
     def test_attaches_json_formatter_to_root(self):
-        from src.utils.po_logging import JsonFormatter, get_logger
+        from flame_po.utils.po_logging import JsonFormatter, get_logger
 
         get_logger()
 
@@ -151,13 +151,13 @@ class TestGetLogger:
         assert len(json_handlers) == 1
 
     def test_sets_root_level_to_info(self):
-        from src.utils.po_logging import get_logger
+        from flame_po.utils.po_logging import get_logger
 
         get_logger()
         assert logging.getLogger().level == logging.INFO
 
     def test_is_idempotent(self):
-        from src.utils.po_logging import JsonFormatter, get_logger
+        from flame_po.utils.po_logging import JsonFormatter, get_logger
 
         get_logger()
         get_logger()
@@ -169,7 +169,7 @@ class TestGetLogger:
         assert len(json_handlers) == 1
 
     def test_registers_custom_levels(self):
-        from src.utils.po_logging import get_logger
+        from flame_po.utils.po_logging import get_logger
 
         get_logger()
 
@@ -179,7 +179,7 @@ class TestGetLogger:
         assert hasattr(logging.getLoggerClass(), "status_loop")
 
     def test_end_to_end_emits_json_to_stream(self, capsys):
-        from src.utils.po_logging import get_logger
+        from flame_po.utils.po_logging import get_logger
 
         logger = get_logger()
         logger.info("end-to-end message")
@@ -194,7 +194,7 @@ class TestGetLogger:
         assert "timestamp" in parsed
 
     def test_end_to_end_custom_level(self, capsys):
-        from src.utils.po_logging import get_logger
+        from flame_po.utils.po_logging import get_logger
 
         logger = get_logger()
         logger.action("custom-level message")  # type: ignore[attr-defined]
@@ -207,7 +207,7 @@ class TestGetLogger:
         assert parsed["msg"] == "custom-level message"
 
     def test_end_to_end_exception_populates_error_field(self, capsys):
-        from src.utils.po_logging import get_logger
+        from flame_po.utils.po_logging import get_logger
 
         logger = get_logger()
         try:

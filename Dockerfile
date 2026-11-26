@@ -34,7 +34,7 @@ WORKDIR /app
 
 # venv must live at the same path as in the builder (absolute paths in scripts/pyvenv.cfg)
 COPY --from=builder --chown=10000:10000 /app/.venv /app/.venv
-COPY --chown=10000:10000 src ./src
+COPY --chown=10000:10000 flame_po ./flame_po
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
@@ -44,4 +44,4 @@ USER 10000:10000
 
 EXPOSE 8000
 
-ENTRYPOINT ["python", "-m", "src.main"]
+ENTRYPOINT ["python", "-m", "flame_po.main"]
