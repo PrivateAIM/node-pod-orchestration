@@ -19,8 +19,7 @@ _PLUGINS = [
         "component": "flame-nextflow-launcher",     # plugin component label
         "location": "/nextflow",                    # nginx proxy path
         "endpoints": ["/run",                       # list of endpoints
-                      "/delete",
-                      "/token_refresh"]
+                      "/delete"]
     }
 ]
 
